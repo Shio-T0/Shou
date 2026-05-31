@@ -242,6 +242,21 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
+step "AniList write access — auto-mark episodes watched (optional)"
+# --------------------------------------------------------------------------- #
+if grep -q '^ANILIST_TOKEN=' "$CONFIG_FILE" 2>/dev/null; then
+  ok "AniList token already configured."
+else
+  info "Lets AnimeUI tick episodes off on AniList automatically once you finish them."
+  info "Needs a one-time AniList API client + approval (write access)."
+  if ask_yes "Set this up now?"; then
+    "$REPO_DIR/animeui_auth.sh" || warn "Auth didn't complete — run ./animeui_auth.sh anytime."
+  else
+    warn "Skipped — run ${DIM}./animeui_auth.sh${RESET} later to enable it."
+  fi
+fi
+
+# --------------------------------------------------------------------------- #
 step "Start the server now?"
 # --------------------------------------------------------------------------- #
 if curl -s -o /dev/null "http://127.0.0.1:4100/" 2>/dev/null; then

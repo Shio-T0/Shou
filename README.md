@@ -61,10 +61,32 @@ and the paths to register as KDE Connect buttons.
 ANILIST_USER="your_username"   # must be a PUBLIC list
 PORT="4100"                    # server + phone remote port
 QUALITY="1080p"                # passed to ani-cli
+WATCHED_PERCENT="90"           # mark watched once playback passes this %
 # REMOTE_TOKEN="..."           # auto-generated on first launch — don't set by hand
+# ANILIST_TOKEN="..."          # OAuth write token — set by ./animeui_auth.sh
 ```
 
 Changing `ANILIST_USER`/`QUALITY` only needs an **Open** tap (config reloads); no restart.
+
+### Auto-mark episodes watched on AniList (optional)
+
+By default AnimeUI only *reads* your public list. To have it **tick episodes off on
+AniList automatically** when you finish them, give it write access once:
+
+```bash
+./animeui_auth.sh
+```
+
+It walks you through creating an AniList API client
+(`https://anilist.co/settings/developer`, redirect URL `https://anilist.co/api/v2/oauth/pin`),
+approving it, and pasting the code; the resulting OAuth token is saved as
+`ANILIST_TOKEN` in `animeui.conf` (gitignored, never in the repo). The installer also
+offers this step. **Restart the daemon afterwards.**
+
+Once enabled, when playback passes `WATCHED_PERCENT` (default 90%) — or mpv reaches a
+clean end — AnimeUI sets that episode as your progress (only ever *increasing* it; it
+won't undo progress on a rewatch or **⏮**), and flips the entry to *Completed* on the
+final episode. Tokens last ~1 year; re-run `./animeui_auth.sh` when it expires.
 
 ## Uninstall
 

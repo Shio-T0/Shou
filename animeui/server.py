@@ -18,6 +18,7 @@ import os
 import shlex
 import secrets
 import signal
+import socket
 import subprocess
 import threading
 import time
@@ -49,7 +50,8 @@ ANILIST_URL = "https://graphql.anilist.co"
 
 def load_config() -> dict:
     """Parse the shell-style KEY="value" animeui.conf."""
-    cfg = {"ANILIST_USER": "", "PORT": "4100", "QUALITY": "1080p", "REMOTE_TOKEN": ""}
+    cfg = {"ANILIST_USER": "", "PORT": "4100", "QUALITY": "1080p", "REMOTE_TOKEN": "",
+           "ANILIST_TOKEN": "", "WATCHED_PERCENT": "90"}
     if CONFIG_FILE.exists():
         for raw in CONFIG_FILE.read_text().splitlines():
             line = raw.strip()
@@ -278,6 +280,8 @@ def episode_decision(entry: dict) -> dict:
             "finished": title,
             "sequel_title": _title(sequel["title"]),
             "sequel_search": _search_title(sequel["title"]),
+            "sequel_id": sequel.get("id"),
+            "sequel_total": sequel.get("episodes"),  # usually None (not in relations query)
         }
 
     # Caught up, no sequel -> play the latest released episode.
@@ -309,6 +313,129 @@ def build_card(entry: dict) -> dict:
         "banner": media.get("bannerImage") or "",
         "caughtUp": bool(last and progress >= last),
     }
+
+
+# --------------------------------------------------------------------------- #
+# AniList write-back : mark episodes watched (needs an OAuth token)
+# --------------------------------------------------------------------------- #
+def anilist_token() -> str:
+    return (CONFIG.get("ANILIST_TOKEN") or "").strip()
+
+
+def _anilist_post(query: str, variables: dict) -> dict:
+    """Authenticated GraphQL call. Returns the `data` dict (raises on transport error)."""
+    resp = requests.post(
+        ANILIST_URL,
+        json={"query": query, "variables": variables},
+        headers={
+            "Authorization": f"Bearer {anilist_token()}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def mark_watched(media_id: int, episode: int, total: int | None, display: str) -> None:
+    """Set AniList progress for `media_id` to `episode` (never lowering it). Flips the
+    entry to COMPLETED on the final episode, otherwise CURRENT. No-op without a token."""
+    if not anilist_token() or not media_id:
+        return
+    try:
+        cur = _anilist_post(
+            "query($id:Int){ Media(id:$id){ mediaListEntry { progress } } }",
+            {"id": int(media_id)},
+        )
+        entry = ((cur.get("data") or {}).get("Media") or {}).get("mediaListEntry") or {}
+        current = entry.get("progress") or 0
+    except Exception as exc:  # noqa: BLE001
+        print(f"[anilist] progress lookup failed: {exc}", flush=True)
+        current = 0
+    if episode <= current:
+        return  # already at/ahead of this episode — don't decrement on rewatch/prev
+    status = "COMPLETED" if (total and episode >= total) else "CURRENT"
+    try:
+        _anilist_post(
+            "mutation($mediaId:Int,$progress:Int,$status:MediaListStatus){"
+            " SaveMediaListEntry(mediaId:$mediaId, progress:$progress, status:$status){ id progress status } }",
+            {"mediaId": int(media_id), "progress": int(episode), "status": status},
+        )
+        print(f"[anilist] marked {display!r} progress={episode} status={status}", flush=True)
+        subprocess.run(
+            ["notify-send", "✓ AniList", f"{display} — Episode {episode} watched",
+             "-u", "low", "-t", "2500"],
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[anilist] mark_watched failed: {exc}", flush=True)
+
+
+def watch_mpv_progress(gen: int, media_id: int, episode: int,
+                       total: int | None, display: str) -> None:
+    """Connect to AnimeUI's mpv IPC socket and mark the episode watched on AniList once
+    playback crosses the completion threshold (or mpv reaches a clean EOF)."""
+    if not anilist_token() or not media_id:
+        return
+    try:
+        threshold = float(CONFIG.get("WATCHED_PERCENT") or 90)
+    except ValueError:
+        threshold = 90.0
+
+    # Wait for mpv to create the socket (it may be a while behind a slow source).
+    end = time.time() + 180
+    while time.time() < end and PLAYBACK["gen"] == gen and not os.path.exists(MPV_IPC):
+        time.sleep(1)
+    if PLAYBACK["gen"] != gen or not os.path.exists(MPV_IPC):
+        return
+
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect(MPV_IPC)
+        sock.sendall(b'{"command":["observe_property",1,"percent-pos"]}\n')
+    except OSError as exc:
+        print(f"[progress] mpv IPC connect failed: {exc}", flush=True)
+        return
+
+    buf = b""
+    marked = False
+    try:
+        while PLAYBACK["gen"] == gen and not marked:
+            try:
+                chunk = sock.recv(4096)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            if not chunk:
+                break  # mpv exited / was killed (e.g. Back)
+            buf += chunk
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                if not line.strip():
+                    continue
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    continue
+                ev = msg.get("event")
+                if ev == "property-change" and msg.get("name") == "percent-pos":
+                    data = msg.get("data")
+                    if isinstance(data, (int, float)) and data >= threshold:
+                        marked = True
+                        break
+                elif ev == "end-file" and msg.get("reason") == "eof":
+                    marked = True
+                    break
+    finally:
+        try:
+            sock.close()
+        except OSError:
+            pass
+    if marked and PLAYBACK["gen"] == gen:
+        mark_watched(media_id, episode, total, display)
 
 
 # --------------------------------------------------------------------------- #
@@ -395,12 +522,15 @@ def mpv_running() -> bool:
     ).returncode == 0
 
 
-def play(search_title: str, episode: int, display_title: str | None = None) -> None:
+def play(search_title: str, episode: int, display_title: str | None = None,
+         media_id: int | None = None, total: int | None = None) -> None:
     """Launch ani-cli for the given title/episode, detached, auto-picking result 1.
 
     `search_title` (romaji) is what ani-cli searches; `display_title` (english) is what
     the UI/notification shows. A background monitor watches whether mpv actually starts
-    and reports back to the UI if no playable source was found.
+    and reports back to the UI if no playable source was found. When `media_id` is known
+    and an AniList token is configured, a second watcher marks the episode watched once
+    playback completes.
     """
     display = display_title or search_title
     gen = bump_play_gen()
@@ -430,13 +560,17 @@ def play(search_title: str, episode: int, display_title: str | None = None) -> N
     logf.close()
     with STATE_LOCK:
         PLAYBACK["proc"] = proc
-        STATE["playing"] = {"title": display, "search": search_title, "episode": episode}
+        STATE["playing"] = {"title": display, "search": search_title, "episode": episode,
+                            "media_id": media_id, "total": total}
     subprocess.run(
         ["notify-send", "🎌 Now Watching", f"{display} — Episode {episode}",
          "-u", "normal", "-t", "3000"],
         check=False,
     )
     socketio.start_background_task(monitor_playback, gen, search_title, episode, display)
+    # Mark-watched watcher (covers the ani-cli mpv and the fallback mpv — same socket).
+    if media_id and anilist_token():
+        socketio.start_background_task(watch_mpv_progress, gen, media_id, episode, total, display)
 
 
 def resolve_fallback(search_title: str, episode: int):
@@ -766,7 +900,8 @@ def select():
 
     # On the sequel card: a second Select plays the sequel from episode 1.
     if view == "sequel" and sequel:
-        play(sequel["sequel_search"], 1, sequel["sequel_title"])
+        play(sequel["sequel_search"], 1, sequel["sequel_title"],
+             media_id=sequel.get("sequel_id"), total=sequel.get("sequel_total"))
         with STATE_LOCK:
             STATE["view"] = "playing"
             STATE["message"] = f"Playing sequel: {sequel['sequel_title']}"
@@ -776,9 +911,11 @@ def select():
     if view != "grid" or not entries or cursor >= len(entries):
         return jsonify(ok=False, reason="nothing selectable")
 
+    media = entries[cursor]["media"]
     decision = episode_decision(entries[cursor])
     if decision["action"] == "play":
-        play(decision["search"], decision["episode"], decision["title"])
+        play(decision["search"], decision["episode"], decision["title"],
+             media_id=media.get("id"), total=media.get("episodes"))
         with STATE_LOCK:
             STATE["view"] = "playing"
             STATE["message"] = f"Playing {decision['title']} — Ep {decision['episode']}"
@@ -792,6 +929,8 @@ def select():
             "finished": decision["finished"],
             "sequel_title": decision["sequel_title"],
             "sequel_search": decision["sequel_search"],
+            "sequel_id": decision.get("sequel_id"),
+            "sequel_total": decision.get("sequel_total"),
         }
     broadcast()
     return jsonify(ok=True, action="sequel")
@@ -836,7 +975,8 @@ def _step_episode(delta: int):
     if not playing:
         return jsonify(ok=False, reason="nothing playing")
     episode = max(1, playing["episode"] + delta)
-    play(playing.get("search") or playing["title"], episode, playing["title"])
+    play(playing.get("search") or playing["title"], episode, playing["title"],
+         media_id=playing.get("media_id"), total=playing.get("total"))
     with STATE_LOCK:
         STATE["view"] = "playing"
         STATE["message"] = f"Playing {playing['title']} — Ep {episode}"
