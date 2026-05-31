@@ -59,6 +59,11 @@ function buildCards(items) {
     }
     card.appendChild(badge);
 
+    // Drop .intro once the cascade-in finishes — a *filling* animation keeps
+    // overriding `transform` in the cascade, which would suppress the coverflow
+    // glide transition on every later selection change.
+    card.addEventListener("animationend", () => card.classList.remove("intro"), { once: true });
+
     el.carousel.appendChild(card);
     return card;
   });
