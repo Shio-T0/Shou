@@ -1,11 +1,23 @@
+/* AnimeUI kiosk — "midnight cinema / Japanese editorial", big-screen lean-back.
+   Shares the phone remote's language: warm ink, vermilion (朱) accent, jade for
+   caught-up, Shippori Mincho display over Zen Kaku Gothic New, film grain. */
+
 :root {
-  --bg: #0a0b12;
-  --fg: #f3f4ff;
-  --muted: #8b8fa8;
-  --accent: #7c5cff;
-  --accent2: #ff5c9d;
-  --card-w: 17vw;
-  --card-h: 25.5vw;
+  --ink:   #0a0a0c;
+  --ink-2: #100f13;
+  --ink-3: #17161c;
+  --ink-4: #201e26;
+  --line:   rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --paper:     #f1ece3;
+  --paper-dim: #918b81;
+  --acc:   #ff4a32;          /* shu / vermilion */
+  --acc-2: #ff6a4d;
+  --acc-soft: rgba(255, 74, 50, 0.16);
+  --live:  #5ad6a0;          /* jade — caught up */
+  --ease: cubic-bezier(0.22, 0.85, 0.24, 1);
+  --card-w: 16vw;
+  --card-h: 24vw;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,32 +26,50 @@ html, body {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: "Outfit", system-ui, sans-serif;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
   cursor: none;
 }
 
 .hidden { display: none !important; }
 
-/* ---- Backdrop ---- */
-#backdrop {
+/* ---- Ambient backdrop (dual layer crossfade + Ken Burns) ---- */
+.backdrop-layer {
   position: fixed;
-  inset: -8% -8% -8% -8%;
+  inset: -10%;
+  z-index: 0;
   background-size: cover;
   background-position: center;
-  filter: blur(60px) saturate(1.3) brightness(0.55);
-  transform: scale(1.1);
-  transition: background-image 0.6s ease, background-color 0.8s ease;
-  z-index: 0;
+  background-color: var(--ink-3);
+  filter: blur(64px) saturate(1.25) brightness(0.5);
+  opacity: 0;
+  transition: opacity 0.9s ease;
+  will-change: opacity, transform;
+}
+.backdrop-layer.is-on {
+  opacity: 1;
+  animation: kenburns 34s ease-in-out infinite alternate;
+}
+@keyframes kenburns {
+  from { transform: scale(1.08) translate(0, 0); }
+  to   { transform: scale(1.20) translate(-2.5%, -2%); }
 }
 #vignette {
   position: fixed;
   inset: 0;
   z-index: 1;
   background:
-    radial-gradient(120% 90% at 50% 18%, transparent 0%, rgba(10,11,18,0.55) 60%, var(--bg) 100%),
-    linear-gradient(to top, var(--bg) 2%, transparent 45%);
+    radial-gradient(120% 92% at 50% 14%, transparent 0%, rgba(10,10,12,0.5) 58%, var(--ink) 100%),
+    linear-gradient(to top, var(--ink) 1%, transparent 42%);
+}
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* ---- Top bar ---- */
@@ -50,34 +80,52 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 2.2vh 3vw;
-  letter-spacing: 0.25em;
+  padding: 3vh 3.2vw;
 }
-.brand { font-weight: 900; font-size: 1.7vw; letter-spacing: 0.35em; }
-.brand-accent {
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.brand { display: flex; align-items: center; gap: 0.9vw; }
+.brand-glyph {
+  display: grid;
+  place-items: center;
+  width: 3vw; height: 3vw;
+  font-family: "Shippori Mincho B1", serif;
+  font-weight: 800;
+  font-size: 1.7vw;
+  color: var(--acc);
+  border: 1px solid var(--line-2);
+  border-radius: 0.7vw;
+  background: linear-gradient(160deg, var(--ink-3), var(--ink-2));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 0 3vw var(--acc-soft);
 }
-.count { color: var(--muted); font-size: 1vw; font-weight: 500; letter-spacing: 0.3em; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.brand-name { font-weight: 900; font-size: 1.15vw; letter-spacing: 0.34em; }
+.brand-sub { font-size: 0.72vw; letter-spacing: 0.4em; color: var(--paper-dim); margin-top: 0.4vh; }
+
+.count {
+  color: var(--paper-dim);
+  font-size: 0.95vw;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  font-variant-numeric: tabular-nums;
+}
+
 .listlabel {
   position: fixed;
-  bottom: 3vh;
+  bottom: 3.4vh;
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
-  font-size: 0.95vw;
+  font-size: 0.82vw;
   font-weight: 700;
-  letter-spacing: 0.34em;
-  padding: 0.6vh 1.3vw;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  padding: 0.85vh 1.5vw;
   border-radius: 999px;
   color: #fff;
-  background: linear-gradient(100deg, var(--accent), var(--accent2));
-  box-shadow: 0 0.5vh 1.5vh rgba(124, 92, 255, 0.3);
+  background: linear-gradient(150deg, var(--acc), #d63b27);
+  box-shadow: 0 1vh 2.4vh -0.6vh var(--acc-soft);
 }
 
-/* ---- Stage / carousel ---- */
+/* ---- Stage / coverflow ---- */
 #stage {
   position: relative;
   z-index: 3;
@@ -91,8 +139,8 @@ html, body {
   position: relative;
   width: 100%;
   height: var(--card-h);
-  margin-top: 4vh;
-  perspective: 1600px;
+  margin-top: 3vh;
+  perspective: 1700px;
   transform-style: preserve-3d;
 }
 .card {
@@ -102,143 +150,190 @@ html, body {
   width: var(--card-w);
   height: var(--card-h);
   margin-left: calc(var(--card-w) / -2);
-  border-radius: 1.1vw;
+  border-radius: 0.9vw;
   overflow: hidden;
-  background: #15172a;
-  box-shadow: 0 2vh 5vh rgba(0,0,0,0.55);
-  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-              opacity 0.5s ease,
-              filter 0.5s ease,
-              box-shadow 0.5s ease;
+  background: var(--ink-3);
+  border: 1px solid var(--line);
+  box-shadow: 0 3vh 6vh rgba(0,0,0,0.6);
+  transition: transform 0.55s var(--ease),
+              opacity 0.55s ease,
+              filter 0.55s ease,
+              box-shadow 0.55s ease;
   will-change: transform, opacity;
 }
-.card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+.card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* soft reflection beneath each card */
+.card::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 38%;
+  background: linear-gradient(to top, rgba(10,10,12,0.55), transparent);
+  pointer-events: none;
 }
+
 .card .badge {
   position: absolute;
-  top: 0.8vw; right: 0.8vw;
-  padding: 0.4vh 0.8vw;
-  font-size: 0.8vw;
+  top: 0.7vw; right: 0.7vw;
+  z-index: 2;
+  padding: 0.5vh 0.85vw;
+  font-size: 0.72vw;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.14em;
   border-radius: 999px;
-  background: rgba(124,92,255,0.85);
+  color: #fff;
+  background: rgba(255,74,50,0.9);
   backdrop-filter: blur(8px);
+  box-shadow: 0 0.4vh 1.2vh rgba(0,0,0,0.4);
 }
-.card .badge.done { background: rgba(46,204,113,0.85); }
+.card .badge.done { background: rgba(90,214,160,0.92); color: #04231a; }
 
-/* Active card gets a glowing ring */
+/* Active card : vermilion glow ring + lift */
 .card.active {
   filter: none;
-  box-shadow: 0 2.5vh 6vh rgba(0,0,0,0.6),
-              0 0 0 0.32vw rgba(255,255,255,0.95),
-              0 0 8vh rgba(124,92,255,0.55);
+  border-color: rgba(255,74,50,0.5);
+  box-shadow:
+    0 4vh 8vh rgba(0,0,0,0.7),
+    0 0 0 0.18vw rgba(255,74,50,0.85),
+    0 0 9vh rgba(255,74,50,0.45);
 }
-.card.dim { filter: brightness(0.45) saturate(0.8); }
+.card.dim { filter: brightness(0.4) saturate(0.78) blur(0.06vw); }
 .card.hiddenCard { opacity: 0; pointer-events: none; }
 
-/* ---- Info panel ---- */
+/* cascade-in on first render */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(4vh) scale(0.9); }
+}
+.card.intro { animation: cardIn 0.6s var(--ease) both; }
+
+/* ---- Info / hero ---- */
 #info {
   z-index: 4;
-  margin-top: 4.5vh;
+  margin-top: 5vh;
   text-align: center;
-  max-width: 70vw;
+  max-width: 74vw;
 }
-#info-title {
-  font-size: 3.4vw;
-  font-weight: 900;
-  line-height: 1.05;
-  text-shadow: 0 0.4vh 2vh rgba(0,0,0,0.7);
+.info-kicker {
+  font-size: 0.92vw;
+  font-weight: 700;
+  letter-spacing: 0.46em;
+  text-transform: uppercase;
+  color: var(--acc-2);
 }
+#info.caughtup .info-kicker { color: var(--live); }
+
+@keyframes titleIn {
+  from { opacity: 0; transform: translateY(1.6vh); filter: blur(4px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+.info-title {
+  font-family: "Shippori Mincho B1", serif;
+  font-size: 4.6vw;
+  font-weight: 800;
+  line-height: 1.04;
+  margin-top: 1.6vh;
+  text-shadow: 0 0.6vh 3vh rgba(0,0,0,0.7);
+}
+.info-title.swap { animation: titleIn 0.5s var(--ease) both; }
+
 .episode {
-  margin-top: 1.4vh;
-  font-size: 1.3vw;
+  margin-top: 1.8vh;
+  font-size: 1.15vw;
   font-weight: 500;
-  letter-spacing: 0.18em;
-  color: var(--muted);
+  letter-spacing: 0.22em;
+  color: var(--paper-dim);
   text-transform: uppercase;
 }
 .progress {
-  margin: 2.2vh auto 0;
-  width: 22vw;
-  height: 0.5vh;
+  margin: 2.6vh auto 0;
+  width: 24vw;
+  height: 0.45vh;
   border-radius: 999px;
-  background: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.1);
   overflow: hidden;
 }
 .progress-fill {
   height: 100%;
   width: 0%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  transition: width 0.6s cubic-bezier(0.22,1,0.36,1);
+  background: linear-gradient(90deg, var(--acc), var(--acc-2));
+  transition: width 0.7s var(--ease), background 0.4s ease;
 }
+#info.caughtup .progress-fill { background: linear-gradient(90deg, var(--live), #3fae82); }
 
 /* ---- Overlays ---- */
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 6;
+  z-index: 7;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
 }
-.sequel-card, .playing-card, .status-card {
-  background: rgba(20,22,40,0.55);
-  border: 1px solid rgba(255,255,255,0.08);
-  backdrop-filter: blur(22px);
-  padding: 6vh 6vw;
-  border-radius: 2vw;
-  box-shadow: 0 3vh 8vh rgba(0,0,0,0.6);
+.cinema-card {
+  background: linear-gradient(180deg, rgba(23,22,28,0.78), rgba(16,15,19,0.82));
+  border: 1px solid var(--line-2);
+  backdrop-filter: blur(26px);
+  padding: 7vh 7vw;
+  border-radius: 1.6vw;
+  box-shadow: 0 5vh 12vh -2vh rgba(0,0,0,0.8);
 }
 .sequel-kicker {
-  color: #2ecc71;
+  color: var(--live);
   font-weight: 700;
-  letter-spacing: 0.4em;
+  letter-spacing: 0.42em;
   font-size: 1vw;
 }
-.sequel-finished { margin-top: 2vh; color: var(--muted); font-size: 1.4vw; }
-.sequel-finished span { color: var(--fg); font-weight: 700; }
+.sequel-finished { margin-top: 2.4vh; color: var(--paper-dim); font-size: 1.3vw; }
+.sequel-finished span { color: var(--paper); font-weight: 700; }
 .sequel-label {
-  margin-top: 4vh;
-  font-size: 1vw;
-  letter-spacing: 0.3em;
-  color: var(--accent2);
+  margin-top: 4.5vh;
+  font-size: 0.95vw;
+  letter-spacing: 0.36em;
+  color: var(--acc-2);
   text-transform: uppercase;
 }
 .sequel-title {
-  margin-top: 1vh;
-  font-size: 3.8vw;
-  font-weight: 900;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-family: "Shippori Mincho B1", serif;
+  margin-top: 1.4vh;
+  font-size: 4vw;
+  font-weight: 800;
+  color: var(--paper);
+  text-shadow: 0 0.6vh 3vh rgba(0,0,0,0.6);
 }
 .sequel-hint, .playing-hint {
-  margin-top: 4vh;
-  color: var(--muted);
-  font-size: 1.05vw;
+  margin-top: 4.5vh;
+  color: var(--paper-dim);
+  font-size: 1vw;
   letter-spacing: 0.05em;
 }
-.sequel-hint b, .playing-hint b { color: var(--fg); }
+.sequel-hint b, .playing-hint b { color: var(--acc-2); }
 
-.playing-msg { margin-top: 3vh; font-size: 2vw; font-weight: 700; }
-.status-msg { margin-top: 3vh; font-size: 1.6vw; font-weight: 500; color: var(--muted); max-width: 60vw; }
+.playing-msg {
+  font-family: "Shippori Mincho B1", serif;
+  margin-top: 3.4vh;
+  font-size: 2.2vw;
+  font-weight: 700;
+}
+.status-msg {
+  margin-top: 3.4vh;
+  font-size: 1.5vw;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--paper-dim);
+  max-width: 60vw;
+}
 
 /* ---- Spinner ---- */
 .spinner {
-  width: 4vw;
-  height: 4vw;
+  width: 3.6vw;
+  height: 3.6vw;
   margin: 0 auto;
   border-radius: 50%;
-  border: 0.4vw solid rgba(255,255,255,0.12);
-  border-top-color: var(--accent);
+  border: 0.32vw solid rgba(255,255,255,0.1);
+  border-top-color: var(--acc);
   animation: spin 0.9s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
