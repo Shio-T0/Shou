@@ -93,12 +93,17 @@ TOKEN = ensure_token()
 # --------------------------------------------------------------------------- #
 STATE = {
     "view": "loading",   # loading | grid | sequel | playing | empty | error
+    "list": "watching",  # which AniList list is shown: watching | planned
     "items": [],          # list of card dicts
     "cursor": 0,
     "sequel": None,       # {"finished": str, "sequel_title": str}
     "playing": None,      # {"title": str, "episode": int}
     "message": "",
 }
+
+# UI list modes -> AniList MediaListStatus + a human label for messages/empty states.
+LIST_STATUS = {"watching": "CURRENT", "planned": "PLANNING"}
+LIST_LABEL = {"watching": "Currently Watching", "planned": "Plan to Watch"}
 STATE_LOCK = threading.Lock()
 
 # Tracks the in-flight playback launch so we can detect "ani-cli found no source"
@@ -148,9 +153,9 @@ def require_auth(fn):
 # --------------------------------------------------------------------------- #
 # AniList
 # --------------------------------------------------------------------------- #
-WATCHING_QUERY = """
-query ($name: String) {
-  MediaListCollection(userName: $name, type: ANIME, status_in: [CURRENT]) {
+LIST_QUERY = """
+query ($name: String, $status: MediaListStatus) {
+  MediaListCollection(userName: $name, type: ANIME, status_in: [$status]) {
     lists {
       entries {
         progress
@@ -196,15 +201,19 @@ def _search_title(title_obj: dict) -> str:
     return title_obj.get("romaji") or title_obj.get("english") or "Unknown"
 
 
-def fetch_watching() -> list:
-    """Return the user's Currently Watching entries (raw AniList entry dicts)."""
+def fetch_list(mode: str = "watching") -> list:
+    """Return the user's entries for the given list mode (raw AniList entry dicts).
+
+    mode is one of LIST_STATUS keys ("watching" -> CURRENT, "planned" -> PLANNING).
+    """
     user = CONFIG.get("ANILIST_USER", "").strip()
     if not user or user == "CHANGE_ME":
         raise RuntimeError("ANILIST_USER is not set in ~/.config/anime/animeui.conf")
+    status = LIST_STATUS.get(mode, "CURRENT")
 
     resp = requests.post(
         ANILIST_URL,
-        json={"query": WATCHING_QUERY, "variables": {"name": user}},
+        json={"query": LIST_QUERY, "variables": {"name": user, "status": status}},
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         timeout=15,
     )
@@ -592,6 +601,7 @@ def broadcast() -> None:
     with STATE_LOCK:
         snapshot = {
             "view": STATE["view"],
+            "list": STATE["list"],
             "items": STATE["items"],
             "cursor": STATE["cursor"],
             "sequel": STATE["sequel"],
@@ -602,9 +612,12 @@ def broadcast() -> None:
 
 
 def refresh_list() -> None:
-    """Pull the watching list from AniList and reset to the grid view."""
+    """Pull the currently-selected AniList list and reset to the grid view."""
+    with STATE_LOCK:
+        mode = STATE["list"]
+    label = LIST_LABEL.get(mode, "Currently Watching")
     try:
-        entries = fetch_watching()
+        entries = fetch_list(mode)
     except Exception as exc:  # noqa: BLE001 - surface any failure to the screen
         with STATE_LOCK:
             STATE.update(view="error", items=[], sequel=None, message=str(exc))
@@ -618,7 +631,7 @@ def refresh_list() -> None:
         STATE["cursor"] = 0
         STATE["sequel"] = None
         STATE["view"] = "grid" if cards else "empty"
-        STATE["message"] = "" if cards else "Nothing in your Currently Watching list."
+        STATE["message"] = "" if cards else f"Nothing in your {label} list."
     broadcast()
 
 
@@ -676,11 +689,29 @@ def open_ui():
     bump_play_gen()
     kill_players()
     with STATE_LOCK:
+        STATE["list"] = "watching"  # a clean Open always starts on the watching list
         STATE.update(view="loading", message="Loading your AniList…")
     broadcast()
     socketio.start_background_task(refresh_list)
     ensure_kiosk()
     return jsonify(ok=True)
+
+
+@app.route("/list", methods=["POST"])
+@require_auth
+def switch_list():
+    """Switch which AniList list the grid shows. ?to=watching|planned selects an
+    explicit list; with no/unknown target it toggles between the two."""
+    target = (request.args.get("to") or "").strip().lower()
+    with STATE_LOCK:
+        if target not in LIST_STATUS:
+            target = "planned" if STATE["list"] == "watching" else "watching"
+        STATE["list"] = target
+        STATE.update(view="loading",
+                     message=f"Loading {LIST_LABEL[target]}…")
+    broadcast()
+    socketio.start_background_task(refresh_list)
+    return jsonify(ok=True, list=target)
 
 
 @app.route("/back", methods=["POST"])

@@ -61,6 +61,16 @@ html, body {
   color: transparent;
 }
 .count { color: var(--muted); font-size: 1vw; font-weight: 500; letter-spacing: 0.3em; }
+.listlabel {
+  font-size: 0.95vw;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  padding: 0.6vh 1.3vw;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(100deg, var(--accent), var(--accent2));
+  box-shadow: 0 0.5vh 1.5vh rgba(124, 92, 255, 0.3);
+}
 
 /* ---- Stage / carousel ---- */
 #stage {

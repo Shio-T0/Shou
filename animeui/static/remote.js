@@ -14,6 +14,7 @@ const el = {
   title: document.getElementById("mirror-title"),
   episode: document.getElementById("mirror-episode"),
   toast: document.getElementById("toast"),
+  segBtns: Array.from(document.querySelectorAll("#listseg .seg-btn")),
 };
 
 let toastTimer = null;
@@ -52,6 +53,21 @@ document.querySelectorAll("[data-act]").forEach((btn) => {
   btn.addEventListener("click", () => send(btn.dataset.act));
 });
 
+// List switcher (Watching / Planned) -> POST /list?to=<mode>
+const LIST_LABEL = { watching: "Watching", planned: "Planned" };
+async function switchList(mode) {
+  if (navigator.vibrate) navigator.vibrate(12);
+  toast(LIST_LABEL[mode] || mode);
+  try {
+    await fetch(`/list?to=${mode}&k=${encodeURIComponent(TOKEN)}`, { method: "POST" });
+  } catch (e) {
+    toast("⚠ no connection");
+  }
+}
+el.segBtns.forEach((btn) => {
+  btn.addEventListener("click", () => switchList(btn.dataset.list));
+});
+
 // --- Live mirror via SocketIO ----------------------------------------------
 const VIEW_LABEL = {
   grid: "Browsing",
@@ -76,6 +92,10 @@ socket.on("disconnect", () => {
 
 socket.on("state", (s) => {
   el.view.textContent = VIEW_LABEL[s.view] || s.view;
+
+  if (s.list) {
+    el.segBtns.forEach((b) => b.classList.toggle("active", b.dataset.list === s.list));
+  }
 
   if (s.view === "grid" && s.items && s.items.length) {
     const it = s.items[s.cursor] || s.items[0];

@@ -149,6 +149,36 @@ body {
 }
 .btn-back { color: var(--muted); }
 
+/* ---- List switcher (Watching / Planned) ---- */
+.seg {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.seg-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  padding: 13px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.08s ease;
+}
+.seg-btn:active { transform: scale(0.96); }
+.seg-btn.active {
+  background: linear-gradient(100deg, var(--accent), var(--accent2));
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(124, 92, 255, 0.35);
+}
+
 .nav-row .btn-nav {
   flex: 1;
   font-size: 26px;

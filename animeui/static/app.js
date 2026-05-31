@@ -6,6 +6,7 @@ const socket = io();
 const el = {
   backdrop: document.getElementById("backdrop"),
   count: document.getElementById("count"),
+  listlabel: document.getElementById("listlabel"),
   stage: document.getElementById("stage"),
   carousel: document.getElementById("carousel"),
   infoTitle: document.getElementById("info-title"),
@@ -108,8 +109,11 @@ function showOnly(view) {
   el.statusView.classList.toggle("hidden", !isStatus);
 }
 
+const LIST_LABEL = { watching: "WATCHING", planned: "PLAN TO WATCH" };
+
 socket.on("state", (s) => {
   showOnly(s.view);
+  if (s.list && el.listlabel) el.listlabel.textContent = LIST_LABEL[s.list] || s.list;
 
   if (s.view === "grid") {
     const sig = s.items.map((i) => i.id).join(",");
