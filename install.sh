@@ -30,6 +30,15 @@ ok()    { printf '   %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
 warn()  { printf '   %s!%s %s\n' "$YELLOW" "$RESET" "$1"; }
 die()   { printf '\n%s✗ %s%s\n' "$RED" "$1" "$RESET" >&2; exit 1; }
 
+# Portable hostname — `hostname` (inetutils) isn't installed on a default Arch box.
+get_hostname() {
+  local h="${HOSTNAME:-}"
+  [[ -z "$h" && -r /etc/hostname ]] && h="$(< /etc/hostname)"
+  [[ -z "$h" && -r /proc/sys/kernel/hostname ]] && h="$(< /proc/sys/kernel/hostname)"
+  [[ -z "$h" ]] && h="$(uname -n 2>/dev/null || echo localhost)"
+  printf '%s' "$h"
+}
+
 partial_upgrade_hint() {
   printf '\n%s%s   pacman couldn'\''t install a dependency.%s\n' "$BOLD" "$YELLOW" "$RESET"
   printf '   If you saw %s"breaks dependency"%s or %s"unable to satisfy dependency"%s, your\n' "$BOLD" "$RESET" "$BOLD" "$RESET"
@@ -194,7 +203,7 @@ step "mDNS — reach the PC by name from your phone"
 if systemctl is-active --quiet avahi-daemon 2>/dev/null; then
   ok "avahi-daemon already running."
 else
-  if ask_yes "Enable avahi-daemon so the phone can use ${BOLD}$(hostname).local${RESET}?"; then
+  if ask_yes "Enable avahi-daemon so the phone can use ${BOLD}$(get_hostname).local${RESET}?"; then
     sudo systemctl enable --now avahi-daemon
     ok "avahi-daemon enabled."
   else
@@ -252,7 +261,7 @@ fi
 #  Done — next steps
 # --------------------------------------------------------------------------- #
 TOKEN="$(grep -E '^REMOTE_TOKEN=' "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\042\047' || true)"
-HOST="$(hostname)"
+HOST="$(get_hostname)"
 printf '\n%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s  AnimeUI is installed. 🎌%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$BOLD" "$GREEN" "$RESET"
