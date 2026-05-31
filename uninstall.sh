@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#  AnimeUI uninstaller — undoes what install.sh set up.
+#  Shou uninstaller — undoes what install.sh set up.
 #
 #  Conservative by design: it stops the server, removes the Hyprland autostart
 #  line, and (only if you ask) deletes your config. It does NOT remove system
@@ -44,21 +44,21 @@ ask_no() {   # default NO
 #  Paths
 # --------------------------------------------------------------------------- #
 REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-APP_DIR="$REPO_DIR/animeui"
-CONFIG_DIR="$HOME/.config/anime"
-DAEMON="$REPO_DIR/animeui_daemon.sh"
+APP_DIR="$REPO_DIR/shou"
+CONFIG_DIR="$HOME/.config/shou"
+DAEMON="$REPO_DIR/shou_daemon.sh"
 PORT=4100
-[[ -f "$CONFIG_DIR/animeui.conf" ]] && PORT="$(grep -E '^PORT=' "$CONFIG_DIR/animeui.conf" | head -1 | cut -d= -f2- | tr -d '\042\047' || echo 4100)"
+[[ -f "$CONFIG_DIR/shou.conf" ]] && PORT="$(grep -E '^PORT=' "$CONFIG_DIR/shou.conf" | head -1 | cut -d= -f2- | tr -d '\042\047' || echo 4100)"
 PORT="${PORT:-4100}"
 
-printf '%s%s\n   🎌  AnimeUI — uninstaller%s\n' "$BOLD" "$MAGENTA" "$RESET"
+printf '%s%s\n   🎌  Shou — uninstaller%s\n' "$BOLD" "$MAGENTA" "$RESET"
 
 # --------------------------------------------------------------------------- #
 step "Stopping the running server"
 # --------------------------------------------------------------------------- #
 PIDS="$(ss -ltnp 2>/dev/null | grep ":$PORT" | grep -oP 'pid=\K[0-9]+' | sort -u || true)"
 # Also catch the daemon wrapper + uv runner by command line.
-PIDS="$PIDS $(pgrep -f 'animeui_daemon.sh' || true) $(pgrep -f 'animeui/server.py' || true)"
+PIDS="$PIDS $(pgrep -f 'shou_daemon.sh' || true) $(pgrep -f 'shou/server.py' || true)"
 PIDS="$(echo "$PIDS" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u | tr '\n' ' ' || true)"
 if [[ -n "${PIDS// /}" ]]; then
   info "Found processes: $PIDS"
@@ -79,9 +79,9 @@ REMOVED=0
 for f in "$HOME/.config/hypr/hyprland/execs.conf" "$HOME/.config/hypr/hyprland.conf"; do
   [[ -f "$f" ]] || continue
   if grep -qF "$DAEMON" "$f"; then
-    cp "$f" "$f.animeui.bak.$(date +%s)"
+    cp "$f" "$f.shou.bak.$(date +%s)"
     # Drop our comment line and the exec-once line referencing the daemon.
-    grep -vF "$DAEMON" "$f" | grep -vF '# AnimeUI server (auto-added by install.sh)' >"$f.tmp" && mv "$f.tmp" "$f"
+    grep -vF "$DAEMON" "$f" | grep -vF '# Shou server (auto-added by install.sh)' >"$f.tmp" && mv "$f.tmp" "$f"
     ok "Removed autostart from ${DIM}$f${RESET} (backup saved)."
     REMOVED=1
   fi
@@ -122,7 +122,7 @@ fi
 #  Done
 # --------------------------------------------------------------------------- #
 printf '\n%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$BOLD" "$GREEN" "$RESET"
-printf '%s%s  AnimeUI uninstalled.%s\n' "$BOLD" "$GREEN" "$RESET"
+printf '%s%s  Shou uninstalled.%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$BOLD" "$GREEN" "$RESET"
 info "Left untouched (remove manually if you want):"
 info "  • system packages — ${DIM}sudo pacman -Rns ani-cli librsvg${RESET} (avahi/mpv/firefox likely used elsewhere)"

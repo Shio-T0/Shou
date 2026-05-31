@@ -1,8 +1,8 @@
-// AnimeUI phone remote — sends control commands to the server and mirrors the
+// Shou phone remote — sends control commands to the server and mirrors the
 // kiosk state live. Everything is gated by a shared token carried in the URL.
 
 const TOKEN =
-  window.ANIMEUI_TOKEN ||
+  window.SHOU_TOKEN ||
   new URLSearchParams(location.search).get("k") ||
   "";
 
@@ -125,7 +125,7 @@ socket.on("state", (s) => {
     el.episode.textContent = s.playing ? "Episode " + s.playing.episode : s.message || "";
     setProgress(100);
   } else {
-    el.title.textContent = s.message || VIEW_LABEL[s.view] || "AnimeUI";
+    el.title.textContent = s.message || VIEW_LABEL[s.view] || "Shou";
     el.episode.textContent = "";
     setCover("", "", "#100f13");
   }

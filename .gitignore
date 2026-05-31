@@ -2,11 +2,11 @@
 __pycache__/
 *.py[cod]
 .venv/
-animeui/.venv/
+shou/.venv/
 
-# Runtime / local state (lives in ~/.config/anime, never the repo)
+# Runtime / local state (lives in ~/.config/shou, never the repo)
 *.log
-animeui.conf
+shou.conf
 state
 
 # Editor / OS cruft

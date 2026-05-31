@@ -1,8 +1,8 @@
 #!/bin/bash
 # Usage: anime_set.sh "Anime Name" <episode> <selection_number>
 # selection_number = which result to pick from ani-cli search (usually 1)
-STATE="$HOME/.config/anime/state"
-mkdir -p "$HOME/.config/anime"
+STATE="$HOME/.config/shou/state"
+mkdir -p "$HOME/.config/shou"
 
 ANIME="${1:-Cowboy Bebop}"
 EPISODE="${2:-1}"

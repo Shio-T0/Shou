@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>AnimeUI · Remote</title>
+  <title>Shou · Remote</title>
 
   <!-- PWA -->
   <link rel="manifest" href="/manifest.webmanifest?k={{ token }}" />
@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='remote.css') }}" />
-  <script>window.ANIMEUI_TOKEN = {{ token|tojson }};</script>
+  <script>window.SHOU_TOKEN = {{ token|tojson }};</script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
@@ -29,7 +29,7 @@
     <div class="brand">
       <span class="brand-glyph">朱</span>
       <span class="brand-text">
-        <span class="brand-name">ANIMEUI</span>
+        <span class="brand-name">SHOU</span>
         <span class="brand-sub">アニメ・リモート</span>
       </span>
     </div>
@@ -46,7 +46,7 @@
       <img id="mirror-cover" class="hero-cover" alt="" />
       <div class="hero-meta">
         <div class="hero-kicker"><span id="mirror-view">—</span><span id="mirror-index" class="hero-index"></span></div>
-        <h1 id="mirror-title" class="hero-title">AnimeUI</h1>
+        <h1 id="mirror-title" class="hero-title">Shou</h1>
         <div id="mirror-episode" class="hero-episode"></div>
       </div>
     </div>

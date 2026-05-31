@@ -1,4 +1,4 @@
-// AnimeUI kiosk — a pure live view driven by SocketIO "state" events.
+// Shou kiosk — a pure live view driven by SocketIO "state" events.
 // All control comes from the phone (KDE Connect / web remote -> server REST -> SocketIO).
 
 const socket = io();

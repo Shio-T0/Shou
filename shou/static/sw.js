@@ -1,6 +1,6 @@
 // Minimal service worker — just enough to make the remote installable as a PWA
 // (in a secure context). Caches the app shell; network-first with cache fallback.
-const CACHE = "animeui-remote-v1";
+const CACHE = "shou-remote-v1";
 const SHELL = [
   "/static/remote.css",
   "/static/remote.js",

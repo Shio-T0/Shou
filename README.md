@@ -1,6 +1,6 @@
-# 🎌 AnimeUI
+# 🎌 Shou
 
-**Watch your anime entirely from your phone.** AnimeUI puts your AniList list on the big
+**Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse and play episodes from a beautiful phone remote — you never
 touch the computer.
 
@@ -23,7 +23,7 @@ auto-fullscreen niceties).
 - [Requirements](#requirements)
 - [Install](#install)
 - [Configuration](#configuration)
-- [Using AnimeUI](#using-animeui)
+- [Using Shou](#using-shou)
   - [1. Get it running](#1-get-it-running)
   - [2. Set up your phone](#2-set-up-your-phone)
   - [3. The remote at a glance](#3-the-remote-at-a-glance)
@@ -88,7 +88,7 @@ The installer is **idempotent** (safe to re-run) and asks before each system cha
 2. Installs the system + AUR dependencies (skips anything already present).
 3. Syncs the Python env (`uv sync`).
 4. Marks the control scripts executable.
-5. Writes `~/.config/anime/animeui.conf`, prompting for your **public** AniList username.
+5. Writes `~/.config/shou/shou.conf`, prompting for your **public** AniList username.
 6. Enables `avahi-daemon` + wires `nss-mdns` so the phone can reach `<hostname>.local`.
 7. Adds a Hyprland `exec-once` autostart line for the daemon.
 8. Optionally sets up AniList write access and starts the server.
@@ -101,7 +101,7 @@ When it finishes it prints your phone remote URL
 
 ## Configuration
 
-`~/.config/anime/animeui.conf`:
+`~/.config/shou/shou.conf`:
 
 ```ini
 ANILIST_USER="your_username"   # must be a PUBLIC list
@@ -109,7 +109,7 @@ PORT="4100"                    # server + phone remote port
 QUALITY="1080p"                # passed to ani-cli
 WATCHED_PERCENT="90"           # auto-mark watched once playback passes this %
 # REMOTE_TOKEN="..."           # auto-generated on first launch — don't set by hand
-# ANILIST_TOKEN="..."          # OAuth write token — set by ./animeui_auth.sh
+# ANILIST_TOKEN="..."          # OAuth write token — set by ./shou_auth.sh
 ```
 
 Changing `ANILIST_USER` / `QUALITY` only needs an **Open** tap (config reloads); no
@@ -117,7 +117,7 @@ restart. Changing `PORT`, `REMOTE_TOKEN`, or `ANILIST_TOKEN` needs a daemon rest
 
 ---
 
-## Using AnimeUI
+## Using Shou
 
 ### 1. Get it running
 
@@ -125,7 +125,7 @@ If you enabled autostart during install, the daemon launches on login — nothin
 Otherwise start it once:
 
 ```bash
-./animeui_daemon.sh        # or just log out and back in
+./shou_daemon.sh        # or just log out and back in
 ```
 
 The server runs in the background; the kiosk window appears the first time you press
@@ -135,8 +135,8 @@ The server runs in the background; the kiosk window appears the first time you p
 
 1. On your phone's browser, open the remote URL the installer printed:
    `http://<hostname>.local:4100/remote?k=<token>`
-   (find it again anytime at the top of `~/.config/anime/animeui.log`).
-2. It should load the dark **AnimeUI remote**. The little dot top-right turns **green
+   (find it again anytime at the top of `~/.config/shou/shou.log`).
+2. It should load the dark **Shou remote**. The little dot top-right turns **green
    “live”** when it's connected to the PC.
 3. **Add it to your home screen** (browser menu → *Add to Home screen* / *Install*) so
    it's a one-tap icon from then on.
@@ -150,7 +150,7 @@ The server runs in the background; the kiosk window appears the first time you p
 
 ```
 ┌───────────────────────────────┐
-│ 朱 ANIMEUI            ● live   │   ← brand + connection status
+│ 朱 SHOU            ● live   │   ← brand + connection status
 │ ┌───────────────────────────┐ │
 │ │  cover   NOW WATCHING  3/7│ │   ← live mirror of the kiosk:
 │ │  ▥▥▥▥    F R I E R E N    │ │     what's highlighted, episode,
@@ -167,7 +167,7 @@ The server runs in the background; the kiosk window appears the first time you p
 
 | Button | What it does |
 | --- | --- |
-| **⏻ Open** | (Re)opens AnimeUI: stops anything playing, refreshes your list, shows the kiosk fullscreen. Your “home” button. |
+| **⏻ Open** | (Re)opens Shou: stops anything playing, refreshes your list, shows the kiosk fullscreen. Your “home” button. |
 | **◀ / ▶** | Move the highlight left/right through the coverflow. |
 | **SELECT** | Choose the highlighted anime (see [Watch something](#4-watch-something)). |
 | **⤺ Back** | Stop playback and return to the carousel (re-fullscreens the kiosk). |
@@ -184,14 +184,14 @@ action even if you're across the room from the screen.
 1. Tap **⏻ Open**. The kiosk fades in on the PC with your *Currently Watching* list as a
    3D coverflow.
 2. Tap **◀ / ▶** to bring the anime you want to the centre.
-3. Tap **SELECT**. AnimeUI:
+3. Tap **SELECT**. Shou:
    - **plays your next unwatched episode** fullscreen (progress + 1), or
    - if you're **caught up and a sequel exists**, shows a *“✓ All caught up — recommended
      sequel”* card. Tap **SELECT** again to start the sequel from episode 1, or
    - if you're caught up with **no sequel**, plays the latest released episode.
 4. When you're done, tap **⤺ Back** to return to the carousel.
 
-If a source can't be found, AnimeUI automatically tries the backup (`anipy`) scrapers;
+If a source can't be found, Shou automatically tries the backup (`anipy`) scrapers;
 if everything fails it shows a clear error card on the kiosk instead of hanging — press
 **Back** and try another title.
 
@@ -202,7 +202,7 @@ The video is fullscreen `mpv`. From the phone:
 - **⏯** pause/resume,
 - **« 30s / 30s »** to skip the recap or rewind,
 - **⏮ / ⏭** to switch episodes,
-- **⤺ Back** to stop and return to the AnimeUI carousel.
+- **⤺ Back** to stop and return to the Shou carousel.
 
 ### 6. Watching vs Plan to Watch
 
@@ -215,23 +215,23 @@ to the *Watching* list.
 
 ## Auto-mark episodes watched on AniList
 
-By default AnimeUI only **reads** your public list. To have it **tick episodes off on
+By default Shou only **reads** your public list. To have it **tick episodes off on
 AniList automatically** when you finish them, grant write access once:
 
 ```bash
-./animeui_auth.sh
+./shou_auth.sh
 ```
 
 It walks you through creating an AniList API client
 (`https://anilist.co/settings/developer`, redirect URL `https://anilist.co/api/v2/oauth/pin`),
 approving it, and pasting the code. The resulting OAuth token is saved as `ANILIST_TOKEN`
-in `animeui.conf` (gitignored, never in the repo). The installer also offers this step.
+in `shou.conf` (gitignored, never in the repo). The installer also offers this step.
 **Restart the daemon afterwards.**
 
 Once enabled, when playback passes `WATCHED_PERCENT` (default 90%) — or `mpv` reaches a
-clean end — AnimeUI sets that episode as your progress (only ever **increasing** it, so a
+clean end — Shou sets that episode as your progress (only ever **increasing** it, so a
 rewatch or **⏮** never lowers it) and flips the entry to **Completed** on the final
-episode. Tokens last ~1 year; re-run `./animeui_auth.sh` when it expires.
+episode. Tokens last ~1 year; re-run `./shou_auth.sh` when it expires.
 
 ## KDE Connect buttons (alternative to the web remote)
 
@@ -241,11 +241,11 @@ instead of (or alongside) the PWA, add one command per script — they're thin l
 
 | Command name | Script |
 | --- | --- |
-| AnimeUI: Open | `…/ScriptsKDE/animeui_open.sh` |
-| AnimeUI: ◀ Left | `…/ScriptsKDE/animeui_left.sh` |
-| AnimeUI: ▶ Right | `…/ScriptsKDE/animeui_right.sh` |
-| AnimeUI: Select | `…/ScriptsKDE/animeui_select.sh` |
-| AnimeUI: Back | `…/ScriptsKDE/animeui_back.sh` |
+| Shou: Open | `…/ScriptsKDE/shou_open.sh` |
+| Shou: ◀ Left | `…/ScriptsKDE/shou_left.sh` |
+| Shou: ▶ Right | `…/ScriptsKDE/shou_right.sh` |
+| Shou: Select | `…/ScriptsKDE/shou_select.sh` |
+| Shou: Back | `…/ScriptsKDE/shou_back.sh` |
 
 (The web remote covers everything including playback + list switching; KDE Connect covers
 the core navigation.)
@@ -272,13 +272,13 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 - **Phone can't reach the PC** — confirm same network; try the LAN IP instead of
   `<hostname>.local`; make sure `avahi-daemon` is running (`systemctl status avahi-daemon`).
 - **Remote loads but says offline / not live** — the daemon isn't running; start it
-  (see [below](#run--restart-manually)) or check `~/.config/anime/animeui.log`.
-- **“ANILIST_USER is not set”** — set it in `animeui.conf` and make sure the list is
+  (see [below](#run--restart-manually)) or check `~/.config/shou/shou.log`.
+- **“ANILIST_USER is not set”** — set it in `shou.conf` and make sure the list is
   **public** (AniList → Settings → Profile).
 - **Kiosk shows the old design after an update** — the running Firefox caches the page.
   Close the kiosk window and tap **Open** to relaunch it fresh.
 - **Nothing plays / “no playable source”** — the scrapers couldn't find that title;
-  AnimeUI already tried the backup. Try another entry; check `~/.config/anime/ani-cli-last.log`.
+  Shou already tried the backup. Try another entry; check `~/.config/shou/ani-cli-last.log`.
 - **Changed a template / `server.py`** — restart the daemon (templates are cached in the
   running process). Editing only `static/*` just needs a kiosk reload.
 
@@ -286,17 +286,17 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 
 ```bash
 # start (foreground-ish, restart-on-crash wrapper — what autostart runs)
-./animeui_daemon.sh
+./shou_daemon.sh
 
 # restart the daemon (kill the daemon first so it doesn't respawn the old server)
-pkill -f animeui_daemon.sh; pkill -f animeui/server.py
-setsid nohup ~/Projects/ScriptsKDE/animeui_daemon.sh >/dev/null 2>&1 &
+pkill -f shou_daemon.sh; pkill -f shou/server.py
+setsid nohup ~/Projects/ScriptsKDE/shou_daemon.sh >/dev/null 2>&1 &
 
 # run the server directly (no restart wrapper), e.g. to see logs live
-uv run --project animeui python animeui/server.py
+uv run --project shou python shou/server.py
 ```
 
-The server prints the full `/remote?k=…` URL to `~/.config/anime/animeui.log` on startup.
+The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on startup.
 
 ## Uninstall
 
@@ -315,10 +315,10 @@ MIT — see [LICENSE](LICENSE).
 
 ## Disclaimer
 
-AnimeUI is a personal hobby project. It hosts, stores, and distributes **no** copyrighted
+Shou is a personal hobby project. It hosts, stores, and distributes **no** copyrighted
 content. It is a thin controller that drives third-party programs (`ani-cli`, `anipy-cli`,
 `mpv`) and the public **AniList** API. Any streams those tools locate come from
-third-party sites that AnimeUI neither operates nor is affiliated with — you alone are
+third-party sites that Shou neither operates nor is affiliated with — you alone are
 responsible for how you use it and for complying with the laws of your jurisdiction.
 Please support creators through official services (Crunchyroll, Netflix, HIDIVE, your
 local licensors, Blu-ray, etc.). Provided "as is", without warranty (see [LICENSE](LICENSE)).

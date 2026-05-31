@@ -62,8 +62,8 @@ banner() {
   cat <<'ART'
 
    ┌──────────────────────────────────────────────┐
-   │   🎌  A N I M E U I   —   I N S T A L L E R   │
-   │   phone-controlled AniList watching, on Arch  │
+   │   朱   S H O U   ·   I N S T A L L E R         │
+   │   your anime, controlled from your phone       │
    └──────────────────────────────────────────────┘
 ART
   printf '%s' "$RESET"
@@ -73,10 +73,10 @@ ART
 #  Paths
 # --------------------------------------------------------------------------- #
 REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-APP_DIR="$REPO_DIR/animeui"
-CONFIG_DIR="$HOME/.config/anime"
-CONFIG_FILE="$CONFIG_DIR/animeui.conf"
-DAEMON="$REPO_DIR/animeui_daemon.sh"
+APP_DIR="$REPO_DIR/shou"
+CONFIG_DIR="$HOME/.config/shou"
+CONFIG_FILE="$CONFIG_DIR/shou.conf"
+DAEMON="$REPO_DIR/shou_daemon.sh"
 
 # Packages from the official repos and the AUR.
 OFFICIAL_PKGS=(uv firefox mpv playerctl curl libnotify avahi nss-mdns librsvg)
@@ -89,14 +89,14 @@ step "Pre-flight checks"
 # --------------------------------------------------------------------------- #
 [[ $EUID -eq 0 ]] && die "Run this as your normal user, not root (it uses sudo only where needed)."
 command -v pacman >/dev/null 2>&1 || die "This installer targets Arch Linux (pacman not found)."
-[[ -f "$APP_DIR/server.py" ]] || die "Can't find animeui/server.py next to this script. Run it from inside the repo."
+[[ -f "$APP_DIR/server.py" ]] || die "Can't find shou/server.py next to this script. Run it from inside the repo."
 ok "Arch Linux detected, repo at ${DIM}$REPO_DIR${RESET}"
 
 if command -v hyprctl >/dev/null 2>&1 || [[ "${XDG_CURRENT_DESKTOP:-}" == *Hyprland* ]]; then
   ok "Hyprland detected — auto-focus / auto-fullscreen of the kiosk & player will work."
   HAS_HYPR=1
 else
-  warn "Hyprland not detected. AnimeUI still runs, but the window auto-focus/fullscreen"
+  warn "Hyprland not detected. Shou still runs, but the window auto-focus/fullscreen"
   warn "tricks (hyprctl) won't apply on other compositors. Everything else works."
   HAS_HYPR=0
 fi
@@ -167,8 +167,8 @@ ok "Python virtualenv synced from uv.lock."
 # --------------------------------------------------------------------------- #
 step "Making control scripts executable"
 # --------------------------------------------------------------------------- #
-chmod +x "$REPO_DIR"/animeui_*.sh "$REPO_DIR"/anime_*.sh 2>/dev/null || true
-ok "AnimeUI + legacy anime scripts are executable."
+chmod +x "$REPO_DIR"/shou_*.sh "$REPO_DIR"/anime_*.sh 2>/dev/null || true
+ok "Shou + legacy anime scripts are executable."
 
 # --------------------------------------------------------------------------- #
 step "Configuration"
@@ -184,7 +184,7 @@ else
   read -r ANILIST_USER || true
   [[ -z "${ANILIST_USER:-}" ]] && ANILIST_USER="CHANGE_ME"
   cat >"$CONFIG_FILE" <<EOF
-# AnimeUI configuration
+# Shou configuration
 # Your AniList username — the list MUST be public (Settings → Profile → "public").
 ANILIST_USER="$ANILIST_USER"
 # Port the server / phone remote listens on.
@@ -213,7 +213,7 @@ fi
 # nss-mdns wiring so *.local actually resolves locally too.
 if ! grep -qE '^\s*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
   if ask_yes "Add 'mdns_minimal' to /etc/nsswitch.conf for .local resolution? (a backup is made)"; then
-    sudo cp /etc/nsswitch.conf "/etc/nsswitch.conf.animeui.bak.$(date +%s)"
+    sudo cp /etc/nsswitch.conf "/etc/nsswitch.conf.shou.bak.$(date +%s)"
     sudo sed -i -E 's/^(hosts:\s*)(.*)$/\1mdns_minimal [NOTFOUND=return] \2/' /etc/nsswitch.conf
     ok "nsswitch.conf updated (backup saved)."
   fi
@@ -233,11 +233,11 @@ if [[ "$HAS_HYPR" -eq 1 && -n "$HYPR_TARGET" ]]; then
   if grep -qF "$DAEMON" "$HYPR_TARGET"; then
     ok "Autostart already present in ${DIM}$HYPR_TARGET${RESET}"
   elif ask_yes "Add the daemon to ${DIM}$HYPR_TARGET${RESET} so it starts on login?"; then
-    printf '\n# AnimeUI server (auto-added by install.sh)\n%s\n' "$EXEC_LINE" >>"$HYPR_TARGET"
+    printf '\n# Shou server (auto-added by install.sh)\n%s\n' "$EXEC_LINE" >>"$HYPR_TARGET"
     ok "Added autostart line."
   fi
 else
-  warn "No Hyprland config found to edit. Start AnimeUI on login yourself with:"
+  warn "No Hyprland config found to edit. Start Shou on login yourself with:"
   printf '       %s%s%s\n' "$DIM" "$DAEMON" "$RESET"
 fi
 
@@ -247,12 +247,12 @@ step "AniList write access — auto-mark episodes watched (optional)"
 if grep -q '^ANILIST_TOKEN=' "$CONFIG_FILE" 2>/dev/null; then
   ok "AniList token already configured."
 else
-  info "Lets AnimeUI tick episodes off on AniList automatically once you finish them."
+  info "Lets Shou tick episodes off on AniList automatically once you finish them."
   info "Needs a one-time AniList API client + approval (write access)."
   if ask_yes "Set this up now?"; then
-    "$REPO_DIR/animeui_auth.sh" || warn "Auth didn't complete — run ./animeui_auth.sh anytime."
+    "$REPO_DIR/shou_auth.sh" || warn "Auth didn't complete — run ./shou_auth.sh anytime."
   else
-    warn "Skipped — run ${DIM}./animeui_auth.sh${RESET} later to enable it."
+    warn "Skipped — run ${DIM}./shou_auth.sh${RESET} later to enable it."
   fi
 fi
 
@@ -261,7 +261,7 @@ step "Start the server now?"
 # --------------------------------------------------------------------------- #
 if curl -s -o /dev/null "http://127.0.0.1:4100/" 2>/dev/null; then
   ok "Server already answering on :4100."
-elif ask_yes "Launch the AnimeUI daemon now?"; then
+elif ask_yes "Launch the Shou daemon now?"; then
   setsid nohup "$DAEMON" >/dev/null 2>&1 &
   for _ in $(seq 1 20); do
     curl -s -o /dev/null "http://127.0.0.1:4100/" 2>/dev/null && break
@@ -269,7 +269,7 @@ elif ask_yes "Launch the AnimeUI daemon now?"; then
   done
   curl -s -o /dev/null "http://127.0.0.1:4100/" 2>/dev/null \
     && ok "Server is up." \
-    || warn "Server didn't answer yet — check ~/.config/anime/animeui.log"
+    || warn "Server didn't answer yet — check ~/.config/shou/shou.log"
 fi
 
 # --------------------------------------------------------------------------- #
@@ -278,7 +278,7 @@ fi
 TOKEN="$(grep -E '^REMOTE_TOKEN=' "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\042\047' || true)"
 HOST="$(get_hostname)"
 printf '\n%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$BOLD" "$GREEN" "$RESET"
-printf '%s%s  AnimeUI is installed. 🎌%s\n' "$BOLD" "$GREEN" "$RESET"
+printf '%s%s  Shou is installed. 🎌%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$BOLD" "$GREEN" "$RESET"
 
 printf '%sPhone web-remote:%s\n' "$BOLD" "$RESET"
@@ -287,12 +287,12 @@ if [[ -n "$TOKEN" ]]; then
   info "Open it on your phone, then 'Add to Home screen' for a one-tap icon."
 else
   info "Start the server once; it generates a token and prints the full /remote URL"
-  info "to ${DIM}~/.config/anime/animeui.log${RESET}. Then add that URL to your phone's home screen."
+  info "to ${DIM}~/.config/shou/shou.log${RESET}. Then add that URL to your phone's home screen."
 fi
 
 printf '\n%sKDE Connect buttons%s (Run Command plugin → add these commands):\n' "$BOLD" "$RESET"
 for s in open left right select back; do
-  printf '   %sAnimeUI %-7s%s  %s%s/animeui_%s.sh%s\n' "$MAGENTA" "$s" "$RESET" "$DIM" "$REPO_DIR" "$s" "$RESET"
+  printf '   %sShou %-7s%s  %s%s/shou_%s.sh%s\n' "$MAGENTA" "$s" "$RESET" "$DIM" "$REPO_DIR" "$s" "$RESET"
 done
 
 printf '\n%sTip:%s if %s.local%s doesn'\''t resolve on the phone, use the PC'\''s LAN IP instead.\n' \

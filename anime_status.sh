@@ -1,6 +1,6 @@
 #!/bin/bash
 # Show current anime status as notification
-STATE="$HOME/.config/anime/state"
+STATE="$HOME/.config/shou/state"
 
 if [ ! -f "$STATE" ]; then
   notify-send "🎌 Anime Player" "Nothing set." -u normal

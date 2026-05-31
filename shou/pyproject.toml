@@ -1,5 +1,5 @@
 [project]
-name = "animeui"
+name = "shou"
 version = "0.1.0"
 description = "Phone-controlled AniList watching UI for KDE Connect"
 requires-python = ">=3.13"

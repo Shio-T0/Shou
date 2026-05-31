@@ -1,10 +1,10 @@
 #!/bin/bash
 # Skip to next episode
-STATE="$HOME/.config/anime/state"
+STATE="$HOME/.config/shou/state"
 source "$STATE"
 
 # Unique marker so we only ever kill OUR mpv, never e.g. an mpvpaper wallpaper.
-MPV_IPC="${XDG_RUNTIME_DIR:-/tmp}/animeui-mpv.sock"
+MPV_IPC="${XDG_RUNTIME_DIR:-/tmp}/shou-mpv.sock"
 
 # Kill only the anime mpv (matched by the marker), not every mpv on the system.
 pkill -f "$MPV_IPC" 2>/dev/null

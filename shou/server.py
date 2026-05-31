@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""AnimeUI — phone-controlled AniList "Currently Watching" launcher.
+"""Shou — phone-controlled AniList "Currently Watching" launcher.
 
-A long-running Flask + SocketIO server that is the single brain for AnimeUI:
+A long-running Flask + SocketIO server that is the single brain for Shou:
   * fetches your AniList "Currently Watching" list (public username, no auth),
   * shows a live carousel UI in a Firefox kiosk (which it launches/focuses itself),
   * serves a touch-first phone web-remote (PWA) that mirrors the kiosk live,
   * launches episodes through ani-cli/mpv (fullscreen) and writes the shared
-    ~/.config/anime/state file so the legacy next/prev/pause scripts keep working.
+    ~/.config/shou/state file so the legacy next/prev/pause scripts keep working.
 
 Control endpoints are reachable from loopback without auth (kiosk page + KDE Connect
 scripts) and require a shared-secret token (?k=…) from any networked client (the phone).
@@ -40,16 +40,16 @@ from flask_socketio import SocketIO
 # --------------------------------------------------------------------------- #
 # Config
 # --------------------------------------------------------------------------- #
-CONFIG_DIR = Path.home() / ".config" / "anime"
-CONFIG_FILE = CONFIG_DIR / "animeui.conf"
+CONFIG_DIR = Path.home() / ".config" / "shou"
+CONFIG_FILE = CONFIG_DIR / "shou.conf"
 STATE_FILE = CONFIG_DIR / "state"
 FF_PROFILE = CONFIG_DIR / "ff-profile"
-FF_PIDFILE = CONFIG_DIR / "animeui-ff.pid"
+FF_PIDFILE = CONFIG_DIR / "shou-ff.pid"
 ANILIST_URL = "https://graphql.anilist.co"
 
 
 def load_config() -> dict:
-    """Parse the shell-style KEY="value" animeui.conf."""
+    """Parse the shell-style KEY="value" shou.conf."""
     cfg = {"ANILIST_USER": "", "PORT": "4100", "QUALITY": "1080p", "REMOTE_TOKEN": "",
            "ANILIST_TOKEN": "", "WATCHED_PERCENT": "90"}
     if CONFIG_FILE.exists():
@@ -67,7 +67,7 @@ PORT = int(CONFIG.get("PORT") or 4100)
 
 
 def reload_config() -> None:
-    """Re-read animeui.conf (called on /open) so ANILIST_USER/QUALITY changes apply
+    """Re-read shou.conf (called on /open) so ANILIST_USER/QUALITY changes apply
     without restarting the daemon. PORT and the token stay fixed for the session."""
     global CONFIG
     fresh = load_config()
@@ -113,9 +113,9 @@ STATE_LOCK = threading.Lock()
 PLAYBACK = {"gen": 0, "proc": None}
 ANI_LOG = CONFIG_DIR / "ani-cli-last.log"
 # Unique cmdline marker on every mpv WE launch (an mpv IPC socket path). It lets us
-# stop *only* AnimeUI's player and never touch other mpv instances — e.g. mpvpaper
+# stop *only* Shou's player and never touch other mpv instances — e.g. mpvpaper
 # live wallpapers. Also doubles as an IPC control socket for future use.
-MPV_IPC = str(Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "animeui-mpv.sock")
+MPV_IPC = str(Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "shou-mpv.sock")
 # What ani-cli should run as its player: fullscreen mpv tagged with our marker.
 ANI_CLI_PLAYER = f"mpv --fs --input-ipc-server={MPV_IPC}"
 # How long ani-cli gets to actually start mpv before we call it a failed source.
@@ -138,7 +138,7 @@ LOCAL_ADDRS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 def authorized() -> bool:
     if (request.remote_addr or "") in LOCAL_ADDRS:
         return True
-    supplied = request.args.get("k") or request.headers.get("X-AnimeUI-Token", "")
+    supplied = request.args.get("k") or request.headers.get("X-Shou-Token", "")
     return bool(supplied) and hmac.compare_digest(supplied, TOKEN)
 
 
@@ -210,7 +210,7 @@ def fetch_list(mode: str = "watching") -> list:
     """
     user = CONFIG.get("ANILIST_USER", "").strip()
     if not user or user == "CHANGE_ME":
-        raise RuntimeError("ANILIST_USER is not set in ~/.config/anime/animeui.conf")
+        raise RuntimeError("ANILIST_USER is not set in ~/.config/shou/shou.conf")
     status = LIST_STATUS.get(mode, "CURRENT")
 
     resp = requests.post(
@@ -374,7 +374,7 @@ def mark_watched(media_id: int, episode: int, total: int | None, display: str) -
 
 def watch_mpv_progress(gen: int, media_id: int, episode: int,
                        total: int | None, display: str) -> None:
-    """Connect to AnimeUI's mpv IPC socket and mark the episode watched on AniList once
+    """Connect to Shou's mpv IPC socket and mark the episode watched on AniList once
     playback crosses the completion threshold (or mpv reaches a clean EOF)."""
     if not anilist_token() or not media_id:
         return
@@ -482,7 +482,7 @@ def ensure_kiosk() -> None:
 # Playback / process control
 # --------------------------------------------------------------------------- #
 def kill_players() -> None:
-    """Stop ONLY the players AnimeUI started — never unrelated mpv instances such as
+    """Stop ONLY the players Shou started — never unrelated mpv instances such as
     mpvpaper live wallpapers. Our mpv carries a unique --input-ipc-server marker; the
     ani-cli launcher we tracked is killed by its process group (which also reaps the
     mpv it spawned); `ani-cli` by name is unambiguous and catches any stray instance."""
@@ -500,7 +500,7 @@ def kill_players() -> None:
 
 
 def write_state_file(title: str, episode: int) -> None:
-    """Mirror state into ~/.config/anime/state for the legacy next/prev/pause scripts."""
+    """Mirror state into ~/.config/shou/state for the legacy next/prev/pause scripts."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(
         f'ANIME="{title}"\nEPISODE={episode}\nSELECTION=1\n'
@@ -515,7 +515,7 @@ def bump_play_gen() -> int:
 
 
 def mpv_running() -> bool:
-    """True only if AnimeUI's own mpv is up (matched by our unique marker), so a
+    """True only if Shou's own mpv is up (matched by our unique marker), so a
     live-wallpaper mpv never counts as 'playing' for the launch monitor."""
     return subprocess.run(
         ["pgrep", "-f", MPV_IPC], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -723,7 +723,7 @@ def monitor_playback(gen: int, search_title: str, episode: int, display: str) ->
         STATE["playing"] = None
     broadcast()
     subprocess.run(
-        ["notify-send", "🎌 AnimeUI", f"⚠ {msg}", "-u", "critical", "-t", "6000"],
+        ["notify-send", "🎌 Shou", f"⚠ {msg}", "-u", "critical", "-t", "6000"],
         check=False,
     )
 
@@ -787,9 +787,9 @@ def remote():
 def manifest():
     token = request.args.get("k", "")
     data = {
-        "name": "AnimeUI Remote",
-        "short_name": "AnimeUI",
-        "description": "Phone remote for the AnimeUI kiosk",
+        "name": "Shou Remote",
+        "short_name": "Shou",
+        "description": "Phone remote for the Shou kiosk",
         "start_url": f"/remote?k={token}",
         "scope": "/",
         "display": "standalone",
@@ -995,7 +995,7 @@ def on_connect():
 if __name__ == "__main__":
     local_url = f"http://127.0.0.1:{PORT}/remote?k={TOKEN}"
     lan_url = f"http://shio-t0.local:{PORT}/remote?k={TOKEN}"
-    print("AnimeUI server listening on 0.0.0.0:%d" % PORT)
+    print("Shou server listening on 0.0.0.0:%d" % PORT)
     print(f"  remote (local) : {local_url}")
     print(f"  remote (phone) : {lan_url}")
     socketio.run(app, host="0.0.0.0", port=PORT, allow_unsafe_werkzeug=True)
