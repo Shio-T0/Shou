@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AnimeUI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+  <div id="backdrop"></div>
+  <div id="vignette"></div>
+
+  <header id="topbar">
+    <span class="brand">◈ ANIME<span class="brand-accent">UI</span></span>
+    <span id="count" class="count"></span>
+  </header>
+
+  <!-- Carousel -->
+  <main id="stage" class="hidden">
+    <div id="carousel"></div>
+    <section id="info">
+      <h1 id="info-title">—</h1>
+      <div id="info-episode" class="episode">—</div>
+      <div class="progress"><div id="info-bar" class="progress-fill"></div></div>
+    </section>
+  </main>
+
+  <!-- Sequel recommendation -->
+  <section id="sequel-view" class="overlay hidden">
+    <div class="sequel-card">
+      <div class="sequel-kicker">✓ ALL CAUGHT UP</div>
+      <div class="sequel-finished">You finished <span id="seq-finished"></span></div>
+      <div class="sequel-label">Recommended sequel</div>
+      <h1 id="seq-title" class="sequel-title"></h1>
+      <div class="sequel-hint">Press <b>●&nbsp;Select</b> again to start it · <b>⤺&nbsp;Back</b> to return</div>
+    </div>
+  </section>
+
+  <!-- Playing -->
+  <section id="playing-view" class="overlay hidden">
+    <div class="playing-card">
+      <div class="spinner"></div>
+      <div id="playing-msg" class="playing-msg">Launching…</div>
+      <div class="playing-hint">Press <b>⤺&nbsp;Back to AnimeUI</b> on your phone to return</div>
+    </div>
+  </section>
+
+  <!-- Loading / empty / error -->
+  <section id="status-view" class="overlay hidden">
+    <div class="status-card">
+      <div id="status-spinner" class="spinner"></div>
+      <div id="status-msg" class="status-msg">Loading…</div>
+    </div>
+  </section>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

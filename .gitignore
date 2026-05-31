@@ -1,0 +1,20 @@
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+animeui/.venv/
+
+# Runtime / local state (lives in ~/.config/anime, never the repo)
+*.log
+animeui.conf
+state
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+
+# Claude Code workspace memory & transcripts — not part of the project
+.claude/
+
+# Unrelated workspace script that carries a private token
+discord_ping.sh

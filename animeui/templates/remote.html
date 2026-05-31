@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>AnimeUI Remote</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.webmanifest?k={{ token }}" />
+  <meta name="theme-color" content="#0a0b12" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="/static/icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='remote.css') }}" />
+  <script>window.ANIMEUI_TOKEN = {{ token|tojson }};</script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+  <div id="conn" class="conn">connecting…</div>
+
+  <!-- Live mirror of the kiosk -->
+  <section id="mirror" class="mirror">
+    <div id="mirror-bg" class="mirror-bg"></div>
+    <img id="mirror-cover" class="mirror-cover" alt="" />
+    <div class="mirror-meta">
+      <div id="mirror-view" class="mirror-view">—</div>
+      <h1 id="mirror-title" class="mirror-title">AnimeUI</h1>
+      <div id="mirror-episode" class="mirror-episode"></div>
+    </div>
+  </section>
+
+  <!-- Controls -->
+  <section class="controls">
+    <button class="btn btn-wide btn-open" data-act="open">⏻&nbsp; Open AnimeUI</button>
+
+    <div class="row nav-row">
+      <button class="btn btn-nav" data-act="left">◀</button>
+      <button class="btn btn-select" data-act="select">SELECT</button>
+      <button class="btn btn-nav" data-act="right">▶</button>
+    </div>
+
+    <button class="btn btn-wide btn-back" data-act="back">⤺&nbsp; Back to UI</button>
+
+    <div class="playback">
+      <div class="playback-label">PLAYBACK</div>
+      <div class="row">
+        <button class="btn btn-pb" data-act="prev">⏮</button>
+        <button class="btn btn-pb btn-pb-main" data-act="pause">⏯</button>
+        <button class="btn btn-pb" data-act="next">⏭</button>
+      </div>
+      <div class="row seek-row">
+        <button class="btn btn-seek" data-act="rew">« 30s</button>
+        <button class="btn btn-seek" data-act="fwd">30s »</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="{{ url_for('static', filename='remote.js') }}"></script>
+</body>
+</html>

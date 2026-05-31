@@ -1,0 +1,12 @@
+[project]
+name = "animeui"
+version = "0.1.0"
+description = "Phone-controlled AniList watching UI for KDE Connect"
+requires-python = ">=3.13"
+dependencies = [
+    "flask>=3.0",
+    "flask-socketio>=5.3",
+    "simple-websocket>=1.0",
+    "requests>=2.31",
+    "anipy-cli>=3.8.10",
+]
