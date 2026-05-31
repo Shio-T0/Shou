@@ -87,7 +87,8 @@ The installer is **idempotent** (safe to re-run) and asks before each system cha
 2. Installs the system + AUR dependencies (skips anything already present).
 3. Syncs the Python env (`uv sync`).
 4. Marks the control scripts executable.
-5. Writes `~/.config/shou/shou.conf`, prompting for your **public** AniList username.
+5. Creates/updates `~/.config/shou/shou.conf` — prompts for your **public** AniList
+   username and **backfills any missing settings** with their defaults.
 6. Enables `avahi-daemon` + wires `nss-mdns` so the phone can reach `<hostname>.local`.
 7. Adds a Hyprland `exec-once` autostart line for the daemon.
 8. Optionally sets up AniList write access and starts the server.
@@ -111,8 +112,15 @@ WATCHED_PERCENT="90"           # auto-mark watched once playback passes this %
 # ANILIST_TOKEN="..."          # OAuth write token — set by ./shou_auth.sh
 ```
 
+`REMOTE_TOKEN` and `ANILIST_TOKEN` are managed for you (the server generates the first
+on launch; `./shou_auth.sh` writes the second) — leave them out and let them appear.
+
 Changing `ANILIST_USER` / `QUALITY` only needs an **Open** tap (config reloads); no
 restart. Changing `PORT`, `REMOTE_TOKEN`, or `ANILIST_TOKEN` needs a daemon restart.
+
+**After updating Shou**, just re-run `./install.sh` — it's idempotent and **adds any new
+config keys** introduced by the update (with sensible defaults) without overwriting the
+values you've set, so you never have to hand-edit `shou.conf` to catch up.
 
 ---
 
