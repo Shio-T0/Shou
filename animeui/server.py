@@ -17,6 +17,7 @@ import json
 import os
 import shlex
 import secrets
+import signal
 import subprocess
 import threading
 import time
@@ -104,6 +105,12 @@ STATE_LOCK = threading.Lock()
 # and report it instead of leaving the UI stuck on the "playing" screen.
 PLAYBACK = {"gen": 0, "proc": None}
 ANI_LOG = CONFIG_DIR / "ani-cli-last.log"
+# Unique cmdline marker on every mpv WE launch (an mpv IPC socket path). It lets us
+# stop *only* AnimeUI's player and never touch other mpv instances — e.g. mpvpaper
+# live wallpapers. Also doubles as an IPC control socket for future use.
+MPV_IPC = str(Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "animeui-mpv.sock")
+# What ani-cli should run as its player: fullscreen mpv tagged with our marker.
+ANI_CLI_PLAYER = f"mpv --fs --input-ipc-server={MPV_IPC}"
 # How long ani-cli gets to actually start mpv before we call it a failed source.
 LAUNCH_TIMEOUT = 30.0
 # Backup scrapers (anipy_api providers) tried when ani-cli finds no source, in order.
@@ -339,8 +346,21 @@ def ensure_kiosk() -> None:
 # Playback / process control
 # --------------------------------------------------------------------------- #
 def kill_players() -> None:
-    for name in ("mpv", "ani-cli"):
-        subprocess.run(["pkill", "-f", name], check=False)
+    """Stop ONLY the players AnimeUI started — never unrelated mpv instances such as
+    mpvpaper live wallpapers. Our mpv carries a unique --input-ipc-server marker; the
+    ani-cli launcher we tracked is killed by its process group (which also reaps the
+    mpv it spawned); `ani-cli` by name is unambiguous and catches any stray instance."""
+    # Reap the tracked ani-cli launcher + its whole session (its mpv child included).
+    proc = PLAYBACK.get("proc")
+    if proc is not None and proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+    # ani-cli is an unambiguous name; safe to match broadly.
+    subprocess.run(["pkill", "-f", "ani-cli"], check=False)
+    # Our mpv only, identified by the unique socket-path marker (NOT bare "mpv").
+    subprocess.run(["pkill", "-f", MPV_IPC], check=False)
 
 
 def write_state_file(title: str, episode: int) -> None:
@@ -359,8 +379,10 @@ def bump_play_gen() -> int:
 
 
 def mpv_running() -> bool:
+    """True only if AnimeUI's own mpv is up (matched by our unique marker), so a
+    live-wallpaper mpv never counts as 'playing' for the launch monitor."""
     return subprocess.run(
-        ["pgrep", "-x", "mpv"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        ["pgrep", "-f", MPV_IPC], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     ).returncode == 0
 
 
@@ -394,7 +416,7 @@ def play(search_title: str, episode: int, display_title: str | None = None) -> N
         stdout=logf,
         stderr=subprocess.STDOUT,
         start_new_session=True,
-        env=os.environ | {"ANI_CLI_PLAYER": "mpv --fs"},
+        env=os.environ | {"ANI_CLI_PLAYER": ANI_CLI_PLAYER},
     )
     logf.close()
     with STATE_LOCK:
@@ -456,7 +478,8 @@ def fallback_play(gen: int, search_title: str, episode: int, display: str) -> bo
             return True  # superseded; treat as handled
     kill_players()
     time.sleep(0.3)
-    cmd = ["mpv", "--fs", f"--force-media-title={display} — Episode {episode}"]
+    cmd = ["mpv", "--fs", f"--input-ipc-server={MPV_IPC}",
+           f"--force-media-title={display} — Episode {episode}"]
     if referrer:
         cmd.append(f"--referrer={referrer}")
     if subtitle:
