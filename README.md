@@ -70,8 +70,10 @@ of its live state, and every control is a small HTTP POST to it.
 - **Hyprland** recommended (for auto-focus / auto-fullscreen of the kiosk and player).
   Other Wayland/X11 compositors work too — you just lose those window tricks.
 - Your **phone and PC on the same network** (for the web remote).
-- Installed automatically: `uv`, `firefox`, `mpv`, `playerctl`, `curl`, `libnotify`,
-  `avahi`, `nss-mdns`, `librsvg`, and `ani-cli` (AUR). Python deps come from `uv.lock`.
+- Installed automatically: `uv`, `firefox`, `mpv`, `mpv-mpris`, `playerctl`, `curl`,
+  `libnotify`, `avahi`, `nss-mdns`, `librsvg`, and `ani-cli` (AUR). `mpv-mpris` is what
+  lets the remote's pause / ±30s seek reach mpv (via `playerctl`). Python deps come
+  from `uv.lock`.
 
 ## Install
 

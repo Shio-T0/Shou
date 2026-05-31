@@ -79,7 +79,7 @@ CONFIG_FILE="$CONFIG_DIR/shou.conf"
 DAEMON="$REPO_DIR/shou_daemon.sh"
 
 # Packages from the official repos and the AUR.
-OFFICIAL_PKGS=(uv firefox mpv playerctl curl libnotify avahi nss-mdns librsvg)
+OFFICIAL_PKGS=(uv firefox mpv mpv-mpris playerctl curl libnotify avahi nss-mdns librsvg)
 AUR_PKGS=(ani-cli)
 
 banner
@@ -107,7 +107,7 @@ step "Installing system dependencies"
 # pkg -> a binary it provides, used to detect installs done OUTSIDE pacman (e.g. uv's
 # standalone installer). Empty = library with no binary (rely on pacman -Q only).
 declare -A PKG_PROBE=(
-  [uv]=uv [firefox]=firefox [mpv]=mpv [playerctl]=playerctl [curl]=curl
+  [uv]=uv [firefox]=firefox [mpv]=mpv [mpv-mpris]="" [playerctl]=playerctl [curl]=curl
   [libnotify]=notify-send [avahi]=avahi-daemon [nss-mdns]="" [librsvg]=rsvg-convert
 )
 MISSING=()
