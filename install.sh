@@ -177,7 +177,7 @@ mkdir -p "$CONFIG_DIR"
 
 # --- tiny conf helpers (KEY="value" lines) -------------------------------------
 conf_has() { grep -qE "^[[:space:]]*$1=" "$CONFIG_FILE" 2>/dev/null; }
-conf_get() { grep -E "^[[:space:]]*$1=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\042\047'; }
+conf_get() { grep -E "^[[:space:]]*$1=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\042\047' || true; }
 conf_set() {  # conf_set KEY VALUE  — replace in place or append
   if conf_has "$1"; then
     local t; t="$(mktemp)"; sed "s|^[[:space:]]*$1=.*|$1=\"$2\"|" "$CONFIG_FILE" >"$t" && mv "$t" "$CONFIG_FILE"
@@ -207,7 +207,7 @@ EOF
 fi
 
 # ANILIST_USER — prompt only if unset/placeholder; otherwise keep silently.
-CUR_USER="$(conf_get ANILIST_USER)"
+CUR_USER="$(conf_get ANILIST_USER || true)"
 if [[ -z "$CUR_USER" || "$CUR_USER" == "CHANGE_ME" ]]; then
   printf '   %s?%s Your %spublic%s AniList username (Settings → make list public): ' \
     "$MAGENTA" "$RESET" "$BOLD" "$RESET"
