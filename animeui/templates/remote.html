@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>AnimeUI Remote</title>
+  <title>AnimeUI · Remote</title>
 
   <!-- PWA -->
   <link rel="manifest" href="/manifest.webmanifest?k={{ token }}" />
-  <meta name="theme-color" content="#0a0b12" />
+  <meta name="theme-color" content="#0a0a0c" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -15,53 +15,98 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='remote.css') }}" />
   <script>window.ANIMEUI_TOKEN = {{ token|tojson }};</script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
-  <div id="conn" class="conn">connecting…</div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="aura" aria-hidden="true"></div>
 
-  <!-- Live mirror of the kiosk -->
-  <section id="mirror" class="mirror">
-    <div id="mirror-bg" class="mirror-bg"></div>
-    <img id="mirror-cover" class="mirror-cover" alt="" />
-    <div class="mirror-meta">
-      <div id="mirror-view" class="mirror-view">—</div>
-      <h1 id="mirror-title" class="mirror-title">AnimeUI</h1>
-      <div id="mirror-episode" class="mirror-episode"></div>
+  <!-- Top bar : wordmark + live status -->
+  <header class="topbar reveal" style="--d:0">
+    <div class="brand">
+      <span class="brand-glyph">朱</span>
+      <span class="brand-text">
+        <span class="brand-name">ANIMEUI</span>
+        <span class="brand-sub">アニメ・リモート</span>
+      </span>
     </div>
+    <div id="conn" class="conn"><span class="dot"></span><span id="conn-text">connecting</span></div>
+  </header>
+
+  <!-- Now-showing hero : live mirror of the kiosk -->
+  <section id="hero" class="hero reveal" style="--d:1">
+    <div id="mirror-bg" class="hero-bg"></div>
+    <div class="hero-scrim"></div>
+    <span class="hero-rail" aria-hidden="true"></span>
+
+    <div class="hero-body">
+      <img id="mirror-cover" class="hero-cover" alt="" />
+      <div class="hero-meta">
+        <div class="hero-kicker"><span id="mirror-view">—</span><span id="mirror-index" class="hero-index"></span></div>
+        <h1 id="mirror-title" class="hero-title">AnimeUI</h1>
+        <div id="mirror-episode" class="hero-episode"></div>
+      </div>
+    </div>
+    <div class="hero-progress"><span id="mirror-progress" class="hero-progress-fill"></span></div>
   </section>
 
-  <!-- Controls -->
-  <section class="controls">
-    <button class="btn btn-wide btn-open" data-act="open">⏻&nbsp; Open AnimeUI</button>
+  <!-- List switcher -->
+  <div class="seg reveal" id="listseg" style="--d:2">
+    <span class="seg-thumb" aria-hidden="true"></span>
+    <button class="seg-btn active" data-list="watching">Watching</button>
+    <button class="seg-btn" data-list="planned">Plan&nbsp;to&nbsp;Watch</button>
+  </div>
 
-    <!-- List switcher: Watching ⇄ Planned -->
-    <div class="seg" id="listseg">
-      <button class="seg-btn active" data-list="watching">▶&nbsp; Watching</button>
-      <button class="seg-btn" data-list="planned">📑&nbsp; Planned</button>
+  <!-- Control deck -->
+  <section class="deck">
+    <div class="nav-row reveal" style="--d:3">
+      <button class="btn btn-nav" data-act="left" aria-label="Previous">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <button class="btn btn-select" data-act="select">
+        <span class="select-mark">●</span><span>SELECT</span>
+      </button>
+      <button class="btn btn-nav" data-act="right" aria-label="Next">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
     </div>
 
-    <div class="row nav-row">
-      <button class="btn btn-nav" data-act="left">◀</button>
-      <button class="btn btn-select" data-act="select">SELECT</button>
-      <button class="btn btn-nav" data-act="right">▶</button>
+    <div class="ghost-row reveal" style="--d:4">
+      <button class="btn btn-ghost btn-open" data-act="open">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.5 6.5a8 8 0 1 0 11 0"/></svg>
+        <span>Open</span>
+      </button>
+      <button class="btn btn-ghost btn-back" data-act="back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+        <span>Back</span>
+      </button>
     </div>
 
-    <button class="btn btn-wide btn-back" data-act="back">⤺&nbsp; Back to UI</button>
-
-    <div class="playback">
-      <div class="playback-label">PLAYBACK</div>
-      <div class="row">
-        <button class="btn btn-pb" data-act="prev">⏮</button>
-        <button class="btn btn-pb btn-pb-main" data-act="pause">⏯</button>
-        <button class="btn btn-pb" data-act="next">⏭</button>
+    <div class="transport reveal" style="--d:5">
+      <div class="transport-label">Transport</div>
+      <div class="transport-row">
+        <button class="btn btn-tp" data-act="prev" aria-label="Previous episode">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="5.5" y="6" width="2.4" height="12" rx=".6"/><path d="M19 6.2 10 12l9 5.8z"/></svg>
+        </button>
+        <button class="btn btn-tp btn-tp-main" data-act="pause" aria-label="Play / pause">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5l7 5-7 5z"/><rect x="14" y="5" width="2.7" height="10" rx=".7"/><rect x="18.4" y="5" width="2.7" height="10" rx=".7"/></svg>
+        </button>
+        <button class="btn btn-tp" data-act="next" aria-label="Next episode">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 6.2 14 12l-9 5.8z"/><rect x="16.1" y="6" width="2.4" height="12" rx=".6"/></svg>
+        </button>
       </div>
-      <div class="row seek-row">
-        <button class="btn btn-seek" data-act="rew">« 30s</button>
-        <button class="btn btn-seek" data-act="fwd">30s »</button>
+      <div class="seek-row">
+        <button class="btn btn-seek" data-act="rew">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4v5h5"/><path d="M3.5 9a9 9 0 1 1-1.2 5"/></svg>
+          <span>30s</span>
+        </button>
+        <button class="btn btn-seek" data-act="fwd">
+          <span>30s</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4v5h-5"/><path d="M20.5 9a9 9 0 1 0 1.2 5"/></svg>
+        </button>
       </div>
     </div>
   </section>
