@@ -30,6 +30,17 @@ ok()    { printf '   %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
 warn()  { printf '   %s!%s %s\n' "$YELLOW" "$RESET" "$1"; }
 die()   { printf '\n%s✗ %s%s\n' "$RED" "$1" "$RESET" >&2; exit 1; }
 
+partial_upgrade_hint() {
+  printf '\n%s%s   pacman couldn'\''t install a dependency.%s\n' "$BOLD" "$YELLOW" "$RESET"
+  printf '   If you saw %s"breaks dependency"%s or %s"unable to satisfy dependency"%s, your\n' "$BOLD" "$RESET" "$BOLD" "$RESET"
+  printf '   system is in a %spartial-upgrade%s state (the package DB is newer than your\n' "$BOLD" "$RESET"
+  printf '   installed packages, e.g. python-uv pins an older uv). Fix it with a FULL\n'
+  printf '   upgrade so paired packages move together, then re-run this installer:\n\n'
+  printf '       %ssudo pacman -Syu%s\n' "$BOLD$CYAN" "$RESET"
+  printf '       %s./install.sh%s\n\n' "$BOLD$CYAN" "$RESET"
+  printf '   %s(Never "pacman -S <one pkg>" on a not-fully-upgraded system — it'\''s unsupported on Arch.)%s\n' "$DIM" "$RESET"
+}
+
 ask_yes() {  # ask_yes "Question?"  -> returns 0 for yes (default yes)
   local reply
   printf '   %s?%s %s %s[Y/n]%s ' "$MAGENTA" "$RESET" "$1" "$DIM" "$RESET"
@@ -84,12 +95,39 @@ fi
 # --------------------------------------------------------------------------- #
 step "Installing system dependencies"
 # --------------------------------------------------------------------------- #
-info "Official repos: ${OFFICIAL_PKGS[*]}"
-if ask_yes "Install/upgrade these with pacman?"; then
-  sudo pacman -S --needed "${OFFICIAL_PKGS[@]}"
-  ok "Official packages ready."
+# pkg -> a binary it provides, used to detect installs done OUTSIDE pacman (e.g. uv's
+# standalone installer). Empty = library with no binary (rely on pacman -Q only).
+declare -A PKG_PROBE=(
+  [uv]=uv [firefox]=firefox [mpv]=mpv [playerctl]=playerctl [curl]=curl
+  [libnotify]=notify-send [avahi]=avahi-daemon [nss-mdns]="" [librsvg]=rsvg-convert
+)
+MISSING=()
+for pkg in "${OFFICIAL_PKGS[@]}"; do
+  if pacman -Qq "$pkg" &>/dev/null; then
+    continue                              # already installed via pacman
+  fi
+  probe="${PKG_PROBE[$pkg]:-}"
+  if [[ -n "$probe" ]] && command -v "$probe" >/dev/null 2>&1; then
+    info "$pkg: '$probe' already on PATH (installed outside pacman) — skipping."
+    continue
+  fi
+  MISSING+=("$pkg")
+done
+
+if [[ ${#MISSING[@]} -eq 0 ]]; then
+  ok "All official dependencies already present."
 else
-  warn "Skipped — make sure they're already installed."
+  info "Need to install: ${MISSING[*]}"
+  if ask_yes "Install these with pacman?"; then
+    if sudo pacman -S --needed "${MISSING[@]}"; then
+      ok "Official packages ready."
+    else
+      partial_upgrade_hint
+      die "Dependency install failed — see the hint above, then re-run ./install.sh"
+    fi
+  else
+    warn "Skipped — make sure they're already installed."
+  fi
 fi
 
 # ani-cli lives in the AUR; use an AUR helper if present.
