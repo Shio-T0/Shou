@@ -167,8 +167,8 @@ ok "Python virtualenv synced from uv.lock."
 # --------------------------------------------------------------------------- #
 step "Making control scripts executable"
 # --------------------------------------------------------------------------- #
-chmod +x "$REPO_DIR"/shou_*.sh "$REPO_DIR"/anime_*.sh 2>/dev/null || true
-ok "Shou + legacy anime scripts are executable."
+chmod +x "$REPO_DIR"/shou_*.sh 2>/dev/null || true
+ok "Shou scripts are executable."
 
 # --------------------------------------------------------------------------- #
 step "Configuration"
@@ -289,11 +289,6 @@ else
   info "Start the server once; it generates a token and prints the full /remote URL"
   info "to ${DIM}~/.config/shou/shou.log${RESET}. Then add that URL to your phone's home screen."
 fi
-
-printf '\n%sKDE Connect buttons%s (Run Command plugin → add these commands):\n' "$BOLD" "$RESET"
-for s in open left right select back; do
-  printf '   %sShou %-7s%s  %s%s/shou_%s.sh%s\n' "$MAGENTA" "$s" "$RESET" "$DIM" "$REPO_DIR" "$s" "$RESET"
-done
 
 printf '\n%sTip:%s if %s.local%s doesn'\''t resolve on the phone, use the PC'\''s LAN IP instead.\n' \
   "$BOLD" "$RESET" "$DIM" "$RESET"

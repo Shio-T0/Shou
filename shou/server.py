@@ -5,11 +5,11 @@ A long-running Flask + SocketIO server that is the single brain for Shou:
   * fetches your AniList "Currently Watching" list (public username, no auth),
   * shows a live carousel UI in a Firefox kiosk (which it launches/focuses itself),
   * serves a touch-first phone web-remote (PWA) that mirrors the kiosk live,
-  * launches episodes through ani-cli/mpv (fullscreen) and writes the shared
-    ~/.config/shou/state file so the legacy next/prev/pause scripts keep working.
+  * launches episodes through ani-cli/mpv (fullscreen), with an anipy fallback,
+  * optionally marks episodes watched back on AniList as you finish them.
 
-Control endpoints are reachable from loopback without auth (kiosk page + KDE Connect
-scripts) and require a shared-secret token (?k=…) from any networked client (the phone).
+Control endpoints are reachable from loopback without auth (the kiosk page) and require
+a shared-secret token (?k=…) from any networked client (the phone web-remote).
 """
 
 import hmac
@@ -42,7 +42,6 @@ from flask_socketio import SocketIO
 # --------------------------------------------------------------------------- #
 CONFIG_DIR = Path.home() / ".config" / "shou"
 CONFIG_FILE = CONFIG_DIR / "shou.conf"
-STATE_FILE = CONFIG_DIR / "state"
 FF_PROFILE = CONFIG_DIR / "ff-profile"
 FF_PIDFILE = CONFIG_DIR / "shou-ff.pid"
 ANILIST_URL = "https://graphql.anilist.co"
@@ -499,14 +498,6 @@ def kill_players() -> None:
     subprocess.run(["pkill", "-f", MPV_IPC], check=False)
 
 
-def write_state_file(title: str, episode: int) -> None:
-    """Mirror state into ~/.config/shou/state for the legacy next/prev/pause scripts."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(
-        f'ANIME="{title}"\nEPISODE={episode}\nSELECTION=1\n'
-    )
-
-
 def bump_play_gen() -> int:
     """Invalidate any in-flight playback monitor and return a fresh generation id."""
     with STATE_LOCK:
@@ -536,7 +527,6 @@ def play(search_title: str, episode: int, display_title: str | None = None,
     gen = bump_play_gen()
     kill_players()
     time.sleep(0.4)
-    write_state_file(search_title, episode)
     quality = CONFIG.get("QUALITY") or "1080p"
     cmd = (
         f"printf '1\\n' | ani-cli -q {shlex.quote(quality)} "

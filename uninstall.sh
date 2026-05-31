@@ -127,6 +127,5 @@ printf '%s%s━━━━━━━━━━━━━━━━━━━━━━�
 info "Left untouched (remove manually if you want):"
 info "  • system packages — ${DIM}sudo pacman -Rns ani-cli librsvg${RESET} (avahi/mpv/firefox likely used elsewhere)"
 info "  • nss-mdns line in /etc/nsswitch.conf (a .bak was made by install.sh)"
-info "  • your KDE Connect Run-Command buttons (remove them in the app)"
 info "  • this repo folder"
 printf '\n'

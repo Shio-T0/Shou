@@ -1,5 +1,5 @@
 // Shou kiosk — a pure live view driven by SocketIO "state" events.
-// All control comes from the phone (KDE Connect / web remote -> server REST -> SocketIO).
+// All control comes from the phone web-remote (HTTP POST -> server -> SocketIO).
 
 const socket = io();
 

@@ -31,7 +31,6 @@ auto-fullscreen niceties).
   - [5. While an episode is playing](#5-while-an-episode-is-playing)
   - [6. Watching vs Plan to Watch](#6-watching-vs-plan-to-watch)
 - [Auto-mark episodes watched on AniList](#auto-mark-episodes-watched-on-anilist)
-- [KDE Connect buttons (alternative to the web remote)](#kde-connect-buttons-alternative-to-the-web-remote)
 - [Control reference (HTTP endpoints)](#control-reference-http-endpoints)
 - [Troubleshooting](#troubleshooting)
 - [Run / restart manually](#run--restart-manually)
@@ -44,25 +43,25 @@ auto-fullscreen niceties).
 ## How it works
 
 ```
-   PHONE                         PC (this repo)                      INTERNET
+   PHONE (web remote)            PC (this repo)                      INTERNET
  ┌─────────┐   HTTP POST     ┌──────────────────────┐   GraphQL    ┌──────────┐
  │ web     │ ───────────────▶│  Flask + SocketIO    │ ────────────▶│ AniList  │
  │ remote  │   /open /select │  server.py (daemon)  │              │   API    │
  │ (PWA)   │◀─ ─ ─ ─ ─ ─ ─ ─ │                      │              └──────────┘
  └─────────┘   SocketIO      │  • Firefox kiosk     │   scrape     ┌──────────┐
-       ▲       live state    │  • ani-cli → mpv     │ ────────────▶│ ani-cli /│
-       │                     │  • anipy fallback    │              │ anipy    │
- ┌─────────┐   HTTP POST     └──────────┬───────────┘              └──────────┘
- │   KDE   │ ───────────────▶           │ launches
- │ Connect │   /open /left …            ▼
- └─────────┘                  ┌──────────────────┐
+                live state   │  • ani-cli → mpv     │ ────────────▶│ ani-cli /│
+                             │  • anipy fallback    │              │ anipy    │
+                             └──────────┬───────────┘              └──────────┘
+                                        │ launches
+                                        ▼
+                              ┌──────────────────┐
                               │  Firefox kiosk   │  ← the cinematic coverflow
                               │  + mpv fullscreen│     you see on the TV/monitor
                               └──────────────────┘
 ```
 
 The server is the only moving part; the kiosk and the phone remote are both just **views**
-of its live state, and every control (phone or KDE Connect) is a small HTTP POST to it.
+of its live state, and every control is a small HTTP POST to it.
 
 ## Requirements
 
@@ -94,7 +93,7 @@ The installer is **idempotent** (safe to re-run) and asks before each system cha
 8. Optionally sets up AniList write access and starts the server.
 
 When it finishes it prints your phone remote URL
-(`http://<hostname>.local:4100/remote?k=<token>`) and the KDE Connect script paths.
+(`http://<hostname>.local:4100/remote?k=<token>`) to add to your phone's home screen.
 
 > **Not on Hyprland?** Everything still works except the `hyprctl` auto-focus/fullscreen
 > of the kiosk/player — the installer detects this and skips those bits.
@@ -233,23 +232,6 @@ clean end — Shou sets that episode as your progress (only ever **increasing** 
 rewatch or **⏮** never lowers it) and flips the entry to **Completed** on the final
 episode. Tokens last ~1 year; re-run `./shou_auth.sh` when it expires.
 
-## KDE Connect buttons (alternative to the web remote)
-
-If you'd rather use [KDE Connect](https://kdeconnect.kde.org/)'s *Run Command* plugin
-instead of (or alongside) the PWA, add one command per script — they're thin loopback
-`curl` clients with no token needed:
-
-| Command name | Script |
-| --- | --- |
-| Shou: Open | `…/ScriptsKDE/shou_open.sh` |
-| Shou: ◀ Left | `…/ScriptsKDE/shou_left.sh` |
-| Shou: ▶ Right | `…/ScriptsKDE/shou_right.sh` |
-| Shou: Select | `…/ScriptsKDE/shou_select.sh` |
-| Shou: Back | `…/ScriptsKDE/shou_back.sh` |
-
-(The web remote covers everything including playback + list switching; KDE Connect covers
-the core navigation.)
-
 ## Control reference (HTTP endpoints)
 
 All control endpoints are `POST`, JSON responses. From the PC (`127.0.0.1`) no token is
@@ -305,9 +287,8 @@ The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on s
 ```
 
 Stops the server, removes the Hyprland autostart line (with a backup), and *optionally*
-deletes your config and the virtualenv. It deliberately **leaves system packages, the
-`nsswitch.conf` entry, and your KDE Connect buttons alone** — it prints how to remove
-those by hand if you want to.
+deletes your config and the virtualenv. It deliberately **leaves system packages and the
+`nsswitch.conf` entry alone** — it prints how to remove those by hand if you want to.
 
 ## License
 
