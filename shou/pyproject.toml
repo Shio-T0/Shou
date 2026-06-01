@@ -1,7 +1,7 @@
 [project]
 name = "shou"
 version = "0.1.0"
-description = "Phone-controlled AniList watching launcher"
+description = "Phone-controlled AniList watching launcher (Windows)"
 requires-python = ">=3.13"
 dependencies = [
     "flask>=3.0",

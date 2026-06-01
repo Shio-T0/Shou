@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Shou — phone-controlled AniList "Currently Watching" launcher.
+"""Shou (Windows) — phone-controlled AniList "Currently Watching" launcher.
 
 A long-running Flask + SocketIO server that is the single brain for Shou:
   * fetches your AniList "Currently Watching" list (public username, no auth),
-  * shows a live carousel UI in a Firefox kiosk (which it launches/focuses itself),
+  * shows a live carousel UI in a browser kiosk (which it launches itself),
   * serves a touch-first phone web-remote (PWA) that mirrors the kiosk live,
-  * launches episodes through ani-cli/mpv (fullscreen), with an anipy fallback,
+  * resolves + plays episodes through anipy + mpv (fullscreen),
   * optionally marks episodes watched back on AniList as you finish them.
+
+This is the WINDOWS port. Compared to the Linux version it:
+  * controls mpv over its JSON IPC named pipe instead of playerctl — so it needs
+    no mpv-mpris / playerctl,
+  * sources episodes purely through anipy (pure Python) instead of ani-cli (bash),
+  * stops the player with taskkill + an IPC `quit` instead of pkill/signals,
+  * opens a browser kiosk (Firefox / Edge / Chrome) with no compositor tricks.
 
 Control endpoints are reachable from loopback without auth (the kiosk page) and require
 a shared-secret token (?k=…) from any networked client (the phone web-remote).
@@ -15,10 +22,7 @@ a shared-secret token (?k=…) from any networked client (the phone web-remote).
 import hmac
 import json
 import os
-import shlex
 import secrets
-import signal
-import socket
 import subprocess
 import threading
 import time
@@ -37,6 +41,9 @@ from flask import (
 )
 from flask_socketio import SocketIO
 
+# Don't pop up a console window for the helper processes we spawn (mpv, taskkill).
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # --------------------------------------------------------------------------- #
 # Config
 # --------------------------------------------------------------------------- #
@@ -50,9 +57,9 @@ ANILIST_URL = "https://graphql.anilist.co"
 def load_config() -> dict:
     """Parse the shell-style KEY="value" shou.conf."""
     cfg = {"ANILIST_USER": "", "PORT": "4100", "QUALITY": "1080p", "REMOTE_TOKEN": "",
-           "ANILIST_TOKEN": "", "WATCHED_PERCENT": "90"}
+           "ANILIST_TOKEN": "", "WATCHED_PERCENT": "90", "MPV_BIN": "", "BROWSER": ""}
     if CONFIG_FILE.exists():
-        for raw in CONFIG_FILE.read_text().splitlines():
+        for raw in CONFIG_FILE.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
@@ -81,7 +88,7 @@ def ensure_token() -> str:
         return token
     token = secrets.token_urlsafe(24)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with CONFIG_FILE.open("a") as fh:
+    with CONFIG_FILE.open("a", encoding="utf-8") as fh:
         fh.write(f'\n# Auto-generated shared secret for the phone web-remote.\nREMOTE_TOKEN="{token}"\n')
     CONFIG["REMOTE_TOKEN"] = token
     return token
@@ -107,25 +114,23 @@ LIST_STATUS = {"watching": "CURRENT", "planned": "PLANNING"}
 LIST_LABEL = {"watching": "Currently Watching", "planned": "Plan to Watch"}
 STATE_LOCK = threading.Lock()
 
-# Tracks the in-flight playback launch so we can detect "ani-cli found no source"
-# and report it instead of leaving the UI stuck on the "playing" screen.
+# Tracks the in-flight playback so we can supersede it and stop only OUR mpv.
 PLAYBACK = {"gen": 0, "proc": None}
-ANI_LOG = CONFIG_DIR / "ani-cli-last.log"
-# Unique cmdline marker on every mpv WE launch (an mpv IPC socket path). It lets us
-# stop *only* Shou's player and never touch other mpv instances — e.g. mpvpaper
-# live wallpapers. Also doubles as an IPC control socket for future use.
-MPV_IPC = str(Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "shou-mpv.sock")
-# What ani-cli should run as its player: fullscreen mpv tagged with our marker.
-ANI_CLI_PLAYER = f"mpv --fs --input-ipc-server={MPV_IPC}"
-# How long ani-cli gets to actually start mpv before we call it a failed source.
-LAUNCH_TIMEOUT = 30.0
-# Backup scrapers (anipy_api providers) tried when ani-cli finds no source, in order.
-# animekai is a genuinely different source; allanime is the same site ani-cli uses but
-# via a different client + smarter result/episode matching (fixes wrong-entry failures).
-FALLBACK_PROVIDERS = ["animekai", "allanime"]
+# mpv's JSON IPC endpoint. On Windows this is a named pipe; we use it both to control
+# playback (pause / seek / quit) and to watch progress for AniList mark-watched.
+MPV_IPC = r"\\.\pipe\shou-mpv"
+# Source scrapers (anipy_api providers) tried in order. allanime is the same site
+# ani-cli uses; animekai is a genuinely different source as a backstop.
+SOURCE_PROVIDERS = ["allanime", "animekai"]
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+
+def notify(title: str, body: str) -> None:
+    """Best-effort desktop notification. Always logs; a real toast is intentionally
+    omitted to keep Shou dependency-free on Windows."""
+    print(f"[notify] {title} — {body}", flush=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -196,7 +201,7 @@ def _title(title_obj: dict) -> str:
 
 
 def _search_title(title_obj: dict) -> str:
-    """ani-cli search title — prefer romaji (allanime matches it best)."""
+    """Search title — prefer romaji (allanime matches it best)."""
     if not title_obj:
         return "Unknown"
     return title_obj.get("romaji") or title_obj.get("english") or "Unknown"
@@ -209,7 +214,7 @@ def fetch_list(mode: str = "watching") -> list:
     """
     user = CONFIG.get("ANILIST_USER", "").strip()
     if not user or user == "CHANGE_ME":
-        raise RuntimeError("ANILIST_USER is not set in ~/.config/shou/shou.conf")
+        raise RuntimeError("ANILIST_USER is not set in shou.conf")
     status = LIST_STATUS.get(mode, "CURRENT")
 
     resp = requests.post(
@@ -263,7 +268,7 @@ def episode_decision(entry: dict) -> dict:
     media = entry["media"]
     progress = entry.get("progress") or 0
     title = _title(media["title"])           # for display
-    search = _search_title(media["title"])   # for ani-cli
+    search = _search_title(media["title"])   # for the scraper
     nxt = progress + 1
     last = last_released_episode(media)
 
@@ -362,18 +367,38 @@ def mark_watched(media_id: int, episode: int, total: int | None, display: str) -
             {"mediaId": int(media_id), "progress": int(episode), "status": status},
         )
         print(f"[anilist] marked {display!r} progress={episode} status={status}", flush=True)
-        subprocess.run(
-            ["notify-send", "✓ AniList", f"{display} — Episode {episode} watched",
-             "-u", "low", "-t", "2500"],
-            check=False,
-        )
+        notify("✓ AniList", f"{display} — Episode {episode} watched")
     except Exception as exc:  # noqa: BLE001
         print(f"[anilist] mark_watched failed: {exc}", flush=True)
 
 
+def _open_ipc():
+    """Open mpv's JSON IPC named pipe for read+write, or None if it isn't there yet."""
+    try:
+        return open(MPV_IPC, "r+b", buffering=0)
+    except OSError:
+        return None
+
+
+def mpv_ipc_command(command: list) -> None:
+    """Fire one JSON command at mpv over its IPC pipe (best-effort, no reply needed)."""
+    pipe = _open_ipc()
+    if pipe is None:
+        return
+    try:
+        pipe.write(json.dumps({"command": command}).encode("utf-8") + b"\n")
+    except OSError:
+        pass
+    finally:
+        try:
+            pipe.close()
+        except OSError:
+            pass
+
+
 def watch_mpv_progress(gen: int, media_id: int, episode: int,
                        total: int | None, display: str) -> None:
-    """Connect to Shou's mpv IPC socket and mark the episode watched on AniList once
+    """Connect to Shou's mpv IPC pipe and mark the episode watched on AniList once
     playback crosses the completion threshold (or mpv reaches a clean EOF)."""
     if not anilist_token() or not media_id:
         return
@@ -382,55 +407,44 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
     except ValueError:
         threshold = 90.0
 
-    # Wait for mpv to create the socket (it may be a while behind a slow source).
+    # Wait for mpv to create the pipe (it may lag behind a slow source).
+    pipe = None
     end = time.time() + 180
-    while time.time() < end and PLAYBACK["gen"] == gen and not os.path.exists(MPV_IPC):
+    while time.time() < end and PLAYBACK["gen"] == gen:
+        pipe = _open_ipc()
+        if pipe is not None:
+            break
         time.sleep(1)
-    if PLAYBACK["gen"] != gen or not os.path.exists(MPV_IPC):
+    if pipe is None or PLAYBACK["gen"] != gen:
+        if pipe is not None:
+            pipe.close()
         return
 
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(5)
-        sock.connect(MPV_IPC)
-        sock.sendall(b'{"command":["observe_property",1,"percent-pos"]}\n')
-    except OSError as exc:
-        print(f"[progress] mpv IPC connect failed: {exc}", flush=True)
-        return
-
-    buf = b""
     marked = False
     try:
+        pipe.write(b'{"command":["observe_property",1,"percent-pos"]}\n')
         while PLAYBACK["gen"] == gen and not marked:
-            try:
-                chunk = sock.recv(4096)
-            except socket.timeout:
-                continue
-            except OSError:
+            line = pipe.readline()  # returns b"" when mpv exits / pipe closes
+            if not line:
                 break
-            if not chunk:
-                break  # mpv exited / was killed (e.g. Back)
-            buf += chunk
-            while b"\n" in buf:
-                line, buf = buf.split(b"\n", 1)
-                if not line.strip():
-                    continue
-                try:
-                    msg = json.loads(line)
-                except ValueError:
-                    continue
-                ev = msg.get("event")
-                if ev == "property-change" and msg.get("name") == "percent-pos":
-                    data = msg.get("data")
-                    if isinstance(data, (int, float)) and data >= threshold:
-                        marked = True
-                        break
-                elif ev == "end-file" and msg.get("reason") == "eof":
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            ev = msg.get("event")
+            if ev == "property-change" and msg.get("name") == "percent-pos":
+                data = msg.get("data")
+                if isinstance(data, (int, float)) and data >= threshold:
                     marked = True
                     break
+            elif ev == "end-file" and msg.get("reason") == "eof":
+                marked = True
+                break
+    except OSError:
+        pass
     finally:
         try:
-            sock.close()
+            pipe.close()
         except OSError:
             pass
     if marked and PLAYBACK["gen"] == gen:
@@ -438,41 +452,79 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
 
 
 # --------------------------------------------------------------------------- #
-# Kiosk window control (Hyprland / Firefox)
+# Browser kiosk control
 # --------------------------------------------------------------------------- #
+def _pid_alive(pid: int) -> bool:
+    """True if a process with this PID is currently running (via tasklist)."""
+    try:
+        out = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True, text=True, creationflags=CREATE_NO_WINDOW,
+        ).stdout
+    except OSError:
+        return False
+    return str(pid) in out
+
+
 def kiosk_pid() -> int | None:
-    """Return the PID of the running Firefox kiosk, or None."""
+    """Return the PID of the running browser kiosk, or None."""
     try:
         pid = int(FF_PIDFILE.read_text().strip())
     except (FileNotFoundError, ValueError):
         return None
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return None
-    return pid
+    return pid if _pid_alive(pid) else None
 
 
-def focus_kiosk(pid: int) -> None:
-    """Raise + force-fullscreen the kiosk window (explicit, non-toggling state)."""
-    subprocess.run(["hyprctl", "dispatch", "focuswindow", f"pid:{pid}"], check=False)
-    subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "2", "-1"], check=False)
+def _find_browser() -> list | None:
+    """Locate a kiosk-capable browser. Returns argv prefix (exe + kiosk flags) or None.
+    Honors a BROWSER override in shou.conf (full path to firefox/edge/chrome .exe)."""
+    pf = os.environ.get("ProgramFiles", r"C:\Program Files")
+    pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+    local = os.environ.get("LOCALAPPDATA", "")
+
+    override = (CONFIG.get("BROWSER") or "").strip()
+    candidates = []
+    if override:
+        candidates.append(("custom", override))
+    candidates += [
+        ("firefox", rf"{pf}\Mozilla Firefox\firefox.exe"),
+        ("firefox", rf"{pf86}\Mozilla Firefox\firefox.exe"),
+        ("edge", rf"{pf86}\Microsoft\Edge\Application\msedge.exe"),
+        ("edge", rf"{pf}\Microsoft\Edge\Application\msedge.exe"),
+        ("chrome", rf"{pf}\Google\Chrome\Application\chrome.exe"),
+        ("chrome", rf"{pf86}\Google\Chrome\Application\chrome.exe"),
+        ("chrome", rf"{local}\Google\Chrome\Application\chrome.exe"),
+    ]
+    for kind, path in candidates:
+        if not path or not os.path.exists(path):
+            continue
+        if kind == "firefox" or (kind == "custom" and "firefox" in path.lower()):
+            return [path, "--kiosk", "--profile", str(FF_PROFILE)]
+        if kind == "edge" or (kind == "custom" and "msedge" in path.lower()):
+            return [path, "--kiosk", "--edge-kiosk-type=fullscreen",
+                    "--no-first-run", f"--user-data-dir={FF_PROFILE}"]
+        # chrome / generic chromium
+        return [path, "--kiosk", "--no-first-run", f"--user-data-dir={FF_PROFILE}"]
+    return None
 
 
 def ensure_kiosk() -> None:
-    """Make sure the fullscreen kiosk is showing; launch it if needed, else refocus."""
-    pid = kiosk_pid()
-    if pid:
-        focus_kiosk(pid)
+    """Make sure the fullscreen kiosk is showing; launch it if it isn't already up.
+    (Windows has no compositor refocus trick — a live kiosk simply stays fullscreen.)"""
+    if kiosk_pid():
+        return
+    prefix = _find_browser()
+    if prefix is None:
+        print("[kiosk] no Firefox/Edge/Chrome found — open "
+              f"http://127.0.0.1:{PORT}/ manually.", flush=True)
         return
     FF_PROFILE.mkdir(parents=True, exist_ok=True)
+    argv = prefix + [f"http://127.0.0.1:{PORT}/"]
     proc = subprocess.Popen(
-        ["firefox", "--kiosk", "--profile", str(FF_PROFILE),
-         f"http://127.0.0.1:{PORT}/"],
-        env=os.environ | {"MOZ_NO_REMOTE": "1"},
+        argv,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        start_new_session=True,
+        creationflags=CREATE_NO_WINDOW,
     )
     FF_PIDFILE.write_text(str(proc.pid))
 
@@ -480,22 +532,22 @@ def ensure_kiosk() -> None:
 # --------------------------------------------------------------------------- #
 # Playback / process control
 # --------------------------------------------------------------------------- #
+def mpv_bin() -> str:
+    """Path/name of the mpv executable (configurable; defaults to PATH lookup)."""
+    return (CONFIG.get("MPV_BIN") or "").strip() or "mpv"
+
+
 def kill_players() -> None:
-    """Stop ONLY the players Shou started — never unrelated mpv instances such as
-    mpvpaper live wallpapers. Our mpv carries a unique --input-ipc-server marker; the
-    ani-cli launcher we tracked is killed by its process group (which also reaps the
-    mpv it spawned); `ani-cli` by name is unambiguous and catches any stray instance."""
-    # Reap the tracked ani-cli launcher + its whole session (its mpv child included).
+    """Stop ONLY the mpv Shou launched — never unrelated mpv instances. We track our
+    own mpv process, so we ask it to quit over IPC, then force-kill that PID tree."""
+    mpv_ipc_command(["quit"])
     proc = PLAYBACK.get("proc")
     if proc is not None and proc.poll() is None:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
-            pass
-    # ani-cli is an unambiguous name; safe to match broadly.
-    subprocess.run(["pkill", "-f", "ani-cli"], check=False)
-    # Our mpv only, identified by the unique socket-path marker (NOT bare "mpv").
-    subprocess.run(["pkill", "-f", MPV_IPC], check=False)
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW, check=False,
+        )
 
 
 def bump_play_gen() -> int:
@@ -506,80 +558,28 @@ def bump_play_gen() -> int:
 
 
 def mpv_running() -> bool:
-    """True only if Shou's own mpv is up (matched by our unique marker), so a
-    live-wallpaper mpv never counts as 'playing' for the launch monitor."""
-    return subprocess.run(
-        ["pgrep", "-f", MPV_IPC], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    ).returncode == 0
+    """True only if Shou's own mpv is still up (we launched and track it directly)."""
+    proc = PLAYBACK.get("proc")
+    return proc is not None and proc.poll() is None
 
 
-def play(search_title: str, episode: int, display_title: str | None = None,
-         media_id: int | None = None, total: int | None = None) -> None:
-    """Launch ani-cli for the given title/episode, detached, auto-picking result 1.
-
-    `search_title` (romaji) is what ani-cli searches; `display_title` (english) is what
-    the UI/notification shows. A background monitor watches whether mpv actually starts
-    and reports back to the UI if no playable source was found. When `media_id` is known
-    and an AniList token is configured, a second watcher marks the episode watched once
-    playback completes.
-    """
-    display = display_title or search_title
-    gen = bump_play_gen()
-    kill_players()
-    time.sleep(0.4)
-    quality = CONFIG.get("QUALITY") or "1080p"
-    cmd = (
-        f"printf '1\\n' | ani-cli -q {shlex.quote(quality)} "
-        f"-e {episode} {shlex.quote(search_title)}"
-    )
-    print(f"[play] ani-cli search={search_title!r} episode={episode} "
-          f"quality={quality!r} (showing as {display!r})", flush=True)
-    # ani-cli output is captured so the monitor can read a failure reason.
-    logf = ANI_LOG.open("w")
-    # ANI_CLI_PLAYER is expanded unquoted into ani-cli's mpv branch, so this
-    # opens mpv fullscreen — scoped to ani-cli only (no global mpv config edit).
-    proc = subprocess.Popen(
-        cmd,
-        shell=True,
-        stdin=subprocess.DEVNULL,
-        stdout=logf,
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-        env=os.environ | {"ANI_CLI_PLAYER": ANI_CLI_PLAYER},
-    )
-    logf.close()
-    with STATE_LOCK:
-        PLAYBACK["proc"] = proc
-        STATE["playing"] = {"title": display, "search": search_title, "episode": episode,
-                            "media_id": media_id, "total": total}
-    subprocess.run(
-        ["notify-send", "🎌 Now Watching", f"{display} — Episode {episode}",
-         "-u", "normal", "-t", "3000"],
-        check=False,
-    )
-    socketio.start_background_task(monitor_playback, gen, search_title, episode, display)
-    # Mark-watched watcher (covers the ani-cli mpv and the fallback mpv — same socket).
-    if media_id and anilist_token():
-        socketio.start_background_task(watch_mpv_progress, gen, media_id, episode, total, display)
-
-
-def resolve_fallback(search_title: str, episode: int):
-    """Try the backup scrapers (anipy_api) for a playable stream of the requested
-    episode. Returns (url, referrer, subtitle, provider, matched_name) or None."""
+def resolve_stream(search_title: str, episode: int):
+    """Find a playable stream for the requested episode via anipy's scrapers.
+    Returns (url, referrer, subtitle, provider, matched_name) or None."""
     try:
         from anipy_api.provider import get_provider, LanguageTypeEnum
     except Exception as exc:  # noqa: BLE001
-        print(f"[fallback] anipy_api unavailable: {exc}", flush=True)
+        print(f"[source] anipy_api unavailable: {exc}", flush=True)
         return None
 
-    for prov_name in FALLBACK_PROVIDERS:
+    for prov_name in SOURCE_PROVIDERS:
         try:
             prov = get_provider(prov_name)
             if not prov:
                 continue
             results = prov.get_search(search_title)
         except Exception as exc:  # noqa: BLE001
-            print(f"[fallback] {prov_name} search failed: {exc}", flush=True)
+            print(f"[source] {prov_name} search failed: {exc}", flush=True)
             continue
         # Pick the first search result that actually has the requested episode.
         for anime in results[:6]:
@@ -593,129 +593,86 @@ def resolve_fallback(search_title: str, episode: int):
             if not streams:
                 continue
             best = max(streams, key=lambda s: s.resolution or 0)
-            print(f"[fallback] {prov_name} matched {anime.name!r} ep {episode} "
+            print(f"[source] {prov_name} matched {anime.name!r} ep {episode} "
                   f"@ {best.resolution}p", flush=True)
             return best.url, best.referrer, best.subtitle, prov_name, anime.name
     return None
 
 
-def fallback_play(gen: int, search_title: str, episode: int, display: str) -> bool:
-    """Resolve a stream from a backup scraper and launch mpv directly. True on success."""
-    resolved = resolve_fallback(search_title, episode)
-    if not resolved:
-        return False
-    url, referrer, subtitle, prov_name, matched = resolved
-
-    with STATE_LOCK:
-        if PLAYBACK["gen"] != gen:
-            return True  # superseded; treat as handled
-    kill_players()
-    time.sleep(0.3)
-    cmd = ["mpv", "--fs", f"--input-ipc-server={MPV_IPC}",
+def _launch_mpv(url: str, display: str, episode: int,
+                referrer: str | None, subtitle: str | None):
+    """Spawn fullscreen mpv on the resolved stream, tagged with our IPC pipe."""
+    cmd = [mpv_bin(), "--fs", f"--input-ipc-server={MPV_IPC}",
            f"--force-media-title={display} — Episode {episode}"]
     if referrer:
         cmd.append(f"--referrer={referrer}")
     if subtitle:
         cmd.append(f"--sub-file={subtitle}")
     cmd.append(url)
-    subprocess.Popen(
+    return subprocess.Popen(
         cmd,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        env=os.environ,
+        creationflags=CREATE_NO_WINDOW,
     )
-    # Give mpv a moment to come up.
-    for _ in range(20):
-        time.sleep(0.5)
-        with STATE_LOCK:
-            if PLAYBACK["gen"] != gen:
-                return True
-        if mpv_running():
-            with STATE_LOCK:
-                STATE["view"] = "playing"
-                STATE["message"] = f"Playing {display} — Ep {episode}  ·  backup: {prov_name}"
-            broadcast()
-            subprocess.run(
-                ["notify-send", "🎌 Backup Source",
-                 f"{display} — Ep {episode} (via {prov_name})", "-u", "normal", "-t", "3000"],
-                check=False,
-            )
-            return True
-    return False
 
 
-def _failure_reason() -> str:
-    """Best-effort hint pulled from ani-cli's captured output."""
-    try:
-        low = ANI_LOG.read_text(errors="ignore").lower()
-    except OSError:
-        return ""
-    if "no results" in low or "not found" in low:
-        return "no search results"
-    if "out of range" in low or "no episode" in low:
-        return "episode not available"
-    return ""
+def play(search_title: str, episode: int, display_title: str | None = None,
+         media_id: int | None = None, total: int | None = None) -> None:
+    """Resolve the title/episode and play it fullscreen. The slow scrape + launch run in
+    a background task so the HTTP request returns immediately; the UI shows progress.
 
-
-def monitor_playback(gen: int, search_title: str, episode: int, display: str) -> None:
-    """Watch for mpv to actually start. If ani-cli never launches it, try the backup
-    scrapers; only if those fail too do we report 'no source' to the UI."""
-    deadline = time.monotonic() + LAUNCH_TIMEOUT
-    while time.monotonic() < deadline:
-        with STATE_LOCK:
-            superseded = PLAYBACK["gen"] != gen
-            proc = PLAYBACK["proc"]
-        if superseded:
-            return
-        if mpv_running():
-            return  # success — playback started
-        # ani-cli exited without launching mpv: give the window a brief grace, then fail.
-        if proc is not None and proc.poll() is not None:
-            for _ in range(8):
-                time.sleep(0.5)
-                with STATE_LOCK:
-                    if PLAYBACK["gen"] != gen:
-                        return
-                if mpv_running():
-                    return
-            break
-        time.sleep(1.0)
-
+    `search_title` (romaji) is what the scraper searches; `display_title` (english) is
+    what the UI/notification shows. When `media_id` is known and an AniList token is
+    configured, a watcher marks the episode watched once playback completes.
+    """
+    display = display_title or search_title
+    gen = bump_play_gen()
     with STATE_LOCK:
-        if PLAYBACK["gen"] != gen:
-            return
-    if mpv_running():
+        STATE["view"] = "playing"
+        STATE["message"] = f"Searching for {display} — Ep {episode}…"
+        STATE["playing"] = {"title": display, "search": search_title, "episode": episode,
+                            "media_id": media_id, "total": total}
+    broadcast()
+    socketio.start_background_task(_play_task, gen, search_title, episode,
+                                   display, media_id, total)
+
+
+def _play_task(gen: int, search_title: str, episode: int, display: str,
+               media_id: int | None, total: int | None) -> None:
+    """Background worker: stop the old player, resolve a stream, launch mpv, report."""
+    kill_players()
+    time.sleep(0.3)
+    if PLAYBACK["gen"] != gen:
+        return
+    print(f"[play] resolving search={search_title!r} episode={episode}", flush=True)
+    resolved = resolve_stream(search_title, episode)
+    if PLAYBACK["gen"] != gen:
+        return
+    if not resolved:
+        msg = (f"No playable source for “{display}” (ep {episode}). "
+               "Press Back and try another.")
+        print(f"[play] FAILED — {msg}", flush=True)
+        with STATE_LOCK:
+            STATE["view"] = "error"
+            STATE["message"] = msg
+            STATE["playing"] = None
+        broadcast()
+        notify("🎌 Shou", f"⚠ {msg}")
         return
 
-    # ani-cli found nothing — try the backup scrapers before giving up.
-    print(f"[play] ani-cli found no source for {search_title!r} ep {episode}; "
-          f"trying backups {FALLBACK_PROVIDERS}", flush=True)
+    url, referrer, subtitle, prov_name, _matched = resolved
+    proc = _launch_mpv(url, display, episode, referrer, subtitle)
     with STATE_LOCK:
-        STATE["message"] = f"Searching backup sources for {display}…"
+        PLAYBACK["proc"] = proc
+        STATE["view"] = "playing"
+        STATE["message"] = f"Playing {display} — Ep {episode}  ·  {prov_name}"
     broadcast()
-    if fallback_play(gen, search_title, episode, display):
-        return
-
-    with STATE_LOCK:
-        if PLAYBACK["gen"] != gen:
-            return
-    reason = _failure_reason()
-    msg = f"No playable source for “{display}” (ep {episode})."
-    if reason:
-        msg += f" ({reason})"
-    msg += " Press Back and try another."
-    print(f"[play] FAILED — {msg}", flush=True)
-    with STATE_LOCK:
-        STATE["view"] = "error"
-        STATE["message"] = msg
-        STATE["playing"] = None
-    broadcast()
-    subprocess.run(
-        ["notify-send", "🎌 Shou", f"⚠ {msg}", "-u", "critical", "-t", "6000"],
-        check=False,
-    )
+    notify("🎌 Now Watching", f"{display} — Episode {episode}")
+    if media_id and anilist_token():
+        socketio.start_background_task(watch_mpv_progress, gen, media_id, episode,
+                                       total, display)
 
 
 # --------------------------------------------------------------------------- #
@@ -848,11 +805,7 @@ def back():
         STATE["playing"] = None
         STATE["view"] = "grid" if STATE["items"] else "empty"
     broadcast()
-    pid = kiosk_pid()
-    if pid:
-        focus_kiosk(pid)
-    else:
-        ensure_kiosk()
+    ensure_kiosk()
     return jsonify(ok=True)
 
 
@@ -892,10 +845,6 @@ def select():
     if view == "sequel" and sequel:
         play(sequel["sequel_search"], 1, sequel["sequel_title"],
              media_id=sequel.get("sequel_id"), total=sequel.get("sequel_total"))
-        with STATE_LOCK:
-            STATE["view"] = "playing"
-            STATE["message"] = f"Playing sequel: {sequel['sequel_title']}"
-        broadcast()
         return jsonify(ok=True, action="play_sequel")
 
     if view != "grid" or not entries or cursor >= len(entries):
@@ -906,10 +855,6 @@ def select():
     if decision["action"] == "play":
         play(decision["search"], decision["episode"], decision["title"],
              media_id=media.get("id"), total=media.get("episodes"))
-        with STATE_LOCK:
-            STATE["view"] = "playing"
-            STATE["message"] = f"Playing {decision['title']} — Ep {decision['episode']}"
-        broadcast()
         return jsonify(ok=True, action="play")
 
     # sequel recommendation
@@ -929,21 +874,21 @@ def select():
 @app.route("/pause", methods=["POST"])
 @require_auth
 def pause():
-    subprocess.run(["playerctl", "-p", "mpv", "play-pause"], check=False)
+    mpv_ipc_command(["cycle", "pause"])
     return jsonify(ok=True)
 
 
 @app.route("/fwd", methods=["POST"])
 @require_auth
 def seek_forward():
-    subprocess.run(["playerctl", "-p", "mpv", "position", "30+"], check=False)
+    mpv_ipc_command(["seek", 30, "relative"])
     return jsonify(ok=True)
 
 
 @app.route("/rew", methods=["POST"])
 @require_auth
 def seek_backward():
-    subprocess.run(["playerctl", "-p", "mpv", "position", "30-"], check=False)
+    mpv_ipc_command(["seek", -30, "relative"])
     return jsonify(ok=True)
 
 
@@ -967,10 +912,6 @@ def _step_episode(delta: int):
     episode = max(1, playing["episode"] + delta)
     play(playing.get("search") or playing["title"], episode, playing["title"],
          media_id=playing.get("media_id"), total=playing.get("total"))
-    with STATE_LOCK:
-        STATE["view"] = "playing"
-        STATE["message"] = f"Playing {playing['title']} — Ep {episode}"
-    broadcast()
     return jsonify(ok=True, episode=episode)
 
 
@@ -984,8 +925,7 @@ def on_connect():
 
 if __name__ == "__main__":
     local_url = f"http://127.0.0.1:{PORT}/remote?k={TOKEN}"
-    lan_url = f"http://shio-t0.local:{PORT}/remote?k={TOKEN}"
     print("Shou server listening on 0.0.0.0:%d" % PORT)
     print(f"  remote (local) : {local_url}")
-    print(f"  remote (phone) : {lan_url}")
+    print(f"  remote (phone) : http://<this-pc-ip>:{PORT}/remote?k={TOKEN}")
     socketio.run(app, host="0.0.0.0", port=PORT, allow_unsafe_werkzeug=True)

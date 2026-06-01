@@ -1,25 +1,29 @@
-# 🎌 Shou
+# 🎌 Shou (Windows)
 
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse and play episodes from a beautiful phone remote — you never
 touch the computer.
 
-A long-running Flask + SocketIO server is the single brain. It fetches your public
-AniList list, shows a cinematic 3D-coverflow **kiosk** (a fullscreen Firefox window) on
-the PC, and serves a touch-first **phone web-remote (PWA)** that mirrors the kiosk live
-over WebSocket. Pick an anime and it auto-plays your next unwatched episode through
-`ani-cli` → `mpv` (fullscreen); if you're caught up it recommends the sequel, or plays
-the latest released episode. If `ani-cli` finds no source it falls back to the `anipy`
-scrapers, and (optionally) it ticks episodes off on AniList as you finish them.
+> This is the **Windows** branch of Shou. For the original **Arch Linux + Hyprland**
+> version (with `ani-cli`, `playerctl`/`mpv-mpris`, and a `pacman` installer), switch to
+> the [`main`](../../tree/main) branch.
 
-Built for **Arch Linux** + **Hyprland** (works on other setups, minus the window
-auto-fullscreen niceties).
+A long-running Flask + SocketIO server is the single brain. It fetches your public
+AniList list, shows a cinematic 3D-coverflow **kiosk** (a fullscreen browser window) on
+the PC, and serves a touch-first **phone web-remote (PWA)** that mirrors the kiosk live
+over WebSocket. Pick an anime and it auto-plays your next unwatched episode through the
+`anipy` scrapers → `mpv` (fullscreen); if you're caught up it recommends the sequel, or
+plays the latest released episode. Optionally it ticks episodes off on AniList as you
+finish them.
+
+Built for **Windows 10/11**. The phone remote works from any phone on the same network.
 
 ---
 
 ## Contents
 
 - [How it works](#how-it-works)
+- [What's different from the Linux version](#whats-different-from-the-linux-version)
 - [Requirements](#requirements)
 - [Install](#install)
 - [Configuration](#configuration)
@@ -48,81 +52,92 @@ auto-fullscreen niceties).
  │ web     │ ───────────────▶│  Flask + SocketIO    │ ────────────▶│ AniList  │
  │ remote  │   /open /select │  server.py (daemon)  │              │   API    │
  │ (PWA)   │◀─ ─ ─ ─ ─ ─ ─ ─ │                      │              └──────────┘
- └─────────┘   SocketIO      │  • Firefox kiosk     │   scrape     ┌──────────┐
-                live state   │  • ani-cli → mpv     │ ────────────▶│ ani-cli /│
-                             │  • anipy fallback    │              │ anipy    │
+ └─────────┘   SocketIO      │  • browser kiosk     │   scrape     ┌──────────┐
+                live state   │  • anipy → mpv       │ ────────────▶│  anipy   │
+                             │  • mpv JSON IPC pipe │              │ scrapers │
                              └──────────┬───────────┘              └──────────┘
                                         │ launches
                                         ▼
                               ┌──────────────────┐
-                              │  Firefox kiosk   │  ← the cinematic coverflow
+                              │  browser kiosk   │  ← the cinematic coverflow
                               │  + mpv fullscreen│     you see on the TV/monitor
                               └──────────────────┘
 ```
 
 The server is the only moving part; the kiosk and the phone remote are both just **views**
-of its live state, and every control is a small HTTP POST to it.
+of its live state, and every control is a small HTTP POST to it. Playback control
+(pause / ±30s seek) is sent to `mpv` over its **JSON IPC named pipe** — no extra player
+plugins required.
+
+## What's different from the Linux version
+
+| | Linux (`main`) | Windows (this branch) |
+| --- | --- | --- |
+| Source | `ani-cli` (+ anipy fallback) | **anipy** (pure Python, no Git Bash needed) |
+| Player control | `playerctl` + `mpv-mpris` | **mpv JSON IPC** named pipe |
+| Installer | `install.sh` (`pacman`/AUR) | **`install.ps1`** (winget) |
+| Daemon / auth | `*.sh` | **`*.ps1`** |
+| Autostart | Hyprland `exec-once` | **Startup-folder shortcut** |
+| `.local` discovery | `avahi` / `nss-mdns` | Windows mDNS (or just use the LAN IP) |
 
 ## Requirements
 
-- **Arch Linux** (the installer uses `pacman` + an AUR helper).
+- **Windows 10 or 11** with **PowerShell**.
 - A **public** AniList account (so the server can read your lists without logging in).
-- **Hyprland** recommended (for auto-focus / auto-fullscreen of the kiosk and player).
-  Other Wayland/X11 compositors work too — you just lose those window tricks.
+- **[mpv](https://mpv.io)** on your `PATH` (or set `MPV_BIN` in `shou.conf`).
+- A **browser** for the kiosk: Firefox, Edge (ships with Windows), or Chrome.
 - Your **phone and PC on the same network** (for the web remote).
-- Installed automatically: `uv`, `firefox`, `mpv`, `mpv-mpris`, `playerctl`, `curl`,
-  `libnotify`, `avahi`, `nss-mdns`, `librsvg`, and `ani-cli` (AUR). `mpv-mpris` is what
-  lets the remote's pause / ±30s seek reach mpv (via `playerctl`). Python deps come
-  from `uv.lock`.
+- Installed by `install.ps1` (via winget, where possible): `uv`, and `mpv` if missing.
+  Python deps come from `uv.lock` (`uv sync`).
 
 ## Install
 
-From inside the repo on the target machine:
+From inside the repo, in PowerShell:
 
-```bash
-./install.sh
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-The installer is **idempotent** (safe to re-run) and asks before each system change. It:
+The installer is **idempotent** (safe to re-run) and asks before each change. It:
 
-1. Checks you're on Arch and not root; detects Hyprland.
-2. Installs the system + AUR dependencies (skips anything already present).
+1. Checks you're in the repo and looks for `winget`.
+2. Installs `uv` and (if missing) `mpv`; detects a kiosk browser.
 3. Syncs the Python env (`uv sync`).
-4. Marks the control scripts executable.
-5. Creates/updates `~/.config/shou/shou.conf` — prompts for your **public** AniList
-   username and **backfills any missing settings** with their defaults.
-6. Enables `avahi-daemon` + wires `nss-mdns` so the phone can reach `<hostname>.local`.
-7. Adds a Hyprland `exec-once` autostart line for the daemon.
-8. Optionally sets up AniList write access and starts the server.
+4. Creates/updates `%USERPROFILE%\.config\shou\shou.conf` — prompts for your **public**
+   AniList username and **backfills any missing settings** with their defaults.
+5. Optionally adds a **Startup-folder shortcut** so the daemon launches at login.
+6. Optionally sets up AniList write access and starts the server.
 
 When it finishes it prints your phone remote URL
-(`http://<hostname>.local:4100/remote?k=<token>`) to add to your phone's home screen.
+(`http://<pc-lan-ip>:4100/remote?k=<token>`) to add to your phone's home screen.
 
-> **Not on Hyprland?** Everything still works except the `hyprctl` auto-focus/fullscreen
-> of the kiosk/player — the installer detects this and skips those bits.
+> **mpv not found after install?** winget doesn't always carry mpv. Install it from
+> [mpv.io](https://mpv.io) (or `scoop install mpv`) and either add it to your `PATH` or
+> set `MPV_BIN="C:\path\to\mpv.exe"` in `shou.conf`.
 
 ## Configuration
 
-`~/.config/shou/shou.conf`:
+`%USERPROFILE%\.config\shou\shou.conf`:
 
 ```ini
 ANILIST_USER="your_username"   # must be a PUBLIC list
 PORT="4100"                    # server + phone remote port
-QUALITY="1080p"                # passed to ani-cli
 WATCHED_PERCENT="90"           # auto-mark watched once playback passes this %
+MPV_BIN=""                     # full path to mpv.exe (blank = use PATH)
+BROWSER=""                     # full path to a kiosk browser .exe (blank = auto-detect)
 # REMOTE_TOKEN="..."           # auto-generated on first launch — don't set by hand
-# ANILIST_TOKEN="..."          # OAuth write token — set by ./shou_auth.sh
+# ANILIST_TOKEN="..."          # OAuth write token — set by .\shou_auth.ps1
 ```
 
 `REMOTE_TOKEN` and `ANILIST_TOKEN` are managed for you (the server generates the first
-on launch; `./shou_auth.sh` writes the second) — leave them out and let them appear.
+on launch; `shou_auth.ps1` writes the second) — leave them out and let them appear.
 
-Changing `ANILIST_USER` / `QUALITY` only needs an **Open** tap (config reloads); no
-restart. Changing `PORT`, `REMOTE_TOKEN`, or `ANILIST_TOKEN` needs a daemon restart.
+Changing `ANILIST_USER` only needs an **Open** tap (config reloads); no restart. Changing
+`PORT`, `MPV_BIN`, `BROWSER`, `REMOTE_TOKEN`, or `ANILIST_TOKEN` needs a daemon restart.
 
-**After updating Shou**, just re-run `./install.sh` — it's idempotent and **adds any new
+**After updating Shou**, just re-run `install.ps1` — it's idempotent and **adds any new
 config keys** introduced by the update (with sensible defaults) without overwriting the
-values you've set, so you never have to hand-edit `shou.conf` to catch up.
+values you've set.
 
 ---
 
@@ -133,8 +148,8 @@ values you've set, so you never have to hand-edit `shou.conf` to catch up.
 If you enabled autostart during install, the daemon launches on login — nothing to do.
 Otherwise start it once:
 
-```bash
-./shou_daemon.sh        # or just log out and back in
+```powershell
+powershell -ExecutionPolicy Bypass -File .\shou_daemon.ps1
 ```
 
 The server runs in the background; the kiosk window appears the first time you press
@@ -143,17 +158,16 @@ The server runs in the background; the kiosk window appears the first time you p
 ### 2. Set up your phone
 
 1. On your phone's browser, open the remote URL the installer printed:
-   `http://<hostname>.local:4100/remote?k=<token>`
-   (find it again anytime at the top of `~/.config/shou/shou.log`).
+   `http://<pc-lan-ip>:4100/remote?k=<token>`
+   (find it again anytime at the top of `%USERPROFILE%\.config\shou\shou.log`).
 2. It should load the dark **Shou remote**. The little dot top-right turns **green
    “live”** when it's connected to the PC.
 3. **Add it to your home screen** (browser menu → *Add to Home screen* / *Install*) so
    it's a one-tap icon from then on.
 
-> If `<hostname>.local` doesn't resolve on the phone, use the PC's LAN IP instead, e.g.
-> `http://192.168.1.50:4100/remote?k=<token>` — the installed icon keeps working either
-> way. The `?k=<token>` is required from the phone (loopback on the PC is exempt); it's
-> your private key, so don't share the URL.
+> The `?k=<token>` is required from the phone (loopback on the PC is exempt); it's your
+> private key, so don't share the URL. If you'd rather use `<pc-name>.local` than the IP,
+> that works only if Windows mDNS resolves it on your network — the LAN IP always works.
 
 ### 3. The remote at a glance
 
@@ -179,7 +193,7 @@ The server runs in the background; the kiosk window appears the first time you p
 | **⏻ Open** | (Re)opens Shou: stops anything playing, refreshes your list, shows the kiosk fullscreen. Your “home” button. |
 | **◀ / ▶** | Move the highlight left/right through the coverflow. |
 | **SELECT** | Choose the highlighted anime (see [Watch something](#4-watch-something)). |
-| **⤺ Back** | Stop playback and return to the carousel (re-fullscreens the kiosk). |
+| **⤺ Back** | Stop playback and return to the carousel. |
 | **Watching / Plan to Watch** | Switch which AniList list the carousel shows. |
 | **⏮ / ⏭** | Jump to the previous / next **episode** (relaunches the player). |
 | **⏯** | Play / pause the current episode. |
@@ -200,9 +214,9 @@ action even if you're across the room from the screen.
    - if you're caught up with **no sequel**, plays the latest released episode.
 4. When you're done, tap **⤺ Back** to return to the carousel.
 
-If a source can't be found, Shou automatically tries the backup (`anipy`) scrapers;
-if everything fails it shows a clear error card on the kiosk instead of hanging — press
-**Back** and try another title.
+While Shou is resolving a stream the kiosk shows a *“Searching…”* message; if no source
+can be found it shows a clear error card instead of hanging — press **Back** and try
+another title.
 
 ### 5. While an episode is playing
 
@@ -227,8 +241,8 @@ to the *Watching* list.
 By default Shou only **reads** your public list. To have it **tick episodes off on
 AniList automatically** when you finish them, grant write access once:
 
-```bash
-./shou_auth.sh
+```powershell
+powershell -ExecutionPolicy Bypass -File .\shou_auth.ps1
 ```
 
 It walks you through creating an AniList API client
@@ -240,7 +254,7 @@ in `shou.conf` (gitignored, never in the repo). The installer also offers this s
 Once enabled, when playback passes `WATCHED_PERCENT` (default 90%) — or `mpv` reaches a
 clean end — Shou sets that episode as your progress (only ever **increasing** it, so a
 rewatch or **⏮** never lowers it) and flips the entry to **Completed** on the final
-episode. Tokens last ~1 year; re-run `./shou_auth.sh` when it expires.
+episode. Tokens last ~1 year; re-run `shou_auth.ps1` when it expires.
 
 ## Control reference (HTTP endpoints)
 
@@ -254,51 +268,56 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 | `/select` | Play next ep / show or play sequel / play latest |
 | `/back` | Stop playback, return to carousel |
 | `/list?to=watching\|planned` | Switch list (omit `to` to toggle) |
-| `/pause` | Play/pause `mpv` |
-| `/fwd` `/rew` | Seek ±30s |
+| `/pause` | Play/pause `mpv` (over IPC) |
+| `/fwd` `/rew` | Seek ±30s (over IPC) |
 | `/next` `/prev` | Previous / next episode |
 | `/` | The kiosk page · `/remote?k=…` the phone PWA |
 
 ## Troubleshooting
 
-- **Phone can't reach the PC** — confirm same network; try the LAN IP instead of
-  `<hostname>.local`; make sure `avahi-daemon` is running (`systemctl status avahi-daemon`).
+- **Phone can't reach the PC** — confirm same network; use the PC's **LAN IP**. The first
+  time the server runs, Windows Firewall may prompt to allow Python on private networks —
+  **allow it**.
 - **Remote loads but says offline / not live** — the daemon isn't running; start it
-  (see [below](#run--restart-manually)) or check `~/.config/shou/shou.log`.
+  (see [below](#run--restart-manually)) or check `%USERPROFILE%\.config\shou\shou.log`.
 - **“ANILIST_USER is not set”** — set it in `shou.conf` and make sure the list is
   **public** (AniList → Settings → Profile).
-- **Kiosk shows the old design after an update** — the running Firefox caches the page.
-  Close the kiosk window and tap **Open** to relaunch it fresh.
-- **Nothing plays / “no playable source”** — the scrapers couldn't find that title;
-  Shou already tried the backup. Try another entry; check `~/.config/shou/ani-cli-last.log`.
+- **Pause / ±30s seek do nothing** — those go to `mpv` over its IPC pipe; they only work
+  while an episode launched by Shou is playing.
+- **Nothing plays / “no playable source”** — the scrapers couldn't find that title. Make
+  sure `mpv` is installed and on `PATH` (or `MPV_BIN` is set); try another entry; check
+  `shou.log`.
+- **No kiosk window appears** — install Firefox/Edge/Chrome, or point `BROWSER` in
+  `shou.conf` at a browser `.exe`.
 - **Changed a template / `server.py`** — restart the daemon (templates are cached in the
   running process). Editing only `static/*` just needs a kiosk reload.
 
 ## Run / restart manually
 
-```bash
-# start (foreground-ish, restart-on-crash wrapper — what autostart runs)
-./shou_daemon.sh
+```powershell
+# start (restart-on-crash wrapper — what autostart runs)
+powershell -ExecutionPolicy Bypass -File .\shou_daemon.ps1
 
-# restart the daemon (kill the daemon first so it doesn't respawn the old server)
-pkill -f shou_daemon.sh; pkill -f shou/server.py
-setsid nohup ~/Projects/ScriptsKDE/shou_daemon.sh >/dev/null 2>&1 &
+# stop the daemon + server + our mpv
+Get-CimInstance Win32_Process |
+  Where-Object { $_.CommandLine -match 'shou_daemon\.ps1|shou\\server\.py|shou-mpv' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 
 # run the server directly (no restart wrapper), e.g. to see logs live
-uv run --project shou python shou/server.py
+uv run --project shou python shou\server.py
 ```
 
-The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on startup.
+The server prints the full `/remote?k=…` URL to `%USERPROFILE%\.config\shou\shou.log`
+on startup.
 
 ## Uninstall
 
-```bash
-./uninstall.sh
+```powershell
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
-Stops the server, removes the Hyprland autostart line (with a backup), and *optionally*
-deletes your config and the virtualenv. It deliberately **leaves system packages and the
-`nsswitch.conf` entry alone** — it prints how to remove those by hand if you want to.
+Stops the server, removes the Startup shortcut, and *optionally* deletes your config and
+the virtualenv. It deliberately **leaves `uv`, `mpv`, and your browser installed**.
 
 ## License
 
@@ -307,9 +326,9 @@ MIT — see [LICENSE](LICENSE).
 ## Disclaimer
 
 Shou is a personal hobby project. It hosts, stores, and distributes **no** copyrighted
-content. It is a thin controller that drives third-party programs (`ani-cli`, `anipy-cli`,
-`mpv`) and the public **AniList** API. Any streams those tools locate come from
-third-party sites that Shou neither operates nor is affiliated with — you alone are
-responsible for how you use it and for complying with the laws of your jurisdiction.
-Please support creators through official services (Crunchyroll, Netflix, HIDIVE, your
-local licensors, Blu-ray, etc.). Provided "as is", without warranty (see [LICENSE](LICENSE)).
+content. It is a thin controller that drives third-party programs (`anipy-cli`, `mpv`)
+and the public **AniList** API. Any streams those tools locate come from third-party
+sites that Shou neither operates nor is affiliated with — you alone are responsible for
+how you use it and for complying with the laws of your jurisdiction. Please support
+creators through official services (Crunchyroll, Netflix, HIDIVE, your local licensors,
+Blu-ray, etc.). Provided "as is", without warranty (see [LICENSE](LICENSE)).
