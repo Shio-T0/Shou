@@ -3,7 +3,7 @@
 
 A long-running Flask + SocketIO server that is the single brain for Shou:
   * fetches your AniList "Currently Watching" list (public username, no auth),
-  * shows a live carousel UI in a Firefox kiosk (which it launches/focuses itself),
+  * shows a live carousel UI in a browser kiosk (which it launches/focuses itself),
   * serves a touch-first phone web-remote (PWA) that mirrors the kiosk live,
   * launches episodes through ani-cli/mpv (fullscreen), with an anipy fallback,
   * optionally marks episodes watched back on AniList as you finish them.
@@ -18,6 +18,7 @@ import os
 import shlex
 import secrets
 import signal
+import shutil
 import socket
 import subprocess
 import threading
@@ -438,10 +439,10 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
 
 
 # --------------------------------------------------------------------------- #
-# Kiosk window control (Hyprland / Firefox)
+# Kiosk window control (compositor-agnostic / any browser)
 # --------------------------------------------------------------------------- #
 def kiosk_pid() -> int | None:
-    """Return the PID of the running Firefox kiosk, or None."""
+    """Return the PID of the running browser kiosk, or None."""
     try:
         pid = int(FF_PIDFILE.read_text().strip())
     except (FileNotFoundError, ValueError):
@@ -454,9 +455,35 @@ def kiosk_pid() -> int | None:
 
 
 def focus_kiosk(pid: int) -> None:
-    """Raise + force-fullscreen the kiosk window (explicit, non-toggling state)."""
-    subprocess.run(["hyprctl", "dispatch", "focuswindow", f"pid:{pid}"], check=False)
-    subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "2", "-1"], check=False)
+    """Best-effort raise + fullscreen of the kiosk window. Supports Hyprland and Sway;
+    a no-op on other compositors/DEs — the browser was already opened with --kiosk, so
+    it stays fullscreen on its own. This is purely a 'bring it back to front' nicety."""
+    if shutil.which("hyprctl"):
+        subprocess.run(["hyprctl", "dispatch", "focuswindow", f"pid:{pid}"], check=False)
+        subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "2", "-1"], check=False)
+    elif shutil.which("swaymsg"):
+        subprocess.run(["swaymsg", f"[pid={pid}]", "focus"], check=False)
+        subprocess.run(["swaymsg", "fullscreen", "enable"], check=False)
+
+
+# Browser candidates, in preference order. Each entry: (binaries, argv-builder, env).
+# Firefox uses --profile; Chromium-family browsers use --user-data-dir.
+_FIREFOX_BINS = ("firefox", "firefox-esr", "librewolf", "waterfox")
+_CHROMIUM_BINS = ("chromium", "chromium-browser", "google-chrome-stable",
+                  "google-chrome", "brave", "brave-browser", "vivaldi-stable", "vivaldi")
+
+
+def _browser_command(url: str):
+    """Return (argv, extra_env) for a fullscreen kiosk on the first browser found,
+    or (None, None) if none is installed."""
+    profile = str(FF_PROFILE)
+    for b in _FIREFOX_BINS:
+        if shutil.which(b):
+            return ([b, "--kiosk", "--profile", profile, url], {"MOZ_NO_REMOTE": "1"})
+    for b in _CHROMIUM_BINS:
+        if shutil.which(b):
+            return ([b, "--kiosk", "--no-first-run", f"--user-data-dir={profile}", url], {})
+    return (None, None)
 
 
 def ensure_kiosk() -> None:
@@ -465,11 +492,15 @@ def ensure_kiosk() -> None:
     if pid:
         focus_kiosk(pid)
         return
+    argv, extra_env = _browser_command(f"http://127.0.0.1:{PORT}/")
+    if argv is None:
+        print("[kiosk] no supported browser found (firefox/chromium/brave/…); "
+              f"open http://127.0.0.1:{PORT}/ manually.", flush=True)
+        return
     FF_PROFILE.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
-        ["firefox", "--kiosk", "--profile", str(FF_PROFILE),
-         f"http://127.0.0.1:{PORT}/"],
-        env=os.environ | {"MOZ_NO_REMOTE": "1"},
+        argv,
+        env=os.environ | extra_env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
@@ -511,6 +542,20 @@ def mpv_running() -> bool:
     return subprocess.run(
         ["pgrep", "-f", MPV_IPC], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     ).returncode == 0
+
+
+def mpv_ipc_command(command: list) -> None:
+    """Send one JSON command to Shou's mpv over its IPC socket (best-effort, no reply).
+    Used for pause / seek so the remote needs no playerctl or mpv-mpris plugin — mpv's
+    own --input-ipc-server (set on every player we launch) is enough."""
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        sock.connect(MPV_IPC)
+        sock.sendall(json.dumps({"command": command}).encode() + b"\n")
+        sock.close()
+    except OSError:
+        pass
 
 
 def play(search_title: str, episode: int, display_title: str | None = None,
@@ -929,21 +974,21 @@ def select():
 @app.route("/pause", methods=["POST"])
 @require_auth
 def pause():
-    subprocess.run(["playerctl", "-p", "mpv", "play-pause"], check=False)
+    mpv_ipc_command(["cycle", "pause"])
     return jsonify(ok=True)
 
 
 @app.route("/fwd", methods=["POST"])
 @require_auth
 def seek_forward():
-    subprocess.run(["playerctl", "-p", "mpv", "position", "30+"], check=False)
+    mpv_ipc_command(["seek", 30, "relative"])
     return jsonify(ok=True)
 
 
 @app.route("/rew", methods=["POST"])
 @require_auth
 def seek_backward():
-    subprocess.run(["playerctl", "-p", "mpv", "position", "30-"], check=False)
+    mpv_ipc_command(["seek", -30, "relative"])
     return jsonify(ok=True)
 
 

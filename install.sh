@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 #
-#   █████╗ ███╗   ██╗██╗███╗   ███╗███████╗██╗   ██╗██╗
-#  ██╔══██╗████╗  ██║██║████╗ ████║██╔════╝██║   ██║██║
-#  ███████║██╔██╗ ██║██║██╔████╔██║█████╗  ██║   ██║██║
-#  ██╔══██║██║╚██╗██║██║██║╚██╔╝██║██╔══╝  ██║   ██║██║
-#  ██║  ██║██║ ╚████║██║██║ ╚═╝ ██║███████╗╚██████╔╝██║
-#  ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═╝     ╚═╝╚══════╝ ╚═════╝ ╚═╝
+#   ███████╗██╗  ██╗ ██████╗ ██╗   ██╗
+#   ██╔════╝██║  ██║██╔═══██╗██║   ██║
+#   ███████╗███████║██║   ██║██║   ██║
+#   ╚════██║██╔══██║██║   ██║██║   ██║
+#   ███████║██║  ██║╚██████╔╝╚██████╔╝
+#   ╚══════╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝
 #
-#  Phone-controlled AniList "Currently Watching" launcher — Arch Linux installer.
+#  Phone-controlled AniList "Currently Watching" launcher — Linux installer.
+#  Works on most distros (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, …).
 #  Idempotent: safe to re-run. It only touches your system with your confirmation.
 #
 set -euo pipefail
@@ -30,7 +31,7 @@ ok()    { printf '   %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
 warn()  { printf '   %s!%s %s\n' "$YELLOW" "$RESET" "$1"; }
 die()   { printf '\n%s✗ %s%s\n' "$RED" "$1" "$RESET" >&2; exit 1; }
 
-# Portable hostname — `hostname` (inetutils) isn't installed on a default Arch box.
+# Portable hostname — `hostname` (inetutils) isn't installed everywhere.
 get_hostname() {
   local h="${HOSTNAME:-}"
   [[ -z "$h" && -r /etc/hostname ]] && h="$(< /etc/hostname)"
@@ -41,13 +42,11 @@ get_hostname() {
 
 partial_upgrade_hint() {
   printf '\n%s%s   pacman couldn'\''t install a dependency.%s\n' "$BOLD" "$YELLOW" "$RESET"
-  printf '   If you saw %s"breaks dependency"%s or %s"unable to satisfy dependency"%s, your\n' "$BOLD" "$RESET" "$BOLD" "$RESET"
-  printf '   system is in a %spartial-upgrade%s state (the package DB is newer than your\n' "$BOLD" "$RESET"
-  printf '   installed packages, e.g. python-uv pins an older uv). Fix it with a FULL\n'
-  printf '   upgrade so paired packages move together, then re-run this installer:\n\n'
+  printf '   If you saw %s"breaks dependency"%s, your system is in a %spartial-upgrade%s\n' \
+    "$BOLD" "$RESET" "$BOLD" "$RESET"
+  printf '   state. Fix it with a FULL upgrade, then re-run this installer:\n\n'
   printf '       %ssudo pacman -Syu%s\n' "$BOLD$CYAN" "$RESET"
   printf '       %s./install.sh%s\n\n' "$BOLD$CYAN" "$RESET"
-  printf '   %s(Never "pacman -S <one pkg>" on a not-fully-upgraded system — it'\''s unsupported on Arch.)%s\n' "$DIM" "$RESET"
 }
 
 ask_yes() {  # ask_yes "Question?"  -> returns 0 for yes (default yes)
@@ -78,9 +77,64 @@ CONFIG_DIR="$HOME/.config/shou"
 CONFIG_FILE="$CONFIG_DIR/shou.conf"
 DAEMON="$REPO_DIR/shou_daemon.sh"
 
-# Packages from the official repos and the AUR.
-OFFICIAL_PKGS=(uv firefox mpv mpv-mpris playerctl curl libnotify avahi nss-mdns librsvg)
-AUR_PKGS=(ani-cli)
+# --------------------------------------------------------------------------- #
+#  Package-manager abstraction (works across distros)
+# --------------------------------------------------------------------------- #
+PM=""
+detect_pm() {
+  if   command -v pacman        >/dev/null 2>&1; then PM=pacman
+  elif command -v apt-get       >/dev/null 2>&1; then PM=apt
+  elif command -v dnf           >/dev/null 2>&1; then PM=dnf
+  elif command -v zypper        >/dev/null 2>&1; then PM=zypper
+  elif command -v xbps-install  >/dev/null 2>&1; then PM=xbps
+  elif command -v apk           >/dev/null 2>&1; then PM=apk
+  else PM=""; fi
+}
+
+pm_refresh() {  # refresh package metadata where it's needed
+  case "$PM" in
+    apt)    sudo apt-get update ;;
+    zypper) sudo zypper --non-interactive refresh ;;
+    *) : ;;
+  esac
+}
+
+pm_install() {  # pm_install pkg...   (returns non-zero on failure)
+  case "$PM" in
+    pacman) sudo pacman -S --needed "$@" ;;
+    apt)    sudo apt-get install -y "$@" ;;
+    dnf)    sudo dnf install -y "$@" ;;
+    zypper) sudo zypper --non-interactive install "$@" ;;
+    xbps)   sudo xbps-install -Sy "$@" ;;
+    apk)    sudo apk add "$@" ;;
+    *) return 1 ;;
+  esac
+}
+
+pkg_name() {  # pkg_name <logical>  -> the package name on the detected distro
+  case "$1:$PM" in
+    firefox:apt)       echo firefox-esr ;;
+    firefox:zypper)    echo MozillaFirefox ;;
+    firefox:*)         echo firefox ;;
+    libnotify:apt)     echo libnotify-bin ;;
+    libnotify:zypper)  echo libnotify-tools ;;
+    libnotify:apk)     echo libnotify ;;
+    libnotify:*)       echo libnotify ;;
+    avahi:apt)         echo avahi-daemon ;;
+    avahi:*)           echo avahi ;;
+    nss-mdns:apt)      echo libnss-mdns ;;
+    nss-mdns:*)        echo nss-mdns ;;
+    *)                 echo "$1" ;;
+  esac
+}
+
+BROWSER_BINS=(firefox firefox-esr librewolf waterfox chromium chromium-browser \
+              google-chrome-stable google-chrome brave brave-browser vivaldi-stable vivaldi)
+have_browser() {
+  local b
+  for b in "${BROWSER_BINS[@]}"; do command -v "$b" >/dev/null 2>&1 && return 0; done
+  return 1
+}
 
 banner
 
@@ -88,86 +142,134 @@ banner
 step "Pre-flight checks"
 # --------------------------------------------------------------------------- #
 [[ $EUID -eq 0 ]] && die "Run this as your normal user, not root (it uses sudo only where needed)."
-command -v pacman >/dev/null 2>&1 || die "This installer targets Arch Linux (pacman not found)."
 [[ -f "$APP_DIR/server.py" ]] || die "Can't find shou/server.py next to this script. Run it from inside the repo."
-ok "Arch Linux detected, repo at ${DIM}$REPO_DIR${RESET}"
 
-if command -v hyprctl >/dev/null 2>&1 || [[ "${XDG_CURRENT_DESKTOP:-}" == *Hyprland* ]]; then
-  ok "Hyprland detected — auto-focus / auto-fullscreen of the kiosk & player will work."
-  HAS_HYPR=1
+DISTRO="Linux"
+[[ -r /etc/os-release ]] && DISTRO="$( . /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-${NAME:-Linux}}" )"
+detect_pm
+if [[ -n "$PM" ]]; then
+  ok "Detected ${BOLD}$DISTRO${RESET} (package manager: ${BOLD}$PM${RESET})"
 else
-  warn "Hyprland not detected. Shou still runs, but the window auto-focus/fullscreen"
-  warn "tricks (hyprctl) won't apply on other compositors. Everything else works."
-  HAS_HYPR=0
+  warn "No supported package manager found. Shou still installs, but you'll have to"
+  warn "install system dependencies (mpv, a browser, curl, uv) yourself."
+fi
+ok "Repo at ${DIM}$REPO_DIR${RESET}"
+
+# Window auto-focus is a Hyprland/Sway nicety; everything else is compositor-agnostic.
+if command -v hyprctl >/dev/null 2>&1 || command -v swaymsg >/dev/null 2>&1; then
+  ok "wlroots compositor tools found — kiosk auto-focus/fullscreen will work."
+else
+  info "No hyprctl/swaymsg — the kiosk still opens fullscreen via the browser's own"
+  info "--kiosk; only the 'raise to front' nicety is skipped. Everything else works."
 fi
 
 # --------------------------------------------------------------------------- #
 step "Installing system dependencies"
 # --------------------------------------------------------------------------- #
-# pkg -> a binary it provides, used to detect installs done OUTSIDE pacman (e.g. uv's
-# standalone installer). Empty = library with no binary (rely on pacman -Q only).
-declare -A PKG_PROBE=(
-  [uv]=uv [firefox]=firefox [mpv]=mpv [mpv-mpris]="" [playerctl]=playerctl [curl]=curl
-  [libnotify]=notify-send [avahi]=avahi-daemon [nss-mdns]="" [librsvg]=rsvg-convert
-)
-MISSING=()
-for pkg in "${OFFICIAL_PKGS[@]}"; do
-  if pacman -Qq "$pkg" &>/dev/null; then
-    continue                              # already installed via pacman
-  fi
-  probe="${PKG_PROBE[$pkg]:-}"
-  if [[ -n "$probe" ]] && command -v "$probe" >/dev/null 2>&1; then
-    info "$pkg: '$probe' already on PATH (installed outside pacman) — skipping."
-    continue
-  fi
-  MISSING+=("$pkg")
-done
+if [[ -n "$PM" ]]; then pm_refresh || warn "Package metadata refresh failed (continuing)."; fi
 
-if [[ ${#MISSING[@]} -eq 0 ]]; then
-  ok "All official dependencies already present."
-else
-  info "Need to install: ${MISSING[*]}"
-  if ask_yes "Install these with pacman?"; then
-    if sudo pacman -S --needed "${MISSING[@]}"; then
-      ok "Official packages ready."
-    else
-      partial_upgrade_hint
-      die "Dependency install failed — see the hint above, then re-run ./install.sh"
+# Core tools detected by the binary they provide (distro-independent).
+for pair in "mpv:mpv" "curl:curl"; do
+  bin="${pair%%:*}"; logical="${pair##*:}"
+  if command -v "$bin" >/dev/null 2>&1; then
+    ok "$logical already installed."
+  elif [[ -z "$PM" ]]; then
+    warn "$logical missing — install it with your package manager."
+  elif ask_yes "Install $(pkg_name "$logical") with $PM?"; then
+    if ! pm_install "$(pkg_name "$logical")"; then
+      [[ "$PM" == pacman ]] && partial_upgrade_hint
+      warn "Failed to install $logical — install it manually and re-run."
     fi
   else
-    warn "Skipped — make sure they're already installed."
+    warn "Skipped $logical — make sure it's installed."
   fi
+done
+
+# Browser for the kiosk.
+if have_browser; then
+  ok "A kiosk-capable browser is already installed."
+elif [[ -z "$PM" ]]; then
+  warn "No browser found — install Firefox, Chromium, or Brave for the kiosk display."
+elif ask_yes "No browser found. Install Firefox for the kiosk?"; then
+  case "$PM" in
+    apt)    cands=(firefox-esr firefox) ;;
+    zypper) cands=(MozillaFirefox firefox) ;;
+    *)      cands=(firefox) ;;
+  esac
+  installed=0
+  for c in "${cands[@]}"; do
+    if pm_install "$c"; then ok "Installed $c."; installed=1; break; fi
+  done
+  [[ "$installed" -eq 1 ]] || warn "Couldn't install Firefox automatically — install any browser manually."
+else
+  warn "Skipped — install firefox/chromium/brave so the kiosk can open."
 fi
 
-# ani-cli lives in the AUR; use an AUR helper if present.
-info "AUR packages: ${AUR_PKGS[*]}"
+# uv — distro package where available, else the official installer (all distros).
+if command -v uv >/dev/null 2>&1; then
+  ok "uv already installed."
+else
+  info "uv (Python project/runtime manager) is required."
+  case "$PM" in
+    pacman|dnf|apk)
+      ask_yes "Install uv with $PM?" && { pm_install uv || true; } ;;
+  esac
+  if ! command -v uv >/dev/null 2>&1; then
+    if ask_yes "Install uv via the official installer (curl -LsSf https://astral.sh/uv/install.sh | sh)?"; then
+      curl -LsSf https://astral.sh/uv/install.sh | sh || warn "uv installer failed."
+      export PATH="$HOME/.local/bin:$PATH"
+    fi
+  fi
+  command -v uv >/dev/null 2>&1 \
+    && ok "uv installed." \
+    || die "uv is still missing. Install it from https://docs.astral.sh/uv/ and re-run."
+fi
+
+# ani-cli — OPTIONAL extra source. Without it, Shou uses the bundled anipy scrapers.
 if command -v ani-cli >/dev/null 2>&1; then
   ok "ani-cli already installed."
 else
-  AUR_HELPER=""
-  for h in paru yay; do command -v "$h" >/dev/null 2>&1 && { AUR_HELPER="$h"; break; }; done
-  if [[ -n "$AUR_HELPER" ]]; then
-    if ask_yes "Install ${AUR_PKGS[*]} with $AUR_HELPER?"; then
-      "$AUR_HELPER" -S --needed "${AUR_PKGS[@]}"
-      ok "AUR packages ready."
+  info "ani-cli is an optional extra source. Without it, Shou's built-in anipy scrapers"
+  info "are used (works fine) — so this is safe to skip."
+  if [[ "$PM" == "pacman" ]]; then
+    helper=""
+    for h in paru yay; do command -v "$h" >/dev/null 2>&1 && { helper="$h"; break; }; done
+    if [[ -n "$helper" ]]; then
+      ask_yes "Install ani-cli with $helper (AUR)?" && { "$helper" -S --needed ani-cli || true; }
+    else
+      warn "No AUR helper (paru/yay) — install ani-cli from the AUR yourself if you want it."
     fi
   else
-    warn "No AUR helper (paru/yay) found. Install ani-cli manually, e.g.:"
-    printf '       %sgit clone https://aur.archlinux.org/ani-cli.git && cd ani-cli && makepkg -si%s\n' "$DIM" "$RESET"
+    if ask_yes "Download the ani-cli script to /usr/local/bin? (optional, needs sudo)"; then
+      if sudo curl -fsSL "https://raw.githubusercontent.com/pystardust/ani-cli/master/ani-cli" \
+           -o /usr/local/bin/ani-cli; then
+        sudo chmod +x /usr/local/bin/ani-cli; ok "ani-cli installed to /usr/local/bin."
+      else
+        warn "Download failed — Shou will use the anipy scrapers instead."
+      fi
+    fi
   fi
+  command -v ani-cli >/dev/null 2>&1 || info "Continuing without ani-cli (anipy scrapers will be used)."
+fi
+
+# Desktop notifications (optional).
+if command -v notify-send >/dev/null 2>&1; then
+  ok "Desktop notifications available (notify-send)."
+elif [[ -n "$PM" ]] && ask_yes "Install $(pkg_name libnotify) for desktop notifications? (optional)"; then
+  pm_install "$(pkg_name libnotify)" || warn "Couldn't install — notifications will be skipped."
 fi
 
 # --------------------------------------------------------------------------- #
 step "Installing the Python environment (uv)"
 # --------------------------------------------------------------------------- #
-command -v uv >/dev/null 2>&1 || die "uv is required but missing (install it in the previous step)."
+command -v uv >/dev/null 2>&1 || die "uv is required but missing."
 ( cd "$APP_DIR" && uv sync )
 ok "Python virtualenv synced from uv.lock."
 
 # --------------------------------------------------------------------------- #
 step "Making control scripts executable"
 # --------------------------------------------------------------------------- #
-chmod +x "$REPO_DIR"/shou_*.sh 2>/dev/null || true
+chmod +x "$REPO_DIR"/shou_*.sh "$REPO_DIR"/install.sh "$REPO_DIR"/uninstall.sh 2>/dev/null || true
 ok "Shou scripts are executable."
 
 # --------------------------------------------------------------------------- #
@@ -186,12 +288,11 @@ conf_set() {  # conf_set KEY VALUE  — replace in place or append
   fi
 }
 
-# Canonical user-editable settings: KEY | default | comment.
-# New Shou versions add rows here; re-running install backfills any the config is
-# missing (handy after an update) WITHOUT changing values you've already set.
+# Canonical user-editable settings: KEY | default | comment. Re-running install
+# backfills any the config is missing WITHOUT changing values you've already set.
 CONF_SETTINGS=(
   "PORT|4100|Port the server / phone remote listens on."
-  "QUALITY|1080p|mpv playback quality passed to ani-cli (e.g. 1080p, 720p)."
+  "QUALITY|1080p|Playback quality passed to ani-cli when it's used (e.g. 1080p, 720p)."
   "WATCHED_PERCENT|90|Auto-mark an episode watched on AniList once playback passes this %."
 )
 
@@ -242,47 +343,67 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
-step "mDNS — reach the PC by name from your phone"
+step "mDNS — reach the PC by name from your phone (optional)"
 # --------------------------------------------------------------------------- #
-if systemctl is-active --quiet avahi-daemon 2>/dev/null; then
-  ok "avahi-daemon already running."
-else
-  if ask_yes "Enable avahi-daemon so the phone can use ${BOLD}$(get_hostname).local${RESET}?"; then
-    sudo systemctl enable --now avahi-daemon
-    ok "avahi-daemon enabled."
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl is-active --quiet avahi-daemon 2>/dev/null; then
+    ok "avahi-daemon already running."
+  elif ask_yes "Install + enable avahi so the phone can use ${BOLD}$(get_hostname).local${RESET}?"; then
+    [[ -n "$PM" ]] && { pm_install "$(pkg_name avahi)" "$(pkg_name nss-mdns)" || warn "avahi/nss-mdns install failed."; }
+    sudo systemctl enable --now avahi-daemon 2>/dev/null && ok "avahi-daemon enabled." \
+      || warn "Couldn't enable avahi-daemon — you can use the PC's LAN IP instead."
   else
-    warn "Skipped — you'll have to use the PC's IP address from the phone."
+    warn "Skipped — you'll use the PC's IP address from the phone."
   fi
+else
+  warn "No systemd detected — enable avahi via your init system for <hostname>.local,"
+  warn "or just use the PC's LAN IP from the phone (always works)."
 fi
 # nss-mdns wiring so *.local actually resolves locally too.
-if ! grep -qE '^\s*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
+if [[ -f /etc/nsswitch.conf ]] && ! grep -qE '^\s*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
   if ask_yes "Add 'mdns_minimal' to /etc/nsswitch.conf for .local resolution? (a backup is made)"; then
     sudo cp /etc/nsswitch.conf "/etc/nsswitch.conf.shou.bak.$(date +%s)"
     sudo sed -i -E 's/^(hosts:\s*)(.*)$/\1mdns_minimal [NOTFOUND=return] \2/' /etc/nsswitch.conf
     ok "nsswitch.conf updated (backup saved)."
   fi
-else
+elif [[ -f /etc/nsswitch.conf ]]; then
   ok "nss-mdns already configured in nsswitch.conf."
 fi
 
 # --------------------------------------------------------------------------- #
-step "Autostart on login (Hyprland)"
+step "Autostart on login"
 # --------------------------------------------------------------------------- #
 EXEC_LINE="exec-once = $DAEMON"
 HYPR_TARGET=""
 for f in "$HOME/.config/hypr/hyprland/execs.conf" "$HOME/.config/hypr/hyprland.conf"; do
   [[ -f "$f" ]] && { HYPR_TARGET="$f"; break; }
 done
-if [[ "$HAS_HYPR" -eq 1 && -n "$HYPR_TARGET" ]]; then
+if [[ -n "$HYPR_TARGET" ]]; then
   if grep -qF "$DAEMON" "$HYPR_TARGET"; then
     ok "Autostart already present in ${DIM}$HYPR_TARGET${RESET}"
   elif ask_yes "Add the daemon to ${DIM}$HYPR_TARGET${RESET} so it starts on login?"; then
     printf '\n# Shou server (auto-added by install.sh)\n%s\n' "$EXEC_LINE" >>"$HYPR_TARGET"
-    ok "Added autostart line."
+    ok "Added Hyprland autostart line."
   fi
 else
-  warn "No Hyprland config found to edit. Start Shou on login yourself with:"
-  printf '       %s%s%s\n' "$DIM" "$DAEMON" "$RESET"
+  # XDG autostart — honored by GNOME, KDE, XFCE, Cinnamon, MATE, LXQt, …
+  AUTOSTART="$HOME/.config/autostart/shou.desktop"
+  if [[ -f "$AUTOSTART" ]]; then
+    ok "Autostart entry already present in ${DIM}$AUTOSTART${RESET}"
+  elif ask_yes "Add a login autostart entry (~/.config/autostart/shou.desktop)?"; then
+    mkdir -p "$HOME/.config/autostart"
+    cat >"$AUTOSTART" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Shou
+Comment=Phone-controlled AniList launcher
+Exec=$DAEMON
+Terminal=false
+X-GNOME-Autostart-enabled=true
+EOF
+    ok "Created ${DIM}$AUTOSTART${RESET}"
+  fi
+  info "On Sway/other wlroots compositors, add this to your config instead: ${DIM}exec $DAEMON${RESET}"
 fi
 
 # --------------------------------------------------------------------------- #
@@ -292,7 +413,6 @@ if grep -q '^ANILIST_TOKEN=' "$CONFIG_FILE" 2>/dev/null; then
   ok "AniList token already configured."
 else
   info "Lets Shou tick episodes off on AniList automatically once you finish them."
-  info "Needs a one-time AniList API client + approval (write access)."
   if ask_yes "Set this up now?"; then
     "$REPO_DIR/shou_auth.sh" || warn "Auth didn't complete — run ./shou_auth.sh anytime."
   else
@@ -303,15 +423,16 @@ fi
 # --------------------------------------------------------------------------- #
 step "Start the server now?"
 # --------------------------------------------------------------------------- #
-if curl -s -o /dev/null "http://127.0.0.1:4100/" 2>/dev/null; then
-  ok "Server already answering on :4100."
+PORT_NUM="$(conf_get PORT || true)"; PORT_NUM="${PORT_NUM:-4100}"
+if curl -s -o /dev/null "http://127.0.0.1:${PORT_NUM}/" 2>/dev/null; then
+  ok "Server already answering on :${PORT_NUM}."
 elif ask_yes "Launch the Shou daemon now?"; then
   setsid nohup "$DAEMON" >/dev/null 2>&1 &
   for _ in $(seq 1 20); do
-    curl -s -o /dev/null "http://127.0.0.1:4100/" 2>/dev/null && break
+    curl -s -o /dev/null "http://127.0.0.1:${PORT_NUM}/" 2>/dev/null && break
     sleep 0.5
   done
-  curl -s -o /dev/null "http://127.0.0.1:4100/" 2>/dev/null \
+  curl -s -o /dev/null "http://127.0.0.1:${PORT_NUM}/" 2>/dev/null \
     && ok "Server is up." \
     || warn "Server didn't answer yet — check ~/.config/shou/shou.log"
 fi
@@ -327,7 +448,7 @@ printf '%s%s━━━━━━━━━━━━━━━━━━━━━━�
 
 printf '%sPhone web-remote:%s\n' "$BOLD" "$RESET"
 if [[ -n "$TOKEN" ]]; then
-  printf '   %shttp://%s.local:4100/remote?k=%s%s\n' "$CYAN" "$HOST" "$TOKEN" "$RESET"
+  printf '   %shttp://%s.local:%s/remote?k=%s%s\n' "$CYAN" "$HOST" "$PORT_NUM" "$TOKEN" "$RESET"
   info "Open it on your phone, then 'Add to Home screen' for a one-tap icon."
 else
   info "Start the server once; it generates a token and prints the full /remote URL"

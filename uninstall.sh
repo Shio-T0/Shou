@@ -73,9 +73,10 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
-step "Removing Hyprland autostart"
+step "Removing autostart"
 # --------------------------------------------------------------------------- #
 REMOVED=0
+# Hyprland exec-once lines.
 for f in "$HOME/.config/hypr/hyprland/execs.conf" "$HOME/.config/hypr/hyprland.conf"; do
   [[ -f "$f" ]] || continue
   if grep -qF "$DAEMON" "$f"; then
@@ -86,13 +87,20 @@ for f in "$HOME/.config/hypr/hyprland/execs.conf" "$HOME/.config/hypr/hyprland.c
     REMOVED=1
   fi
 done
-[[ "$REMOVED" -eq 0 ]] && ok "No autostart line found."
+# XDG autostart entry (GNOME/KDE/XFCE/…).
+XDG_AUTOSTART="$HOME/.config/autostart/shou.desktop"
+if [[ -f "$XDG_AUTOSTART" ]]; then
+  rm -f "$XDG_AUTOSTART"
+  ok "Removed ${DIM}$XDG_AUTOSTART${RESET}"
+  REMOVED=1
+fi
+[[ "$REMOVED" -eq 0 ]] && ok "No autostart entry found."
 
 # --------------------------------------------------------------------------- #
 step "Configuration & state"
 # --------------------------------------------------------------------------- #
 if [[ -d "$CONFIG_DIR" ]]; then
-  warn "This holds your AniList username, the remote token, logs and the Firefox kiosk profile:"
+  warn "This holds your AniList username, the remote token, logs and the browser kiosk profile:"
   info "${DIM}$CONFIG_DIR${RESET}"
   if ask_no "Delete $CONFIG_DIR entirely?"; then
     rm -rf "$CONFIG_DIR"
@@ -124,8 +132,8 @@ fi
 printf '\n%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s  Shou uninstalled.%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$BOLD" "$GREEN" "$RESET"
-info "Left untouched (remove manually if you want):"
-info "  • system packages — ${DIM}sudo pacman -Rns ani-cli librsvg${RESET} (avahi/mpv/firefox likely used elsewhere)"
+info "Left untouched (remove manually with your package manager if you want):"
+info "  • system packages — ${DIM}mpv, your browser, curl, uv, ani-cli, avahi${RESET} (likely used elsewhere)"
 info "  • nss-mdns line in /etc/nsswitch.conf (a .bak was made by install.sh)"
 info "  • this repo folder"
 printf '\n'

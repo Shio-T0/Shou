@@ -1,7 +1,8 @@
 #!/bin/bash
 # Shou daemon: keeps the server running (restart-on-crash). Launched at login
-# via a Hyprland `exec-once` so it inherits the Wayland/Hyprland session env it
-# needs to spawn the firefox kiosk + mpv and to run hyprctl.
+# from your graphical session (a compositor `exec`/`exec-once`, or an XDG
+# ~/.config/autostart entry) so it inherits the display env it needs to spawn
+# the browser kiosk + mpv.
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 APPDIR="$SCRIPT_DIR/shou"
 LOG="$HOME/.config/shou/shou.log"
