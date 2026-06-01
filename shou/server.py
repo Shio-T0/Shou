@@ -544,6 +544,15 @@ def kill_players() -> None:
     subprocess.run(["pkill", "-f", "ani-cli"], check=False)
     # Our mpv only, identified by the unique socket-path marker (NOT bare "mpv").
     subprocess.run(["pkill", "-f", MPV_IPC], check=False)
+    # Drop the IPC socket file. A hard-killed mpv can leave it behind, and a stale
+    # file blocks the next mpv from binding its --input-ipc-server — which silently
+    # disables pause/seek and the watch-progress watcher (ECONNREFUSED on connect).
+    try:
+        Path(MPV_IPC).unlink()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
 
 
 def bump_play_gen() -> int:
