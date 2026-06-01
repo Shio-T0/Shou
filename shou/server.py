@@ -376,7 +376,12 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
                        total: int | None, display: str) -> None:
     """Connect to Shou's mpv IPC socket and mark the episode watched on AniList once
     playback crosses the completion threshold (or mpv reaches a clean EOF)."""
-    if not anilist_token() or not media_id:
+    if not anilist_token():
+        print("[progress] no AniList token — progress won't be saved "
+              "(run ./shou_auth.sh, then restart the server)", flush=True)
+        return
+    if not media_id:
+        print(f"[progress] no media_id for {display!r} — can't mark watched", flush=True)
         return
     try:
         threshold = float(CONFIG.get("WATCHED_PERCENT") or 90)
@@ -387,7 +392,11 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
     end = time.time() + 180
     while time.time() < end and PLAYBACK["gen"] == gen and not os.path.exists(MPV_IPC):
         time.sleep(1)
-    if PLAYBACK["gen"] != gen or not os.path.exists(MPV_IPC):
+    if PLAYBACK["gen"] != gen:
+        return  # superseded by a newer play
+    if not os.path.exists(MPV_IPC):
+        print(f"[progress] mpv IPC socket never appeared at {MPV_IPC} "
+              f"(no playable source?) — {display!r} not marked", flush=True)
         return
 
     try:
@@ -398,9 +407,12 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
     except OSError as exc:
         print(f"[progress] mpv IPC connect failed: {exc}", flush=True)
         return
+    print(f"[progress] watching {display!r} ep {episode} "
+          f"(mark at {threshold:.0f}% or EOF)", flush=True)
 
     buf = b""
     marked = False
+    last_pos = 0.0  # furthest playback position we saw, for diagnostics
     try:
         while PLAYBACK["gen"] == gen and not marked:
             try:
@@ -423,9 +435,11 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
                 ev = msg.get("event")
                 if ev == "property-change" and msg.get("name") == "percent-pos":
                     data = msg.get("data")
-                    if isinstance(data, (int, float)) and data >= threshold:
-                        marked = True
-                        break
+                    if isinstance(data, (int, float)):
+                        last_pos = max(last_pos, data)
+                        if data >= threshold:
+                            marked = True
+                            break
                 elif ev == "end-file" and msg.get("reason") == "eof":
                     marked = True
                     break
@@ -436,6 +450,9 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
             pass
     if marked and PLAYBACK["gen"] == gen:
         mark_watched(media_id, episode, total, display)
+    elif PLAYBACK["gen"] == gen:
+        print(f"[progress] {display!r} ep {episode} not marked — playback ended at "
+              f"{last_pos:.0f}% (threshold {threshold:.0f}%); stopped early?", flush=True)
 
 
 # --------------------------------------------------------------------------- #
