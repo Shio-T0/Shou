@@ -599,8 +599,15 @@ def play(search_title: str, episode: int, display_title: str | None = None,
     kill_players()
     time.sleep(0.4)
     quality = CONFIG.get("QUALITY") or "1080p"
+    # -S 1 picks the first search result non-interactively. ani-cli selects the anime
+    # with fzf, which reads /dev/tty; running detached (no terminal) that aborts with
+    # "inappropriate ioctl for device" on any multi-result search (e.g. ONE PIECE, which
+    # returns the series plus dozens of films/specials), so nothing plays. Piping a "1"
+    # to stdin does NOT help — the picker ignores stdin. --select-nth sets the index
+    # directly and never invokes fzf. (Single-result searches skipped fzf already, which
+    # is why some titles played while others silently failed.)
     cmd = (
-        f"printf '1\\n' | ani-cli -q {shlex.quote(quality)} "
+        f"ani-cli -S 1 -q {shlex.quote(quality)} "
         f"-e {episode} {shlex.quote(search_title)}"
     )
     print(f"[play] ani-cli search={search_title!r} episode={episode} "
