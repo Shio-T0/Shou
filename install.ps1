@@ -256,9 +256,38 @@ if (Conf-Has 'ANILIST_TOKEN') {
 }
 
 # --------------------------------------------------------------------------- #
+Step 'Windows Firewall — let your phone reach the server on the LAN'
+# --------------------------------------------------------------------------- #
+# The server listens on 0.0.0.0, but Windows Defender Firewall blocks inbound by default,
+# so the PC's own kiosk (localhost) works while the phone hangs forever. Open the port for
+# Private/Domain networks (home/work Wi-Fi) — NOT Public.
+$port = Conf-Get 'PORT'; if ([string]::IsNullOrWhiteSpace($port)) { $port = '4100' }
+$fwName = "Shou (TCP $port)"
+if (Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue) {
+    Ok "Firewall rule already present: $fwName"
+} else {
+    # New-NetFirewallRule needs admin; elevate just this one command if we aren't already.
+    $fwCmd = "New-NetFirewallRule -DisplayName '$fwName' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $port -Profile Private,Domain | Out-Null"
+    try {
+        if (Is-Admin) {
+            Invoke-Expression $fwCmd
+        } else {
+            Info 'Adding the rule needs admin — accept the UAC prompt...'
+            Start-Process powershell -Verb RunAs -Wait -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $fwCmd)
+        }
+    } catch { Warn "Firewall step failed: $($_.Exception.Message)" }
+    if (Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue) {
+        Ok "Opened TCP $port for Private/Domain networks."
+    } else {
+        Warn 'Could not add the firewall rule. Run this in an elevated PowerShell:'
+        Warn "  $fwCmd"
+        Warn 'Also confirm your Wi-Fi is set to a Private network (not Public).'
+    }
+}
+
+# --------------------------------------------------------------------------- #
 Step 'Start the server now?'
 # --------------------------------------------------------------------------- #
-$port = Conf-Get 'PORT'; if ([string]::IsNullOrWhiteSpace($port)) { $port = '4100' }
 function Server-Up { try { Invoke-WebRequest "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 2 | Out-Null; $true } catch { $false } }
 
 if (Server-Up) {
