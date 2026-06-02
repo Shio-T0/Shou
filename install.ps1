@@ -56,28 +56,81 @@ Step 'Installing dependencies'
 # --------------------------------------------------------------------------- #
 function Have($name) { [bool](Get-Command $name -ErrorAction SilentlyContinue) }
 
-function Winget-Install($id, $label) {
-    if (-not $hasWinget) { Warn "Install $label manually (winget unavailable)."; return }
-    if (AskYes "Install $label with winget?") {
-        try { winget install --id $id -e --accept-source-agreements --accept-package-agreements }
-        catch { Warn "winget couldn't install $label — install it manually." }
-    }
+# winget / scoop edit the *persistent* (registry) PATH, but this running session keeps its
+# old copy — so a freshly installed tool looks "missing" until the shell is restarted.
+# Rebuild $env:Path from the Machine+User registry values plus the well-known per-user
+# tool dirs, so the rest of the installer can see what we just installed.
+function Refresh-Path {
+    $parts = @(
+        [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+        [Environment]::GetEnvironmentVariable('Path', 'User'),
+        (Join-Path $HOME '.local\bin'),                          # uv (astral installer)
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'),  # winget shims
+        (Join-Path $HOME 'scoop\shims')                          # scoop shims
+    ) | Where-Object { $_ }
+    $env:Path = ($parts -join ';')
 }
 
-# uv (Python env manager)
-if (Have 'uv') { Ok 'uv already installed.' }
-else { Info 'uv (Python manager) is required.'; Winget-Install 'astral-sh.uv' 'uv' }
+function Is-Admin {
+    $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    return $p.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+}
 
-# mpv (player). No single canonical winget id across machines — prefer scoop if present.
-if (Have 'mpv') {
-    Ok 'mpv already installed.'
-} elseif (Have 'scoop') {
-    if (AskYes 'Install mpv with scoop?') { scoop install mpv }
+# Returns $true if the command is on PATH after the attempt.
+function Winget-Install($id, $cmd, $label) {
+    if (-not $hasWinget) { return $false }
+    try { winget install --id $id -e --accept-source-agreements --accept-package-agreements }
+    catch { Warn "winget couldn't install $label ($($_.Exception.Message))." }
+    Refresh-Path
+    return (Have $cmd)
+}
+
+# Bootstrap scoop on demand — our admin-free fallback for tools winget can't place (mpv).
+# Honours an elevated shell via -RunAsAdmin so it never aborts mid-run.
+function Ensure-Scoop {
+    if (Have 'scoop') { return $true }
+    Info 'Installing scoop (user-scoped package manager, no admin needed)...'
+    try {
+        $installer = [scriptblock]::Create((Invoke-RestMethod -Uri 'https://get.scoop.sh'))
+        if (Is-Admin) { & $installer -RunAsAdmin } else { & $installer }
+    } catch { Warn "scoop bootstrap failed: $($_.Exception.Message)"; return $false }
+    Refresh-Path
+    return (Have 'scoop')
+}
+
+# uv (Python env manager) — winget first, official installer as the fallback.
+if (Have 'uv') {
+    Ok "uv already installed: $((Get-Command uv).Source)"
 } else {
-    Info 'mpv was not found on PATH.'
-    Winget-Install 'mpv' 'mpv'
-    if (-not (Have 'mpv')) {
-        Warn 'If mpv still isn''t on PATH, install it from https://mpv.io (or `scoop install mpv`)'
+    Info 'Installing uv (Python manager)...'
+    if (-not (Winget-Install 'astral-sh.uv' 'uv' 'uv')) {
+        Info 'Falling back to the official uv installer...'
+        try { Invoke-RestMethod -Uri 'https://astral.sh/uv/install.ps1' | Invoke-Expression }
+        catch { Warn "uv installer failed: $($_.Exception.Message)" }
+        Refresh-Path
+    }
+    if (Have 'uv') { Ok "uv installed: $((Get-Command uv).Source)" }
+    else { Warn 'uv still not on PATH — open a new terminal and re-run install.ps1.' }
+}
+
+# mpv (player) — REQUIRED. Installed automatically: there is no reliable winget id for mpv,
+# so we bootstrap scoop (+ git + the extras bucket where mpv lives) to guarantee a working
+# player in a single installer run.
+if (Have 'mpv') {
+    Ok "mpv already installed: $((Get-Command mpv).Source)"
+} else {
+    Info 'mpv not found — installing it automatically (this may bootstrap scoop + git)...'
+    if (Ensure-Scoop) {
+        # The extras bucket needs git; git ships in scoop's default main bucket.
+        if (-not (Have 'git')) { Info 'Installing git (needed for scoop buckets)...'; scoop install git; Refresh-Path }
+        try { scoop bucket add extras } catch { }  # no-op if already added
+        scoop install mpv
+        Refresh-Path
+    }
+    if (Have 'mpv') {
+        Ok "mpv installed: $((Get-Command mpv).Source)"
+    } else {
+        Warn 'Automatic mpv install failed. Install it from https://mpv.io (or `scoop install mpv`)'
         Warn 'and set MPV_BIN in shou.conf to the full path of mpv.exe.'
     }
 }
@@ -98,6 +151,7 @@ else { Warn 'No Firefox/Edge/Chrome found — install one for the kiosk display.
 # --------------------------------------------------------------------------- #
 Step 'Installing the Python environment (uv)'
 # --------------------------------------------------------------------------- #
+Refresh-Path  # pick up uv if winget just placed it but the session PATH was stale
 if (-not (Have 'uv')) { Die 'uv is required but missing (install it in the previous step).' }
 Push-Location $AppDir
 try { uv sync } finally { Pop-Location }
@@ -148,12 +202,16 @@ if ([string]::IsNullOrWhiteSpace($curUser) -or $curUser -eq 'CHANGE_ME') {
     Ok "AniList user: $curUser"
 }
 
+# Pin MPV_BIN to the resolved mpv on first run so the login daemon finds it even if the
+# session PATH differs (e.g. scoop shims not yet picked up). Blank falls back to PATH.
+$mpvBin = if (Have 'mpv') { (Get-Command mpv).Source } else { '' }
+
 # Canonical settings: key | default | comment. Re-running backfills any missing.
 $settings = @(
-    @('PORT',            '4100', 'Port the server / phone remote listens on.'),
-    @('WATCHED_PERCENT', '90',   'Auto-mark an episode watched on AniList once playback passes this %.'),
-    @('MPV_BIN',         '',     'Full path to mpv.exe (leave blank to use PATH).'),
-    @('BROWSER',         '',     'Full path to a kiosk browser .exe (blank = auto-detect Firefox/Edge/Chrome).')
+    @('PORT',            '4100',    'Port the server / phone remote listens on.'),
+    @('WATCHED_PERCENT', '90',      'Auto-mark an episode watched on AniList once playback passes this %.'),
+    @('MPV_BIN',         $mpvBin,   'Full path to mpv.exe (leave blank to use PATH).'),
+    @('BROWSER',         '',        'Full path to a kiosk browser .exe (blank = auto-detect Firefox/Edge/Chrome).')
 )
 $added = @()
 foreach ($s in $settings) {
