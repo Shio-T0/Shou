@@ -1,4 +1,4 @@
-<#
+﻿<#
   ┌──────────────────────────────────────────────┐
   │   朱   S H O U   ·   I N S T A L L E R  (Win)  │
   │   your anime, controlled from your phone       │

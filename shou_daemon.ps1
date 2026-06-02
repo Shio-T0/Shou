@@ -1,4 +1,4 @@
-<#
+﻿<#
   Shou daemon (Windows): keeps the server running (restart-on-crash).
   Launched at login via a Startup-folder shortcut or Task Scheduler so it can
   spawn the browser kiosk + mpv in the user's desktop session.

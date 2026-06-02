@@ -1,4 +1,4 @@
-<#
+﻿<#
   Shou — AniList write access setup (one-time, Windows).
   Obtains an OAuth access token via AniList's authorization-code "PIN" flow and
   stores it as ANILIST_TOKEN in ~/.config/shou/shou.conf, enabling Shou to mark

@@ -1,4 +1,4 @@
-<#
+﻿<#
   Shou — Windows uninstaller. Stops the server, removes the Startup shortcut, and
   optionally deletes your config + virtualenv. Does NOT remove uv / mpv / browsers
   (those are general-purpose tools you may use elsewhere).
