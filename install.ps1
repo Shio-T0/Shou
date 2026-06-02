@@ -342,19 +342,34 @@ if (Server-Up) {
 #  Done — next steps
 # --------------------------------------------------------------------------- #
 $token = Conf-Get 'REMOTE_TOKEN'
-$ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-       Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
-       Select-Object -First 1).IPAddress
-if (-not $ip) { $ip = '<this-pc-ip>' }
+# Candidate LAN IPs for the phone URL. Keep only real private (RFC1918) addresses and skip
+# VPN / virtual adapters (Radmin 26.x, Hamachi, Tailscale, Hyper-V/WSL vEthernet, etc.) —
+# the phone has no route to those, which is the classic "stuck loading / connection aborted"
+# trap. Prefer 192.168.x (typical home Wi-Fi) first.
+$lanIps = @(
+    Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.IPAddress -match '^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)' -and
+        $_.InterfaceAlias -notmatch 'Radmin|Hamachi|VPN|ZeroTier|Tailscale|Hyper-V|vEthernet|VirtualBox|VMware|WSL|Loopback'
+    } |
+    Sort-Object -Property @{ Expression = { $_.IPAddress -notmatch '^192\.168\.' } } |
+    Select-Object -ExpandProperty IPAddress -Unique
+)
+if ($lanIps.Count -eq 0) { $lanIps = @('<this-pc-ip>') }
+$ip = $lanIps[0]
 
 Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
 Write-Host "  Shou is installed. 🎌" -ForegroundColor Green
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" -ForegroundColor Green
 
-Write-Host 'Phone web-remote:'
+Write-Host 'Phone web-remote (phone must be on the SAME Wi-Fi/router as this PC):'
 if ($token) {
-    Write-Host "   http://${ip}:${port}/remote?k=$token" -ForegroundColor Cyan
+    foreach ($cand in $lanIps) {
+        Write-Host "   http://${cand}:${port}/remote?k=$token" -ForegroundColor Cyan
+    }
+    if ($lanIps.Count -gt 1) { Info 'Several networks detected — use the one matching your phone''s Wi-Fi.' }
     Info "Open it on your phone, then 'Add to Home screen' for a one-tap icon."
+    Info 'Ignore any VPN/virtual address (e.g. Radmin 26.x) — the phone cannot reach those.'
 } else {
     Info 'Start the server once; it generates a token and prints the full /remote URL'
     Info "to $ConfDir\shou.log. Then add that URL to your phone's home screen."
