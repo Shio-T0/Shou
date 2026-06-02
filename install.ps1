@@ -259,29 +259,67 @@ if (Conf-Has 'ANILIST_TOKEN') {
 Step 'Windows Firewall — let your phone reach the server on the LAN'
 # --------------------------------------------------------------------------- #
 # The server listens on 0.0.0.0, but Windows Defender Firewall blocks inbound by default,
-# so the PC's own kiosk (localhost) works while the phone hangs forever. Open the port for
-# Private/Domain networks (home/work Wi-Fi) — NOT Public.
+# so the PC's own kiosk (localhost) works while the phone hangs forever. Two things must
+# be true for the phone to connect: (1) an inbound allow-rule for the port, and (2) the
+# active network set to Private/Domain — the rule does NOT apply on a 'Public' network
+# (you'd see EnforcementStatus=NotApplicable), which is the usual reason the phone hangs.
 $port = Conf-Get 'PORT'; if ([string]::IsNullOrWhiteSpace($port)) { $port = '4100' }
 $fwName = "Shou (TCP $port)"
-if (Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue) {
-    Ok "Firewall rule already present: $fwName"
-} else {
-    # New-NetFirewallRule needs admin; elevate just this one command if we aren't already.
-    $fwCmd = "New-NetFirewallRule -DisplayName '$fwName' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $port -Profile Private,Domain | Out-Null"
+
+$needRule   = -not (Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue)
+$publicNics = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue |
+                Where-Object { $_.NetworkCategory -eq 'Public' })
+
+if (-not $needRule) { Ok "Firewall rule already present: $fwName" }
+
+# Offer to flip any Public network to Private (without it, the rule is inert).
+$fixPublic = $false
+if ($publicNics.Count -gt 0) {
+    Warn "Your active network is 'Public' — Windows will block the phone even with the rule:"
+    foreach ($n in $publicNics) { Warn "    $($n.InterfaceAlias)  ($($n.Name))" }
+    $fixPublic = AskYes 'Switch it to Private so the phone can connect?'
+} elseif (-not $needRule) {
+    Info 'Active network is Private/Domain — good.'
+}
+
+if ($needRule -or $fixPublic) {
+    # Bundle everything that needs admin into ONE command, so the user sees at most one UAC.
+    $cmds = @()
+    if ($needRule) {
+        $cmds += "New-NetFirewallRule -DisplayName '$fwName' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $port -Profile Private,Domain | Out-Null"
+    }
+    if ($fixPublic) {
+        foreach ($n in $publicNics) {
+            $cmds += "Set-NetConnectionProfile -InterfaceIndex $($n.InterfaceIndex) -NetworkCategory Private"
+        }
+    }
+    $adminScript = $cmds -join '; '
     try {
         if (Is-Admin) {
-            Invoke-Expression $fwCmd
+            Invoke-Expression $adminScript
         } else {
-            Info 'Adding the rule needs admin — accept the UAC prompt...'
-            Start-Process powershell -Verb RunAs -Wait -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $fwCmd)
+            Info 'These changes need admin — accept the UAC prompt...'
+            Start-Process powershell -Verb RunAs -Wait -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $adminScript)
         }
-    } catch { Warn "Firewall step failed: $($_.Exception.Message)" }
-    if (Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue) {
-        Ok "Opened TCP $port for Private/Domain networks."
-    } else {
-        Warn 'Could not add the firewall rule. Run this in an elevated PowerShell:'
-        Warn "  $fwCmd"
-        Warn 'Also confirm your Wi-Fi is set to a Private network (not Public).'
+    } catch { Warn "Firewall step could not run elevated: $($_.Exception.Message)" }
+
+    # Re-check and report loudly — a silent failure here is exactly what strands the phone.
+    $haveRule    = [bool](Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue)
+    $stillPublic = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue |
+                     Where-Object { $_.NetworkCategory -eq 'Public' })
+    if ($haveRule) { Ok "Opened TCP $port for Private/Domain networks." }
+    else {
+        Warn '==================================================================='
+        Warn 'FIREWALL RULE NOT CREATED  ->  your phone will NOT be able to connect.'
+        Warn 'Open an elevated PowerShell (Win+X -> Terminal (Admin)) and run:'
+        Warn "    New-NetFirewallRule -DisplayName '$fwName' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $port -Profile Private,Domain"
+        Warn '==================================================================='
+    }
+    if ($stillPublic.Count -gt 0) {
+        Warn "Network is still 'Public' -> the rule stays inert and the phone is blocked. Run elevated:"
+        foreach ($n in $stillPublic) {
+            Warn "    Set-NetConnectionProfile -InterfaceAlias '$($n.InterfaceAlias)' -NetworkCategory Private"
+        }
     }
 }
 
