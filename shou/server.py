@@ -124,9 +124,10 @@ MPV_IPC = r"\\.\pipe\shou-mpv"
 # ani-cli uses; animekai is a genuinely different source as a backstop.
 SOURCE_PROVIDERS = ["allanime", "animekai"]
 
-# ani-cli backup: when anipy resolves nothing, fall back to ani-cli (a bash script) run
-# under Git Bash. It needs bash + fzf on the system (the installer sets these up) and sends
-# its mpv to the same IPC pipe, so pause/seek/progress/resume all keep working.
+# ani-cli is the primary source on Windows (a bash script run under Git Bash); anipy is the
+# backup tried when ani-cli finds nothing. ani-cli needs bash + fzf on the system (the
+# installer sets these up) and sends its mpv to the same IPC pipe, so pause/seek/progress/
+# resume all keep working.
 LAUNCH_TIMEOUT = 30.0                       # secs to wait for ani-cli's mpv to come up
 ANI_LOG = CONFIG_DIR / "ani-cli-last.log"   # ani-cli's captured output, for diagnostics
 
@@ -819,18 +820,42 @@ def _play_task(gen: int, search_title: str, episode: int, display: str,
                media_id: int | None, total: int | None, cover: str = "",
                color: str = "", banner: str = "", start: float = 0.0) -> None:
     """Background worker: stop the old player, resolve a stream, launch mpv, report.
-    anipy is the primary scraper; ani-cli is a second, independent backup source."""
+    ani-cli is the primary source; anipy is the backup tried when ani-cli finds nothing."""
     kill_players()
     time.sleep(0.3)
     if PLAYBACK["gen"] != gen:
         return
     print(f"[play] resolving search={search_title!r} episode={episode} "
           f"start={int(start)}s", flush=True)
+
+    # Primary: ani-cli (lets it launch mpv itself, on our IPC pipe).
+    if anicli_play(gen, search_title, episode, display, start):
+        with STATE_LOCK:
+            if PLAYBACK["gen"] != gen:
+                return
+            STATE["view"] = "playing"
+            STATE["message"] = f"Playing {display} — Ep {episode}  ·  ani-cli"
+        broadcast()
+        notify("🎌 Now Watching", f"{display} — Episode {episode} (ani-cli)")
+        _start_watcher(gen, media_id, episode, total, display, search_title,
+                       cover, color, banner)
+        return
+
+    # Backup: ani-cli found nothing (or isn't installed) — fall back to anipy's scrapers.
+    if PLAYBACK["gen"] != gen:
+        return
+    print(f"[play] ani-cli found no source for {search_title!r} ep {episode}; "
+          "trying anipy backup", flush=True)
+    with STATE_LOCK:
+        STATE["message"] = f"Searching anipy backup for {display}…"
+    broadcast()
+    kill_players()
+    time.sleep(0.3)
+    if PLAYBACK["gen"] != gen:
+        return
     resolved = resolve_stream(search_title, episode)
     if PLAYBACK["gen"] != gen:
         return
-
-    # Primary: anipy resolved a direct stream — launch mpv ourselves.
     if resolved:
         url, referrer, subtitle, prov_name, _matched = resolved
         proc = _launch_mpv(url, display, episode, referrer, subtitle, start)
@@ -840,26 +865,6 @@ def _play_task(gen: int, search_title: str, episode: int, display: str,
             STATE["message"] = f"Playing {display} — Ep {episode}  ·  {prov_name}"
         broadcast()
         notify("🎌 Now Watching", f"{display} — Episode {episode}")
-        _start_watcher(gen, media_id, episode, total, display, search_title,
-                       cover, color, banner)
-        return
-
-    # Backup: anipy found nothing — fall back to ani-cli (lets it launch mpv itself).
-    print(f"[play] anipy found no source for {search_title!r} ep {episode}; "
-          "trying ani-cli backup", flush=True)
-    with STATE_LOCK:
-        if PLAYBACK["gen"] != gen:
-            return
-        STATE["message"] = f"Searching ani-cli backup for {display}…"
-    broadcast()
-    if anicli_play(gen, search_title, episode, display, start):
-        with STATE_LOCK:
-            if PLAYBACK["gen"] != gen:
-                return
-            STATE["view"] = "playing"
-            STATE["message"] = f"Playing {display} — Ep {episode}  ·  ani-cli"
-        broadcast()
-        notify("🎌 Now Watching", f"{display} — Episode {episode} (ani-cli)")
         _start_watcher(gen, media_id, episode, total, display, search_title,
                        cover, color, banner)
         return

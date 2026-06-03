@@ -135,10 +135,10 @@ if (Have 'mpv') {
     }
 }
 
-# ani-cli backup source (optional, recommended). anipy is the primary scraper; ani-cli — a
-# bash script — is a second, independent source Shou tries when anipy finds nothing. On
-# Windows it runs under Git Bash and needs fzf (mpv it already has). We make sure git + fzf
-# are present, locate Git Bash, and fetch the ani-cli script into the config dir.
+# ani-cli — the PRIMARY source. A bash script Shou drives under Git Bash; anipy is the
+# fallback tried when ani-cli finds nothing. On Windows ani-cli needs fzf (mpv it already
+# has). We make sure git + fzf are present, locate Git Bash, and fetch the ani-cli script
+# into the config dir. If this is unavailable, Shou still works via the anipy fallback.
 $BashBin = $null
 $AniCli  = ''
 function Find-Bash {
