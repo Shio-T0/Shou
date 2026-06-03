@@ -125,6 +125,13 @@ LAUNCH_TIMEOUT = 30.0
 # via a different client + smarter result/episode matching (fixes wrong-entry failures).
 FALLBACK_PROVIDERS = ["animekai", "allanime"]
 
+# Continue-watching history: episodes left mid-way get a resume point (episode +
+# playback position) persisted here, so the phone can pick one and resume on the PC.
+HISTORY_FILE = CONFIG_DIR / "history.json"
+HISTORY_LOCK = threading.Lock()
+HISTORY_MAX = 24            # cap stored resume points (newest kept)
+RESUME_MIN_SECONDS = 30     # ignore trivially-short positions (skipped intros etc.)
+
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
@@ -372,17 +379,19 @@ def mark_watched(media_id: int, episode: int, total: int | None, display: str) -
         print(f"[anilist] mark_watched failed: {exc}", flush=True)
 
 
-def watch_mpv_progress(gen: int, media_id: int, episode: int,
-                       total: int | None, display: str) -> None:
-    """Connect to Shou's mpv IPC socket and mark the episode watched on AniList once
-    playback crosses the completion threshold (or mpv reaches a clean EOF)."""
-    if not anilist_token():
-        print("[progress] no AniList token — progress won't be saved "
-              "(run ./shou_auth.sh, then restart the server)", flush=True)
-        return
+def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
+                   display: str, search: str = "", cover: str = "",
+                   color: str = "", banner: str = "") -> None:
+    """Track Shou's mpv over its IPC socket. Two jobs:
+
+      * past the completion threshold (or a clean EOF), mark the episode watched on
+        AniList — only if a token is configured;
+      * if playback stops mid-way instead, record a resume point (episode + position)
+        in the continue-watching history. This runs with or without a token.
+    """
     if not media_id:
-        print(f"[progress] no media_id for {display!r} — can't mark watched", flush=True)
-        return
+        return  # need a stable key to relaunch/dedupe
+    has_token = bool(anilist_token())
     try:
         threshold = float(CONFIG.get("WATCHED_PERCENT") or 90)
     except ValueError:
@@ -396,7 +405,7 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
         return  # superseded by a newer play
     if not os.path.exists(MPV_IPC):
         print(f"[progress] mpv IPC socket never appeared at {MPV_IPC} "
-              f"(no playable source?) — {display!r} not marked", flush=True)
+              f"(no playable source?) — {display!r} not tracked", flush=True)
         return
 
     try:
@@ -404,15 +413,19 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
         sock.settimeout(5)
         sock.connect(MPV_IPC)
         sock.sendall(b'{"command":["observe_property",1,"percent-pos"]}\n')
+        sock.sendall(b'{"command":["observe_property",2,"time-pos"]}\n')
+        sock.sendall(b'{"command":["observe_property",3,"duration"]}\n')
     except OSError as exc:
         print(f"[progress] mpv IPC connect failed: {exc}", flush=True)
         return
-    print(f"[progress] watching {display!r} ep {episode} "
-          f"(mark at {threshold:.0f}% or EOF)", flush=True)
+    print(f"[progress] watching {display!r} ep {episode} (mark at {threshold:.0f}% or EOF"
+          f"{'' if has_token else '; no token — resume only'})", flush=True)
 
     buf = b""
     marked = False
-    last_pos = 0.0  # furthest playback position we saw, for diagnostics
+    last_pos = 0.0   # furthest percent seen
+    last_time = 0.0  # furthest time-pos seen (seconds)
+    duration = 0.0
     try:
         while PLAYBACK["gen"] == gen and not marked:
             try:
@@ -422,7 +435,7 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
             except OSError:
                 break
             if not chunk:
-                break  # mpv exited / was killed (e.g. Back)
+                break  # mpv exited / was killed (e.g. Back, Next, or stopped)
             buf += chunk
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
@@ -433,13 +446,18 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
                 except ValueError:
                     continue
                 ev = msg.get("event")
-                if ev == "property-change" and msg.get("name") == "percent-pos":
+                if ev == "property-change":
+                    name = msg.get("name")
                     data = msg.get("data")
-                    if isinstance(data, (int, float)):
+                    if name == "percent-pos" and isinstance(data, (int, float)):
                         last_pos = max(last_pos, data)
                         if data >= threshold:
                             marked = True
                             break
+                    elif name == "time-pos" and isinstance(data, (int, float)):
+                        last_time = max(last_time, data)
+                    elif name == "duration" and isinstance(data, (int, float)):
+                        duration = data
                 elif ev == "end-file" and msg.get("reason") == "eof":
                     marked = True
                     break
@@ -448,11 +466,35 @@ def watch_mpv_progress(gen: int, media_id: int, episode: int,
             sock.close()
         except OSError:
             pass
-    if marked and PLAYBACK["gen"] == gen:
-        mark_watched(media_id, episode, total, display)
-    elif PLAYBACK["gen"] == gen:
-        print(f"[progress] {display!r} ep {episode} not marked — playback ended at "
-              f"{last_pos:.0f}% (threshold {threshold:.0f}%); stopped early?", flush=True)
+
+    if marked:
+        # Finished (or close enough) — clear any saved resume point, then mark.
+        forget_resume(media_id, episode)
+        if has_token and PLAYBACK["gen"] == gen:
+            mark_watched(media_id, episode, total, display)
+        broadcast()
+        return
+
+    # Stopped before the threshold — remember where, so it can be resumed later.
+    if last_time >= RESUME_MIN_SECONDS and last_pos < threshold:
+        remember_resume({
+            "media_id": media_id,
+            "episode": episode,
+            "title": display,
+            "search": search or display,
+            "total": total,
+            "cover": cover,
+            "color": color or "#1f2233",
+            "banner": banner,
+            "position": round(last_time, 1),
+            "duration": round(duration, 1),
+            "percent": round(last_pos, 1),
+            "updated_at": int(time.time()),
+        })
+        broadcast()
+    else:
+        print(f"[progress] {display!r} ep {episode} not marked/saved — ended at "
+              f"{last_pos:.0f}% / {int(last_time)}s", flush=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -585,16 +627,20 @@ def mpv_ipc_command(command: list) -> None:
 
 
 def play(search_title: str, episode: int, display_title: str | None = None,
-         media_id: int | None = None, total: int | None = None) -> None:
+         media_id: int | None = None, total: int | None = None,
+         cover: str = "", color: str = "", banner: str = "",
+         start: float = 0.0) -> None:
     """Launch ani-cli for the given title/episode, detached, auto-picking result 1.
 
     `search_title` (romaji) is what ani-cli searches; `display_title` (english) is what
     the UI/notification shows. A background monitor watches whether mpv actually starts
     and reports back to the UI if no playable source was found. When `media_id` is known
-    and an AniList token is configured, a second watcher marks the episode watched once
-    playback completes.
+    a second watcher marks the episode watched once playback completes (if an AniList
+    token is set) and records a resume point if you stop mid-episode. `start` (seconds)
+    resumes playback from a saved position; cover/color/banner travel into the history.
     """
     display = display_title or search_title
+    start = float(start or 0)
     gen = bump_play_gen()
     kill_players()
     time.sleep(0.4)
@@ -611,11 +657,15 @@ def play(search_title: str, episode: int, display_title: str | None = None,
         f"-e {episode} {shlex.quote(search_title)}"
     )
     print(f"[play] ani-cli search={search_title!r} episode={episode} "
-          f"quality={quality!r} (showing as {display!r})", flush=True)
+          f"quality={quality!r} start={int(start)}s (showing as {display!r})", flush=True)
     # ani-cli output is captured so the monitor can read a failure reason.
     logf = ANI_LOG.open("w")
-    # ANI_CLI_PLAYER is expanded unquoted into ani-cli's mpv branch, so this
-    # opens mpv fullscreen — scoped to ani-cli only (no global mpv config edit).
+    # ANI_CLI_PLAYER is expanded unquoted into ani-cli's mpv branch, so this opens mpv
+    # fullscreen — scoped to ani-cli only (no global mpv config edit). A non-zero start
+    # adds --start=<sec> so a resumed episode opens at the saved position.
+    player = ANI_CLI_PLAYER
+    if start > 0:
+        player = f"mpv --fs --start={int(start)} --input-ipc-server={MPV_IPC}"
     proc = subprocess.Popen(
         cmd,
         shell=True,
@@ -623,22 +673,25 @@ def play(search_title: str, episode: int, display_title: str | None = None,
         stdout=logf,
         stderr=subprocess.STDOUT,
         start_new_session=True,
-        env=os.environ | {"ANI_CLI_PLAYER": ANI_CLI_PLAYER},
+        env=os.environ | {"ANI_CLI_PLAYER": player},
     )
     logf.close()
     with STATE_LOCK:
         PLAYBACK["proc"] = proc
         STATE["playing"] = {"title": display, "search": search_title, "episode": episode,
-                            "media_id": media_id, "total": total}
+                            "media_id": media_id, "total": total,
+                            "cover": cover, "color": color, "banner": banner}
     subprocess.run(
         ["notify-send", "🎌 Now Watching", f"{display} — Episode {episode}",
          "-u", "normal", "-t", "3000"],
         check=False,
     )
-    socketio.start_background_task(monitor_playback, gen, search_title, episode, display)
-    # Mark-watched watcher (covers the ani-cli mpv and the fallback mpv — same socket).
-    if media_id and anilist_token():
-        socketio.start_background_task(watch_mpv_progress, gen, media_id, episode, total, display)
+    socketio.start_background_task(monitor_playback, gen, search_title, episode, display, start)
+    # Playback watcher: marks watched on AniList (if a token is set) and records a
+    # resume point if stopped mid-way. Covers the ani-cli mpv and the fallback mpv.
+    if media_id:
+        socketio.start_background_task(watch_playback, gen, media_id, episode, total,
+                                       display, search_title, cover, color, banner)
 
 
 def resolve_fallback(search_title: str, episode: int):
@@ -677,7 +730,8 @@ def resolve_fallback(search_title: str, episode: int):
     return None
 
 
-def fallback_play(gen: int, search_title: str, episode: int, display: str) -> bool:
+def fallback_play(gen: int, search_title: str, episode: int, display: str,
+                  start: float = 0.0) -> bool:
     """Resolve a stream from a backup scraper and launch mpv directly. True on success."""
     resolved = resolve_fallback(search_title, episode)
     if not resolved:
@@ -691,6 +745,8 @@ def fallback_play(gen: int, search_title: str, episode: int, display: str) -> bo
     time.sleep(0.3)
     cmd = ["mpv", "--fs", f"--input-ipc-server={MPV_IPC}",
            f"--force-media-title={display} — Episode {episode}"]
+    if start and start > 0:
+        cmd.append(f"--start={int(start)}")
     if referrer:
         cmd.append(f"--referrer={referrer}")
     if subtitle:
@@ -737,7 +793,8 @@ def _failure_reason() -> str:
     return ""
 
 
-def monitor_playback(gen: int, search_title: str, episode: int, display: str) -> None:
+def monitor_playback(gen: int, search_title: str, episode: int, display: str,
+                     start: float = 0.0) -> None:
     """Watch for mpv to actually start. If ani-cli never launches it, try the backup
     scrapers; only if those fail too do we report 'no source' to the UI."""
     deadline = time.monotonic() + LAUNCH_TIMEOUT
@@ -773,7 +830,7 @@ def monitor_playback(gen: int, search_title: str, episode: int, display: str) ->
     with STATE_LOCK:
         STATE["message"] = f"Searching backup sources for {display}…"
     broadcast()
-    if fallback_play(gen, search_title, episode, display):
+    if fallback_play(gen, search_title, episode, display, start):
         return
 
     with STATE_LOCK:
@@ -797,9 +854,61 @@ def monitor_playback(gen: int, search_title: str, episode: int, display: str) ->
 
 
 # --------------------------------------------------------------------------- #
+# Continue-watching history (resume points for episodes stopped mid-way)
+# --------------------------------------------------------------------------- #
+def _load_history() -> list:
+    try:
+        data = json.loads(HISTORY_FILE.read_text())
+        return data if isinstance(data, list) else []
+    except (FileNotFoundError, ValueError, OSError):
+        return []
+
+
+def _save_history(items: list) -> None:
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        HISTORY_FILE.write_text(json.dumps(items))
+    except OSError as exc:  # noqa: BLE001
+        print(f"[history] save failed: {exc}", flush=True)
+
+
+def history_snapshot() -> list:
+    """The current resume list (newest first) — broadcast to the UIs."""
+    with HISTORY_LOCK:
+        return _load_history()
+
+
+def remember_resume(entry: dict) -> None:
+    """Insert/replace a resume point keyed by (media_id, episode); newest first."""
+    mid, ep = entry.get("media_id"), entry.get("episode")
+    if not mid:
+        return
+    with HISTORY_LOCK:
+        items = [e for e in _load_history()
+                 if not (e.get("media_id") == mid and e.get("episode") == ep)]
+        items.insert(0, entry)
+        _save_history(items[:HISTORY_MAX])
+    print(f"[history] saved resume {entry.get('title')!r} ep {ep} "
+          f"@ {int(entry.get('position') or 0)}s", flush=True)
+
+
+def forget_resume(media_id: int, episode: int) -> None:
+    """Drop a resume point — called once an episode is finished/marked watched."""
+    if not media_id:
+        return
+    with HISTORY_LOCK:
+        before = _load_history()
+        items = [e for e in before
+                 if not (e.get("media_id") == media_id and e.get("episode") == episode)]
+        if len(items) != len(before):
+            _save_history(items)
+
+
+# --------------------------------------------------------------------------- #
 # State broadcast
 # --------------------------------------------------------------------------- #
 def broadcast() -> None:
+    history = history_snapshot()  # read outside STATE_LOCK (own lock)
     with STATE_LOCK:
         snapshot = {
             "view": STATE["view"],
@@ -809,6 +918,7 @@ def broadcast() -> None:
             "sequel": STATE["sequel"],
             "playing": STATE["playing"],
             "message": STATE["message"],
+            "history": history,
         }
     socketio.emit("state", snapshot)
 
@@ -982,8 +1092,12 @@ def select():
     media = entries[cursor]["media"]
     decision = episode_decision(entries[cursor])
     if decision["action"] == "play":
+        art = media.get("coverImage") or {}
         play(decision["search"], decision["episode"], decision["title"],
-             media_id=media.get("id"), total=media.get("episodes"))
+             media_id=media.get("id"), total=media.get("episodes"),
+             cover=art.get("extraLarge") or art.get("large") or "",
+             color=art.get("color") or "#1f2233",
+             banner=media.get("bannerImage") or "")
         with STATE_LOCK:
             STATE["view"] = "playing"
             STATE["message"] = f"Playing {decision['title']} — Ep {decision['episode']}"
@@ -1002,6 +1116,33 @@ def select():
         }
     broadcast()
     return jsonify(ok=True, action="sequel")
+
+
+@app.route("/resume", methods=["POST"])
+@require_auth
+def resume_play():
+    """Resume a continue-watching entry on the PC, from its saved position.
+    Identified by ?media_id=…&episode=… (the phone taps a card in its resume rail)."""
+    try:
+        media_id = int(request.args.get("media_id") or 0)
+        episode = int(request.args.get("episode") or 0)
+    except ValueError:
+        return jsonify(ok=False, reason="bad params")
+
+    entry = next((e for e in history_snapshot()
+                  if e.get("media_id") == media_id and e.get("episode") == episode), None)
+    if not entry:
+        return jsonify(ok=False, reason="no such resume point")
+
+    play(entry.get("search") or entry.get("title"), episode, entry.get("title"),
+         media_id=media_id, total=entry.get("total"),
+         cover=entry.get("cover", ""), color=entry.get("color", ""),
+         banner=entry.get("banner", ""), start=entry.get("position") or 0)
+    with STATE_LOCK:
+        STATE["view"] = "playing"
+        STATE["message"] = f"Resuming {entry.get('title')} — Ep {episode}"
+    broadcast()
+    return jsonify(ok=True, action="resume")
 
 
 @app.route("/pause", methods=["POST"])
@@ -1044,7 +1185,9 @@ def _step_episode(delta: int):
         return jsonify(ok=False, reason="nothing playing")
     episode = max(1, playing["episode"] + delta)
     play(playing.get("search") or playing["title"], episode, playing["title"],
-         media_id=playing.get("media_id"), total=playing.get("total"))
+         media_id=playing.get("media_id"), total=playing.get("total"),
+         cover=playing.get("cover", ""), color=playing.get("color", ""),
+         banner=playing.get("banner", ""))
     with STATE_LOCK:
         STATE["view"] = "playing"
         STATE["message"] = f"Playing {playing['title']} — Ep {episode}"

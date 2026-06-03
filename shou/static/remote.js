@@ -20,6 +20,8 @@ const el = {
   toast: document.getElementById("toast"),
   seg: document.getElementById("listseg"),
   segBtns: Array.from(document.querySelectorAll("#listseg .seg-btn")),
+  resume: document.getElementById("resume"),
+  resumeRail: document.getElementById("resume-rail"),
 };
 
 let toastTimer = null;
@@ -73,6 +75,75 @@ el.segBtns.forEach((btn) => {
   btn.addEventListener("click", () => switchList(btn.dataset.list));
 });
 
+// --- Continue watching ------------------------------------------------------
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s == null ? "" : String(s);
+  return d.innerHTML;
+}
+function fmtTime(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const mm = String(m).padStart(h ? 2 : 1, "0");
+  const ss = String(s).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+async function resume(mediaId, ep, title) {
+  if (navigator.vibrate) navigator.vibrate(12);
+  toast("Resuming " + (title || ""));
+  try {
+    await fetch(
+      `/resume?media_id=${encodeURIComponent(mediaId)}&episode=${encodeURIComponent(ep)}&k=${encodeURIComponent(TOKEN)}`,
+      { method: "POST" }
+    );
+  } catch (e) {
+    toast("⚠ no connection");
+  }
+}
+
+let resumeSig = "";
+function renderResume(history) {
+  history = history || [];
+  const sig = history
+    .map((e) => `${e.media_id}:${e.episode}:${Math.round(e.position || 0)}`)
+    .join("|");
+  if (sig === resumeSig) return;
+  resumeSig = sig;
+
+  if (!history.length) {
+    el.resume.classList.add("hidden");
+    el.resumeRail.innerHTML = "";
+    return;
+  }
+  el.resumeRail.innerHTML = "";
+  history.forEach((e) => {
+    const pct = e.duration
+      ? Math.min(100, Math.round((e.position / e.duration) * 100))
+      : Math.round(e.percent || 0);
+    const coverStyle = e.cover
+      ? `background-image:url(${e.cover})`
+      : `background-color:${e.color || "#1f2233"}`;
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "rcard";
+    card.innerHTML = `
+      <span class="rcard-cover" style="${coverStyle}">
+        <span class="rcard-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
+      </span>
+      <span class="rcard-meta">
+        <span class="rcard-title">${escapeHtml(e.title)}</span>
+        <span class="rcard-ep">EP ${escapeHtml(e.episode)} · ${fmtTime(e.position)}</span>
+      </span>
+      <span class="rcard-bar"><span style="width:${pct}%"></span></span>`;
+    card.addEventListener("click", () => resume(e.media_id, e.episode, e.title));
+    el.resumeRail.appendChild(card);
+  });
+  el.resume.classList.remove("hidden");
+}
+
 // --- Live mirror via SocketIO ----------------------------------------------
 const VIEW_LABEL = {
   grid: "Browsing",
@@ -98,6 +169,8 @@ socket.on("disconnect", () => {
 
 socket.on("state", (s) => {
   el.view.textContent = VIEW_LABEL[s.view] || s.view;
+
+  renderResume(s.history);
 
   if (s.list) {
     el.segBtns.forEach((b) => b.classList.toggle("active", b.dataset.list === s.list));
