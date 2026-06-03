@@ -135,6 +135,54 @@ if (Have 'mpv') {
     }
 }
 
+# ani-cli backup source (optional, recommended). anipy is the primary scraper; ani-cli — a
+# bash script — is a second, independent source Shou tries when anipy finds nothing. On
+# Windows it runs under Git Bash and needs fzf (mpv it already has). We make sure git + fzf
+# are present, locate Git Bash, and fetch the ani-cli script into the config dir.
+$BashBin = $null
+$AniCli  = ''
+function Find-Bash {
+    foreach ($c in @(
+        (Join-Path $HOME 'scoop\apps\git\current\bin\bash.exe'),
+        (Join-Path $HOME 'scoop\apps\git\current\usr\bin\bash.exe'),
+        "$env:ProgramFiles\Git\bin\bash.exe",
+        "${env:ProgramFiles(x86)}\Git\bin\bash.exe")) {
+        if ($c -and (Test-Path $c)) { return $c }
+    }
+    return $null
+}
+
+if (-not (Have 'git')) {
+    Info 'Installing git (provides Git Bash for the ani-cli backup)...'
+    if (Ensure-Scoop) { scoop install git; Refresh-Path }
+}
+$BashBin = Find-Bash
+if (-not $BashBin) {
+    Warn 'Git Bash not found — ani-cli backup will be unavailable (anipy still works).'
+    Warn 'Install Git for Windows, then re-run install.ps1 to enable it.'
+} else {
+    Ok "Git Bash: $BashBin"
+    if (-not (Have 'fzf')) {
+        Info 'Installing fzf (ani-cli dependency)...'
+        if (Ensure-Scoop) { scoop install fzf; Refresh-Path }
+    }
+    if (Have 'fzf') { Ok "fzf: $((Get-Command fzf).Source)" }
+    else { Warn 'fzf not installed — ani-cli may refuse to run. Try: scoop install fzf' }
+
+    $aniDest = Join-Path $ConfDir 'ani-cli'
+    try {
+        New-Item -ItemType Directory -Force -Path $ConfDir | Out-Null
+        # Raw download preserves the script's LF line endings (Git Bash needs them).
+        Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/pystardust/ani-cli/master/ani-cli' `
+            -OutFile $aniDest -UseBasicParsing
+        $AniCli = $aniDest
+        Ok "ani-cli script: $aniDest"
+    } catch {
+        Warn "Couldn't download ani-cli: $($_.Exception.Message)"
+        Warn 'anipy still works; the ani-cli backup stays disabled until the script is present.'
+    }
+}
+
 # Browser for the kiosk: Edge ships with Windows, so a kiosk browser almost always exists.
 $browser = $null
 foreach ($p in @(
@@ -205,13 +253,17 @@ if ([string]::IsNullOrWhiteSpace($curUser) -or $curUser -eq 'CHANGE_ME') {
 # Pin MPV_BIN to the resolved mpv on first run so the login daemon finds it even if the
 # session PATH differs (e.g. scoop shims not yet picked up). Blank falls back to PATH.
 $mpvBin = if (Have 'mpv') { (Get-Command mpv).Source } else { '' }
+$bashDef = if ($BashBin) { $BashBin } else { '' }
+$aniDef  = if ($AniCli)  { $AniCli }  else { '' }
 
 # Canonical settings: key | default | comment. Re-running backfills any missing.
 $settings = @(
     @('PORT',            '4100',    'Port the server / phone remote listens on.'),
     @('WATCHED_PERCENT', '90',      'Auto-mark an episode watched on AniList once playback passes this %.'),
     @('MPV_BIN',         $mpvBin,   'Full path to mpv.exe (leave blank to use PATH).'),
-    @('BROWSER',         '',        'Full path to a kiosk browser .exe (blank = auto-detect Firefox/Edge/Chrome).')
+    @('BROWSER',         '',        'Full path to a kiosk browser .exe (blank = auto-detect Firefox/Edge/Chrome).'),
+    @('BASH_BIN',        $bashDef,  'Git Bash bash.exe for the ani-cli backup (blank = auto-detect).'),
+    @('ANI_CLI',         $aniDef,   'Path to the ani-cli backup script (blank = ~/.config/shou/ani-cli).')
 )
 $added = @()
 foreach ($s in $settings) {

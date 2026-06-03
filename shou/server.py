@@ -57,7 +57,8 @@ ANILIST_URL = "https://graphql.anilist.co"
 def load_config() -> dict:
     """Parse the shell-style KEY="value" shou.conf."""
     cfg = {"ANILIST_USER": "", "PORT": "4100", "QUALITY": "1080p", "REMOTE_TOKEN": "",
-           "ANILIST_TOKEN": "", "WATCHED_PERCENT": "90", "MPV_BIN": "", "BROWSER": ""}
+           "ANILIST_TOKEN": "", "WATCHED_PERCENT": "90", "MPV_BIN": "", "BROWSER": "",
+           "BASH_BIN": "", "ANI_CLI": ""}
     if CONFIG_FILE.exists():
         for raw in CONFIG_FILE.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
@@ -122,6 +123,12 @@ MPV_IPC = r"\\.\pipe\shou-mpv"
 # Source scrapers (anipy_api providers) tried in order. allanime is the same site
 # ani-cli uses; animekai is a genuinely different source as a backstop.
 SOURCE_PROVIDERS = ["allanime", "animekai"]
+
+# ani-cli backup: when anipy resolves nothing, fall back to ani-cli (a bash script) run
+# under Git Bash. It needs bash + fzf on the system (the installer sets these up) and sends
+# its mpv to the same IPC pipe, so pause/seek/progress/resume all keep working.
+LAUNCH_TIMEOUT = 30.0                       # secs to wait for ani-cli's mpv to come up
+ANI_LOG = CONFIG_DIR / "ani-cli-last.log"   # ani-cli's captured output, for diagnostics
 
 # Continue-watching history: episodes left mid-way get a resume point (episode +
 # playback position) persisted here, so the phone can pick one and resume on the PC.
@@ -617,6 +624,104 @@ def mpv_running() -> bool:
     return proc is not None and proc.poll() is None
 
 
+def mpv_ipc_alive() -> bool:
+    """True if Shou's mpv IPC pipe is open — i.e. our mpv is up. Used to detect when the
+    ani-cli backup (which launches its OWN mpv) has actually started playback."""
+    pipe = _open_ipc()
+    if pipe is None:
+        return False
+    try:
+        pipe.close()
+    except OSError:
+        pass
+    return True
+
+
+def find_bash() -> str | None:
+    """Locate Git Bash's bash.exe (NOT the System32 WSL launcher, which we must avoid).
+    Honours a BASH_BIN override in shou.conf, then checks scoop's git + a system Git."""
+    home = Path.home()
+    candidates = [
+        (CONFIG.get("BASH_BIN") or "").strip(),
+        str(home / "scoop" / "apps" / "git" / "current" / "bin" / "bash.exe"),
+        str(home / "scoop" / "apps" / "git" / "current" / "usr" / "bin" / "bash.exe"),
+        rf"{os.environ.get('ProgramFiles', r'C:\Program Files')}\Git\bin\bash.exe",
+        rf"{os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')}\Git\bin\bash.exe",
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return None
+
+
+def anicli_script() -> Path:
+    """Path to the ani-cli bash script (installer fetches it into the config dir)."""
+    override = (CONFIG.get("ANI_CLI") or "").strip()
+    return Path(override) if override else (CONFIG_DIR / "ani-cli")
+
+
+def anicli_play(gen: int, search_title: str, episode: int, display: str,
+                start: float = 0.0) -> bool:
+    """Backup source: drive ani-cli (under Git Bash) to resolve + launch mpv on the same
+    IPC pipe. Returns True if our mpv came up (or playback was superseded), else False."""
+    bash = find_bash()
+    script = anicli_script()
+    if not bash:
+        print("[anicli] Git Bash not found — ani-cli backup unavailable "
+              "(install Git for Windows, or set BASH_BIN)", flush=True)
+        return False
+    if not script.exists():
+        print(f"[anicli] script missing at {script} — re-run install.ps1 to fetch it",
+              flush=True)
+        return False
+
+    quality = CONFIG.get("QUALITY") or "1080p"
+    # Use a bare 'mpv' (on PATH via scoop) to dodge Windows path/space issues inside bash.
+    # The IPC pipe path's backslashes pass through bash unprocessed, straight to mpv.
+    player = f"mpv --fs --input-ipc-server={MPV_IPC}"
+    if start and start > 0:
+        player += f" --start={int(start)}"
+    # -S 1 auto-picks the first search result so ani-cli never needs the fzf TTY menu.
+    cmd = [bash, str(script).replace("\\", "/"),
+           "-S", "1", "-q", quality, "-e", str(episode), search_title]
+    print(f"[anicli] {search_title!r} ep {episode} via {bash}", flush=True)
+    try:
+        logf = open(ANI_LOG, "w", encoding="utf-8", errors="ignore")
+    except OSError:
+        logf = subprocess.DEVNULL
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=logf,
+        stderr=subprocess.STDOUT,
+        env=os.environ | {"ANI_CLI_PLAYER": player},
+        creationflags=CREATE_NO_WINDOW,
+    )
+    if logf is not subprocess.DEVNULL:
+        logf.close()
+    with STATE_LOCK:
+        PLAYBACK["proc"] = proc
+
+    # ani-cli scrapes first, so wait for it to actually bring mpv up — or to give up.
+    deadline = time.monotonic() + LAUNCH_TIMEOUT
+    while time.monotonic() < deadline:
+        if PLAYBACK["gen"] != gen:
+            return True  # superseded by a newer play — treat as handled
+        if mpv_ipc_alive():
+            return True
+        if proc.poll() is not None:
+            # ani-cli exited without launching mpv; brief grace, then declare failure.
+            for _ in range(6):
+                time.sleep(0.5)
+                if PLAYBACK["gen"] != gen:
+                    return True
+                if mpv_ipc_alive():
+                    return True
+            return False
+        time.sleep(1.0)
+    return mpv_ipc_alive()
+
+
 def resolve_stream(search_title: str, episode: int):
     """Find a playable stream for the requested episode via anipy's scrapers.
     Returns (url, referrer, subtitle, provider, matched_name) or None."""
@@ -702,10 +807,19 @@ def play(search_title: str, episode: int, display_title: str | None = None,
                                    display, media_id, total, cover, color, banner, start)
 
 
+def _start_watcher(gen, media_id, episode, total, display, search, cover, color, banner):
+    """Start the playback watcher (mark-watched + resume capture) when a media_id is
+    known. Runs with or without an AniList token; covers anipy and ani-cli mpv alike."""
+    if media_id:
+        socketio.start_background_task(watch_playback, gen, media_id, episode,
+                                       total, display, search, cover, color, banner)
+
+
 def _play_task(gen: int, search_title: str, episode: int, display: str,
                media_id: int | None, total: int | None, cover: str = "",
                color: str = "", banner: str = "", start: float = 0.0) -> None:
-    """Background worker: stop the old player, resolve a stream, launch mpv, report."""
+    """Background worker: stop the old player, resolve a stream, launch mpv, report.
+    anipy is the primary scraper; ani-cli is a second, independent backup source."""
     kill_players()
     time.sleep(0.3)
     if PLAYBACK["gen"] != gen:
@@ -715,31 +829,53 @@ def _play_task(gen: int, search_title: str, episode: int, display: str,
     resolved = resolve_stream(search_title, episode)
     if PLAYBACK["gen"] != gen:
         return
-    if not resolved:
-        msg = (f"No playable source for “{display}” (ep {episode}). "
-               "Press Back and try another.")
-        print(f"[play] FAILED — {msg}", flush=True)
+
+    # Primary: anipy resolved a direct stream — launch mpv ourselves.
+    if resolved:
+        url, referrer, subtitle, prov_name, _matched = resolved
+        proc = _launch_mpv(url, display, episode, referrer, subtitle, start)
         with STATE_LOCK:
-            STATE["view"] = "error"
-            STATE["message"] = msg
-            STATE["playing"] = None
+            PLAYBACK["proc"] = proc
+            STATE["view"] = "playing"
+            STATE["message"] = f"Playing {display} — Ep {episode}  ·  {prov_name}"
         broadcast()
-        notify("🎌 Shou", f"⚠ {msg}")
+        notify("🎌 Now Watching", f"{display} — Episode {episode}")
+        _start_watcher(gen, media_id, episode, total, display, search_title,
+                       cover, color, banner)
         return
 
-    url, referrer, subtitle, prov_name, _matched = resolved
-    proc = _launch_mpv(url, display, episode, referrer, subtitle, start)
+    # Backup: anipy found nothing — fall back to ani-cli (lets it launch mpv itself).
+    print(f"[play] anipy found no source for {search_title!r} ep {episode}; "
+          "trying ani-cli backup", flush=True)
     with STATE_LOCK:
-        PLAYBACK["proc"] = proc
-        STATE["view"] = "playing"
-        STATE["message"] = f"Playing {display} — Ep {episode}  ·  {prov_name}"
+        if PLAYBACK["gen"] != gen:
+            return
+        STATE["message"] = f"Searching ani-cli backup for {display}…"
     broadcast()
-    notify("🎌 Now Watching", f"{display} — Episode {episode}")
-    # Playback watcher: marks watched on AniList (if a token is set) and records a
-    # resume point if stopped mid-way. Runs with or without a token.
-    if media_id:
-        socketio.start_background_task(watch_playback, gen, media_id, episode,
-                                       total, display, search_title, cover, color, banner)
+    if anicli_play(gen, search_title, episode, display, start):
+        with STATE_LOCK:
+            if PLAYBACK["gen"] != gen:
+                return
+            STATE["view"] = "playing"
+            STATE["message"] = f"Playing {display} — Ep {episode}  ·  ani-cli"
+        broadcast()
+        notify("🎌 Now Watching", f"{display} — Episode {episode} (ani-cli)")
+        _start_watcher(gen, media_id, episode, total, display, search_title,
+                       cover, color, banner)
+        return
+
+    # Both sources failed.
+    if PLAYBACK["gen"] != gen:
+        return
+    msg = (f"No playable source for “{display}” (ep {episode}). "
+           "Press Back and try another.")
+    print(f"[play] FAILED — {msg}", flush=True)
+    with STATE_LOCK:
+        STATE["view"] = "error"
+        STATE["message"] = msg
+        STATE["playing"] = None
+    broadcast()
+    notify("🎌 Shou", f"⚠ {msg}")
 
 
 # --------------------------------------------------------------------------- #
