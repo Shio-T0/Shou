@@ -278,18 +278,35 @@ Step 'Autostart on login'
 # --------------------------------------------------------------------------- #
 $startup  = [Environment]::GetFolderPath('Startup')
 $lnkPath  = Join-Path $startup 'Shou.lnk'
-if (Test-Path $lnkPath) {
-    Ok "Autostart shortcut already present in Startup."
-} elseif (AskYes 'Add a Startup shortcut so Shou launches at login?') {
-    $ps = (Get-Command powershell).Source
+
+# Launch the daemon through a tiny VBScript run by wscript.exe. wscript has no console of its
+# own and starts PowerShell with SW_HIDE, so there is NO window flash at boot. (The old
+# `powershell -WindowStyle Hidden` still flashed a console for an instant before it could
+# hide itself — that's the window you were seeing.)
+$LauncherVbs = Join-Path $ConfDir 'shou-launch.vbs'
+$vbsBody = @"
+' Shou - start the daemon with no visible window (wscript + Run windowStyle 0 = SW_HIDE).
+CreateObject("WScript.Shell").Run "powershell -NoProfile -ExecutionPolicy Bypass -File ""$Daemon""", 0, False
+"@
+Set-Content -Path $LauncherVbs -Value $vbsBody -Encoding ASCII
+$wscript = Join-Path $env:WINDIR 'System32\wscript.exe'
+
+function New-AutostartShortcut {
     $wsh = New-Object -ComObject WScript.Shell
     $lnk = $wsh.CreateShortcut($lnkPath)
-    $lnk.TargetPath = $ps
-    $lnk.Arguments  = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Daemon`""
+    $lnk.TargetPath       = $wscript
+    $lnk.Arguments        = "`"$LauncherVbs`""
     $lnk.WorkingDirectory = $RepoDir
-    $lnk.Description = 'Shou — phone-controlled AniList launcher'
+    $lnk.Description       = 'Shou - phone-controlled AniList launcher'
     $lnk.Save()
-    Ok "Added $lnkPath"
+}
+
+if (Test-Path $lnkPath) {
+    New-AutostartShortcut  # re-point older shortcuts that opened a PowerShell window
+    Ok "Autostart shortcut present (starts hidden — no PowerShell window)."
+} elseif (AskYes 'Add a Startup shortcut so Shou launches at login (hidden)?') {
+    New-AutostartShortcut
+    Ok "Added $lnkPath (starts hidden)."
 }
 
 # --------------------------------------------------------------------------- #
@@ -383,9 +400,8 @@ function Server-Up { try { Invoke-WebRequest "http://127.0.0.1:$port/" -UseBasic
 if (Server-Up) {
     Ok "Server already answering on :$port."
 } elseif (AskYes 'Launch the Shou daemon now?') {
-    Start-Process powershell -ArgumentList @(
-        '-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', "`"$Daemon`""
-    )
+    # Same hidden launcher as autostart — no PowerShell window.
+    Start-Process -FilePath $wscript -ArgumentList "`"$LauncherVbs`""
     for ($i = 0; $i -lt 20; $i++) { if (Server-Up) { break }; Start-Sleep -Milliseconds 500 }
     if (Server-Up) { Ok 'Server is up.' } else { Warn "Server didn't answer yet — check $ConfDir\shou.log" }
 }

@@ -27,6 +27,8 @@ Ok 'Stopped Shou processes (if any were running).'
 Step 'Removing autostart shortcut'
 $lnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'Shou.lnk'
 if (Test-Path $lnk) { Remove-Item $lnk -Force; Ok "Removed $lnk" } else { Info 'No Startup shortcut found.' }
+$launchVbs = Join-Path $ConfDir 'shou-launch.vbs'
+if (Test-Path $launchVbs) { Remove-Item $launchVbs -Force; Ok 'Removed hidden launcher.' }
 
 Step 'Config + virtualenv'
 if ((Test-Path $ConfDir) -and (AskYes "Delete your config + tokens at $ConfDir ?")) {
