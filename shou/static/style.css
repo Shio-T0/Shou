@@ -413,3 +413,180 @@ html, body {
   animation: spin 0.9s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Series-complete rating (cinematic) ---- */
+#rating-view {
+  --gold:   #ffcf6a;
+  --gold-2: #ffb23a;
+  overflow: hidden;
+}
+.rating-bg {
+  position: absolute;
+  inset: -8%;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--ink-3);
+  filter: blur(40px) brightness(0.34) saturate(1.3);
+  transform: scale(1.12);
+  animation: ratingBgIn 1.3s var(--ease) both, ratingKen 26s ease-in-out 1.3s infinite alternate;
+}
+@keyframes ratingBgIn { from { opacity: 0; transform: scale(1.28); } to { opacity: 1; } }
+@keyframes ratingKen  { from { transform: scale(1.12); } to { transform: scale(1.22) translateY(-2%); } }
+.rating-scrim {
+  position: absolute; inset: 0; z-index: 1;
+  background:
+    radial-gradient(120% 90% at 50% 36%, transparent 0%, rgba(10,10,12,0.55) 62%, var(--ink) 100%),
+    linear-gradient(to top, var(--ink) 2%, transparent 46%);
+}
+.rating-stage {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 6vw;
+}
+
+/* 完 seal — a hanko-style vermilion stamp that presses in */
+.rating-seal {
+  display: grid;
+  place-items: center;
+  width: 6.4vw; height: 6.4vw;
+  border-radius: 1.1vw;
+  color: #fff;
+  background: linear-gradient(155deg, var(--acc), #d63b27);
+  box-shadow: 0 1.6vh 4vh -1vh rgba(255,74,50,0.5), inset 0 0 0 0.16vw rgba(255,255,255,0.16);
+  animation: sealIn 0.9s cubic-bezier(0.2,1.5,0.3,1) both;
+}
+.rating-seal-kanji {
+  font-family: "Shippori Mincho B1", serif;
+  font-weight: 800;
+  font-size: 3.6vw;
+  line-height: 1;
+  text-shadow: 0 0.3vh 1vh rgba(0,0,0,0.35);
+}
+@keyframes sealIn {
+  0%   { opacity: 0; transform: scale(2.1) rotate(-14deg); filter: blur(6px); }
+  60%  { opacity: 1; filter: blur(0); }
+  100% { transform: scale(1) rotate(-4deg); }
+}
+
+.rating-kicker {
+  margin-top: 2.6vh;
+  font-size: 0.95vw;
+  font-weight: 700;
+  letter-spacing: 0.56em;
+  text-indent: 0.56em;
+  color: var(--gold);
+  animation: ratingRise 0.7s var(--ease) 0.34s both;
+}
+.rating-finished {
+  margin-top: 2.2vh;
+  font-size: 1.1vw;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+  animation: ratingRise 0.7s var(--ease) 0.42s both;
+}
+.rating-title {
+  font-family: "Shippori Mincho B1", serif;
+  font-weight: 800;
+  font-size: 4.2vw;
+  line-height: 1.06;
+  margin-top: 1vh;
+  max-width: 80vw;
+  text-shadow: 0 0.6vh 3vh rgba(0,0,0,0.7);
+  animation: ratingRise 0.8s var(--ease) 0.5s both;
+}
+@keyframes ratingRise {
+  from { opacity: 0; transform: translateY(2vh); filter: blur(3px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+
+/* Stars */
+.rating-stars {
+  --star-size: 4.8vw;
+  display: flex;
+  gap: 1.1vw;
+  margin-top: 4vh;
+}
+.star {
+  position: relative;
+  width: var(--star-size);
+  height: var(--star-size);
+  animation: starPop 0.55s var(--ease) both;
+}
+.star .s-base, .star .s-fill {
+  position: absolute; top: 0; left: 0;
+  width: var(--star-size); height: var(--star-size);
+  display: block;
+}
+.star .s-base { color: rgba(255,255,255,0.14); }
+.star .s-clip {
+  position: absolute; top: 0; left: 0; height: 100%;
+  width: 0%;
+  overflow: hidden;
+  transition: width 0.6s var(--ease);
+}
+.star .s-fill {
+  color: var(--gold);
+  filter: drop-shadow(0 0 0.5vw rgba(255,178,58,0.55));
+}
+@keyframes starPop {
+  from { opacity: 0; transform: scale(0.4) translateY(1.4vh); }
+  to   { opacity: 1; transform: none; }
+}
+
+.rating-score {
+  margin-top: 3.4vh;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5vw;
+  animation: ratingRise 0.7s var(--ease) 0.8s both;
+}
+.rating-score-num {
+  font-family: "Shippori Mincho B1", serif;
+  font-weight: 800;
+  font-size: 2.8vw;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.18s var(--ease);
+}
+.rating-score-num.bump { transform: scale(1.16); }
+.rating-score-scale {
+  font-size: 1.1vw;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--paper-dim);
+}
+.rating-hint {
+  margin-top: 4.4vh;
+  font-size: 1vw;
+  letter-spacing: 0.05em;
+  color: var(--paper-dim);
+  animation: ratingRise 0.7s var(--ease) 0.92s both;
+}
+.rating-hint b { color: var(--gold); font-size: 1.1vw; }
+
+/* "Rated ✓" flourish — hidden until submission lands */
+.rating-done {
+  margin-top: 3vh;
+  font-size: 1.5vw;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--live);
+  opacity: 0;
+  transform: translateY(1vh);
+  pointer-events: none;
+}
+#rating-view.is-done .rating-done {
+  animation: ratedIn 0.6s var(--ease) both;
+}
+#rating-view.is-done .rating-hint { opacity: 0; transition: opacity 0.3s ease; }
+@keyframes ratedIn {
+  0%   { opacity: 0; transform: translateY(1vh) scale(0.9); }
+  60%  { opacity: 1; transform: translateY(0) scale(1.08); }
+  100% { transform: scale(1); }
+}

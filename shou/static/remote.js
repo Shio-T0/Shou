@@ -149,10 +149,25 @@ const VIEW_LABEL = {
   grid: "Browsing",
   sequel: "Sequel found",
   playing: "Now playing",
+  rating: "Rate it",
   loading: "Loading",
   empty: "Nothing to watch",
   error: "Error",
 };
+
+// Compact star string (★ / ⯪ / ☆) for the phone's rating mirror.
+function starString(stars) {
+  let out = "";
+  for (let i = 0; i < 5; i++) {
+    const frac = stars - i;
+    out += frac >= 0.75 ? "★" : frac >= 0.25 ? "⯪" : "☆";
+  }
+  return out;
+}
+function fmtRatingScore(r) {
+  if (r.format === "POINT_10_DECIMAL") return (Math.round(r.score * 10) / 10).toFixed(1);
+  return String(r.score);
+}
 
 const socket = io({ query: { k: TOKEN } });
 
@@ -197,6 +212,15 @@ socket.on("state", (s) => {
     el.title.textContent = s.playing ? s.playing.title : "Playing";
     el.episode.textContent = s.playing ? "Episode " + s.playing.episode : s.message || "";
     setProgress(100);
+  } else if (s.view === "rating" && s.rating) {
+    const r = s.rating;
+    el.title.textContent = r.title;
+    el.episode.textContent = r.done
+      ? "Rated ✓ — " + fmtRatingScore(r) + " / " + r.max
+      : starString(r.stars) + "   " + fmtRatingScore(r) + " / " + r.max;
+    setCover(r.cover, r.banner, r.color);
+    setIndex("◀ ▶ adjust · ● confirm");
+    setProgress(Math.round(((r.stars || 0) / 5) * 100));
   } else {
     el.title.textContent = s.message || VIEW_LABEL[s.view] || "Shou";
     el.episode.textContent = "";
