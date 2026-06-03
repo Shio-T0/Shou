@@ -23,7 +23,12 @@ const el = {
   statusView: document.getElementById("status-view"),
   statusSpinner: document.getElementById("status-spinner"),
   statusMsg: document.getElementById("status-msg"),
+  resumeShelf: document.getElementById("resume-shelf"),
+  resumeStrip: document.getElementById("resume-strip"),
 };
+
+// How many continue-watching chips to show on the kiosk's left panel.
+const RESUME_SHELF_MAX = 4;
 
 const LIST_LABEL = { watching: "WATCHING", planned: "PLAN TO WATCH" };
 
@@ -136,6 +141,59 @@ function updateInfo(items, cursor) {
   setBackdrop(it.banner, it.cover, it.color);
 }
 
+// --- Continue-watching shelf (display only) --------------------------------
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s == null ? "" : String(s);
+  return d.innerHTML;
+}
+function fmtTime(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const mm = String(m).padStart(h ? 2 : 1, "0");
+  const ss = String(s).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+let resumeSig = "";
+function renderResume(history, view) {
+  history = history || [];
+  const show = view === "grid" && history.length > 0;
+  if (!show) {
+    el.resumeShelf.classList.add("hidden");
+    return;
+  }
+  const slice = history.slice(0, RESUME_SHELF_MAX);
+  const sig = slice
+    .map((e) => `${e.media_id}:${e.episode}:${Math.round(e.position || 0)}`)
+    .join("|");
+  if (sig !== resumeSig) {
+    resumeSig = sig;
+    el.resumeStrip.innerHTML = "";
+    slice.forEach((e) => {
+      const pct = e.duration
+        ? Math.min(100, Math.round((e.position / e.duration) * 100))
+        : Math.round(e.percent || 0);
+      const coverStyle = e.cover
+        ? `background-image:url(${e.cover})`
+        : `background-color:${e.color || "#1f2233"}`;
+      const chip = document.createElement("div");
+      chip.className = "rchip";
+      chip.innerHTML = `
+        <div class="rchip-cover" style="${coverStyle}"></div>
+        <div class="rchip-meta">
+          <div class="rchip-title">${escapeHtml(e.title)}</div>
+          <div class="rchip-ep">EP ${escapeHtml(e.episode)} · ${fmtTime(e.position)}</div>
+          <div class="rchip-bar"><span style="width:${pct}%"></span></div>
+        </div>`;
+      el.resumeStrip.appendChild(chip);
+    });
+  }
+  el.resumeShelf.classList.remove("hidden");
+}
+
 function showOnly(view) {
   el.stage.classList.toggle("hidden", view !== "grid");
   el.sequelView.classList.toggle("hidden", view !== "sequel");
@@ -148,6 +206,7 @@ let currentList = "watching";
 
 socket.on("state", (s) => {
   showOnly(s.view);
+  renderResume(s.history, s.view);
   if (s.list) {
     currentList = s.list;
     el.listlabel.textContent = LIST_LABEL[s.list] || s.list;

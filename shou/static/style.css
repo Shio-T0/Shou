@@ -125,6 +125,82 @@ html, body {
   box-shadow: 0 1vh 2.4vh -0.6vh var(--acc-soft);
 }
 
+/* ---- Continue-watching panel (kiosk, left side, display only) ---- */
+.resume-shelf {
+  position: fixed;
+  left: 2.4vw;
+  bottom: 3vh;
+  z-index: 6;
+  width: 17vw;
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  pointer-events: none;
+  animation: shelfIn 0.6s var(--ease) both;
+}
+.resume-shelf.hidden { display: none !important; }
+@keyframes shelfIn {
+  from { opacity: 0; transform: translateX(-1.4vw); }
+  to   { opacity: 1; transform: none; }
+}
+.resume-shelf-head {
+  display: flex; align-items: baseline; gap: 0.6vw;
+  padding-left: 0.2vw;
+  margin-bottom: 0.2vh;
+}
+.resume-shelf-jp {
+  font-family: "Shippori Mincho B1", serif;
+  font-weight: 700; font-size: 0.92vw;
+  color: var(--acc-2);
+}
+.resume-shelf-en {
+  font-size: 0.62vw; font-weight: 700;
+  letter-spacing: 0.32em; text-transform: uppercase;
+  color: var(--paper-dim);
+}
+.resume-strip { display: flex; flex-direction: column; gap: 0.7vh; }
+.rchip {
+  display: flex;
+  align-items: center;
+  gap: 0.7vw;
+  width: 100%;
+  padding: 0.7vh 0.7vw;
+  border-radius: 0.7vw;
+  background: linear-gradient(165deg, rgba(23,22,28,0.92), rgba(16,15,19,0.94));
+  border: 1px solid var(--line);
+  box-shadow: 0 1.2vh 2.6vh -1vh rgba(0,0,0,0.7);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+.rchip-cover {
+  flex: none;
+  width: 2vw; height: 2.8vw;
+  border-radius: 0.35vw;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--ink-4);
+  border: 1px solid var(--line-2);
+}
+.rchip-meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.45vh; }
+.rchip-title {
+  font-size: 0.8vw; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rchip-ep {
+  font-size: 0.66vw; color: var(--paper-dim);
+  letter-spacing: 0.1em; font-variant-numeric: tabular-nums;
+}
+.rchip-bar {
+  margin-top: 0.2vh;
+  height: 0.3vh; border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+.rchip-bar > span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--acc), var(--acc-2));
+}
+
 /* ---- Stage / coverflow ---- */
 #stage {
   position: relative;
