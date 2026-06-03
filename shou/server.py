@@ -103,7 +103,7 @@ STATE = {
     "cursor": 0,
     "sequel": None,       # {"finished": str, "sequel_title": str}
     "playing": None,      # {"title": str, "episode": int}
-    "rating": None,       # series-complete rating prompt (see begin_rating)
+    "rating": None,       # series-complete rating prompt (see show_rating)
     "message": "",
 }
 
@@ -115,6 +115,10 @@ STATE_LOCK = threading.Lock()
 # Tracks the in-flight playback launch so we can detect "ani-cli found no source"
 # and report it instead of leaving the UI stuck on the "playing" screen.
 PLAYBACK = {"gen": 0, "proc": None}
+# A finished series (final episode completed) that's awaiting its rating page. Set the
+# moment completion is detected — while mpv may still be open — so that whatever closes
+# the player (a clean EOF, or pressing Back at 90%) can pop it and show the rating.
+PENDING_RATING = {"info": None}
 ANI_LOG = CONFIG_DIR / "ani-cli-last.log"
 # Unique cmdline marker on every mpv WE launch (an mpv IPC socket path). It lets us
 # stop *only* Shou's player and never touch other mpv instances — e.g. mpvpaper
@@ -444,12 +448,19 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
     last_time = 0.0    # furthest time-pos seen (seconds)
     duration = 0.0
 
+    is_final = bool(total) and episode >= total and bool(anilist_token())
+
     def _finish():
         """Mark watched once, the moment completion is detected (so a quick Back right
-        after the threshold still counts). Kept idempotent via the `completed` flag."""
+        after the threshold still counts). Kept idempotent via the `completed` flag.
+        If this was the final episode, arm the rating now — before mpv is even closed —
+        so closing it (clean EOF or Back at 90%) still surfaces the rating page."""
         forget_resume(media_id, episode)
         if has_token and PLAYBACK["gen"] == gen:
             mark_watched(media_id, episode, total, display)
+        if is_final:
+            mark_pending_rating({"media_id": media_id, "title": display,
+                                 "cover": cover, "color": color, "banner": banner})
         broadcast()
 
     # Read until mpv closes (EOF / Back / Next / stopped) — NOT just until the threshold —
@@ -496,10 +507,13 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
             pass
 
     if completed:
-        # Already marked watched. If this was the very last episode and mpv has now
-        # closed (loop ended without being superseded), show the cinematic rating page.
-        if (PLAYBACK["gen"] == gen and total and episode >= total and anilist_token()):
-            begin_rating(gen, media_id, episode, total, display, cover, color, banner)
+        # Already marked watched. If mpv closed on its own (not superseded by Back/Next/
+        # Open), pop the awaiting-rating info and show the page. If the user closed mpv via
+        # Back instead, the /back handler pops it first — the atomic pop ensures one winner.
+        if PLAYBACK["gen"] == gen:
+            info = _pop_pending_rating()
+            if info:
+                show_rating(info)
         return
 
     # Stopped before the threshold — remember where, so it can be resumed later.
@@ -668,6 +682,7 @@ def play(search_title: str, episode: int, display_title: str | None = None,
     """
     display = display_title or search_title
     start = float(start or 0)
+    _pop_pending_rating()  # starting new playback cancels any awaiting finale rating
     gen = bump_play_gen()
     kill_players()
     time.sleep(0.4)
@@ -1030,25 +1045,37 @@ def play_finish_sound() -> None:
             return
 
 
-def begin_rating(gen: int, media_id: int, episode: int, total: int | None,
-                 display: str, cover: str, color: str, banner: str) -> None:
+def mark_pending_rating(info: dict) -> None:
+    """Record that a finished series is awaiting its rating (set at completion, while mpv
+    may still be open). Whatever closes the player then pops it via _pop_pending_rating."""
+    with STATE_LOCK:
+        PENDING_RATING["info"] = info
+
+
+def _pop_pending_rating() -> dict | None:
+    """Atomically take the awaiting-rating info (None if already consumed/cleared)."""
+    with STATE_LOCK:
+        info = PENDING_RATING["info"]
+        PENDING_RATING["info"] = None
+    return info
+
+
+def show_rating(info: dict) -> None:
     """Show the cinematic rating page for a just-finished series + play the chime."""
-    if PLAYBACK["gen"] != gen or not anilist_token():
+    if not info or not anilist_token():
         return
     fmt = fetch_score_format()
     spec = SCORE_FORMATS.get(fmt, SCORE_FORMATS["POINT_10"])
     score = spec["default"]
     with STATE_LOCK:
-        if PLAYBACK["gen"] != gen:
-            return
         STATE["view"] = "rating"
         STATE["playing"] = None
         STATE["rating"] = {
-            "media_id": media_id,
-            "title": display,
-            "cover": cover,
-            "color": color or "#1f2233",
-            "banner": banner,
+            "media_id": info["media_id"],
+            "title": info["title"],
+            "cover": info.get("cover", ""),
+            "color": info.get("color") or "#1f2233",
+            "banner": info.get("banner", ""),
             "format": fmt,
             "score": score,
             "min": spec["min"],
@@ -1058,7 +1085,8 @@ def begin_rating(gen: int, media_id: int, episode: int, total: int | None,
             "submitting": False,
             "done": False,
         }
-    print(f"[rating] {display!r} complete — prompting ({fmt}, default {score})", flush=True)
+    print(f"[rating] {info['title']!r} complete — prompting ({fmt}, default {score})",
+          flush=True)
     broadcast()
     play_finish_sound()
 
@@ -1155,6 +1183,7 @@ def refresh_list() -> None:
         return
 
     cards = [build_card(e) for e in entries]
+    _pop_pending_rating()  # a fresh grid (Open / list switch) clears any awaiting rating
     with STATE_LOCK:
         STATE["items"] = cards
         STATE["_entries"] = entries  # keep raw entries for decisions
@@ -1248,15 +1277,24 @@ def switch_list():
 @app.route("/back", methods=["POST"])
 @require_auth
 def back():
+    # Closing a finished finale (e.g. Back at 90%) should rate it, not skip to the grid.
+    pending = _pop_pending_rating()
     bump_play_gen()
     kill_players()
+    pid = kiosk_pid()
+    if pending:
+        show_rating(pending)
+        if pid:
+            focus_kiosk(pid)
+        else:
+            ensure_kiosk()
+        return jsonify(ok=True, action="rate")
     with STATE_LOCK:
         STATE["sequel"] = None
         STATE["playing"] = None
         STATE["rating"] = None
         STATE["view"] = "grid" if STATE["items"] else "empty"
     broadcast()
-    pid = kiosk_pid()
     if pid:
         focus_kiosk(pid)
     else:
