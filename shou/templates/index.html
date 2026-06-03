@@ -28,17 +28,16 @@
     <span id="count" class="count"></span>
   </header>
 
-  <!-- Bottom dock : continue-watching shelf (display only) + list label -->
-  <div id="dock" class="dock">
-    <section id="resume-shelf" class="resume-shelf hidden" aria-hidden="true">
-      <div class="resume-shelf-head">
-        <span class="resume-shelf-jp">続きから</span>
-        <span class="resume-shelf-en">Continue Watching</span>
-      </div>
-      <div id="resume-strip" class="resume-strip"></div>
-    </section>
-    <span id="listlabel" class="listlabel">WATCHING</span>
-  </div>
+  <!-- Continue-watching panel : left side, display only (never selectable) -->
+  <aside id="resume-shelf" class="resume-shelf hidden" aria-hidden="true">
+    <div class="resume-shelf-head">
+      <span class="resume-shelf-jp">続きから</span>
+      <span class="resume-shelf-en">Continue Watching</span>
+    </div>
+    <div id="resume-strip" class="resume-strip"></div>
+  </aside>
+
+  <span id="listlabel" class="listlabel">WATCHING</span>
 
   <!-- Coverflow -->
   <main id="stage" class="hidden">

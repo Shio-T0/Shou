@@ -131,6 +131,7 @@ HISTORY_FILE = CONFIG_DIR / "history.json"
 HISTORY_LOCK = threading.Lock()
 HISTORY_MAX = 24            # cap stored resume points (newest kept)
 RESUME_MIN_SECONDS = 30     # ignore trivially-short positions (skipped intros etc.)
+RESUME_REWIND_SECONDS = 5   # resume a few seconds before you stopped, for context
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
@@ -1134,10 +1135,12 @@ def resume_play():
     if not entry:
         return jsonify(ok=False, reason="no such resume point")
 
+    # Resume a few seconds early so you can re-orient where you left off.
+    start = max(0.0, (entry.get("position") or 0) - RESUME_REWIND_SECONDS)
     play(entry.get("search") or entry.get("title"), episode, entry.get("title"),
          media_id=media_id, total=entry.get("total"),
          cover=entry.get("cover", ""), color=entry.get("color", ""),
-         banner=entry.get("banner", ""), start=entry.get("position") or 0)
+         banner=entry.get("banner", ""), start=start)
     with STATE_LOCK:
         STATE["view"] = "playing"
         STATE["message"] = f"Resuming {entry.get('title')} — Ep {episode}"

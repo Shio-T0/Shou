@@ -27,8 +27,8 @@ const el = {
   resumeStrip: document.getElementById("resume-strip"),
 };
 
-// How many continue-watching chips to show on the kiosk shelf.
-const RESUME_SHELF_MAX = 5;
+// How many continue-watching chips to show on the kiosk's left panel.
+const RESUME_SHELF_MAX = 4;
 
 const LIST_LABEL = { watching: "WATCHING", planned: "PLAN TO WATCH" };
 
