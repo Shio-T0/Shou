@@ -14,15 +14,18 @@ a shared-secret token (?k=…) from any networked client (the phone web-remote).
 
 import hmac
 import json
+import math
 import os
 import shlex
 import secrets
 import signal
 import shutil
 import socket
+import struct
 import subprocess
 import threading
 import time
+import wave
 from functools import wraps
 from pathlib import Path
 
@@ -100,6 +103,7 @@ STATE = {
     "cursor": 0,
     "sequel": None,       # {"finished": str, "sequel_title": str}
     "playing": None,      # {"title": str, "episode": int}
+    "rating": None,       # series-complete rating prompt (see begin_rating)
     "message": "",
 }
 
@@ -132,6 +136,18 @@ HISTORY_LOCK = threading.Lock()
 HISTORY_MAX = 24            # cap stored resume points (newest kept)
 RESUME_MIN_SECONDS = 30     # ignore trivially-short positions (skipped intros etc.)
 RESUME_REWIND_SECONDS = 5   # resume a few seconds before you stopped, for context
+
+# Series-complete rating: when the final episode finishes and mpv closes, the kiosk shows a
+# cinematic rating page driven from the phone (◀ ▶ adjust, ● confirm). The score is on the
+# user's AniList scale; the kiosk also draws the proportionate star equivalent.
+SCORE_FORMATS = {  # AniList scoreFormat -> {min, max, step, default}
+    "POINT_100":        {"min": 0, "max": 100, "step": 5,   "default": 70},
+    "POINT_10_DECIMAL": {"min": 0, "max": 10,  "step": 0.5, "default": 7.0},
+    "POINT_10":         {"min": 0, "max": 10,  "step": 1,   "default": 7},
+    "POINT_5":          {"min": 0, "max": 5,   "step": 1,   "default": 4},
+    "POINT_3":          {"min": 0, "max": 3,   "step": 1,   "default": 2},
+}
+FINISH_SOUND = CONFIG_DIR / "finish.wav"    # synthesized once; overridable via FINISH_SOUND
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
@@ -423,12 +439,23 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
           f"{'' if has_token else '; no token — resume only'})", flush=True)
 
     buf = b""
-    marked = False
-    last_pos = 0.0   # furthest percent seen
-    last_time = 0.0  # furthest time-pos seen (seconds)
+    completed = False  # crossed the threshold or hit a clean EOF
+    last_pos = 0.0     # furthest percent seen
+    last_time = 0.0    # furthest time-pos seen (seconds)
     duration = 0.0
+
+    def _finish():
+        """Mark watched once, the moment completion is detected (so a quick Back right
+        after the threshold still counts). Kept idempotent via the `completed` flag."""
+        forget_resume(media_id, episode)
+        if has_token and PLAYBACK["gen"] == gen:
+            mark_watched(media_id, episode, total, display)
+        broadcast()
+
+    # Read until mpv closes (EOF / Back / Next / stopped) — NOT just until the threshold —
+    # so we can tell the final episode actually played out and mpv is gone before rating.
     try:
-        while PLAYBACK["gen"] == gen and not marked:
+        while PLAYBACK["gen"] == gen:
             try:
                 chunk = sock.recv(4096)
             except socket.timeout:
@@ -436,7 +463,7 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
             except OSError:
                 break
             if not chunk:
-                break  # mpv exited / was killed (e.g. Back, Next, or stopped)
+                break  # mpv exited / was killed
             buf += chunk
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
@@ -452,28 +479,27 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
                     data = msg.get("data")
                     if name == "percent-pos" and isinstance(data, (int, float)):
                         last_pos = max(last_pos, data)
-                        if data >= threshold:
-                            marked = True
-                            break
+                        if data >= threshold and not completed:
+                            completed = True
+                            _finish()
                     elif name == "time-pos" and isinstance(data, (int, float)):
                         last_time = max(last_time, data)
                     elif name == "duration" and isinstance(data, (int, float)):
                         duration = data
-                elif ev == "end-file" and msg.get("reason") == "eof":
-                    marked = True
-                    break
+                elif ev == "end-file" and msg.get("reason") == "eof" and not completed:
+                    completed = True
+                    _finish()
     finally:
         try:
             sock.close()
         except OSError:
             pass
 
-    if marked:
-        # Finished (or close enough) — clear any saved resume point, then mark.
-        forget_resume(media_id, episode)
-        if has_token and PLAYBACK["gen"] == gen:
-            mark_watched(media_id, episode, total, display)
-        broadcast()
+    if completed:
+        # Already marked watched. If this was the very last episode and mpv has now
+        # closed (loop ended without being superseded), show the cinematic rating page.
+        if (PLAYBACK["gen"] == gen and total and episode >= total and anilist_token()):
+            begin_rating(gen, media_id, episode, total, display, cover, color, banner)
         return
 
     # Stopped before the threshold — remember where, so it can be resumed later.
@@ -906,6 +932,196 @@ def forget_resume(media_id: int, episode: int) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Series-complete rating  (cinematic page + finish chime)
+# --------------------------------------------------------------------------- #
+_SCORE_FORMAT_CACHE = {"name": None, "fmt": None}
+
+
+def fetch_score_format() -> str:
+    """The user's AniList scoring scale (POINT_100/10/5/3…). Public, no token needed.
+    Cached per username; falls back to POINT_10 on any error."""
+    user = (CONFIG.get("ANILIST_USER") or "").strip()
+    if not user:
+        return "POINT_10"
+    if _SCORE_FORMAT_CACHE["name"] == user and _SCORE_FORMAT_CACHE["fmt"]:
+        return _SCORE_FORMAT_CACHE["fmt"]
+    fmt = "POINT_10"
+    try:
+        resp = requests.post(
+            ANILIST_URL,
+            json={"query": "query($n:String){ User(name:$n){ mediaListOptions "
+                           "{ scoreFormat } } }", "variables": {"n": user}},
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            timeout=15,
+        )
+        got = (((resp.json().get("data") or {}).get("User") or {})
+               .get("mediaListOptions") or {}).get("scoreFormat")
+        if got in SCORE_FORMATS:
+            fmt = got
+    except Exception as exc:  # noqa: BLE001
+        print(f"[rating] scoreFormat lookup failed: {exc}", flush=True)
+    _SCORE_FORMAT_CACHE.update(name=user, fmt=fmt)
+    return fmt
+
+
+def _stars(score: float, max_score: float) -> float:
+    """Proportionate 0..5 star equivalent of a score on its native scale."""
+    if not max_score:
+        return 0.0
+    return round(max(0.0, min(5.0, score / max_score * 5.0)), 3)
+
+
+def _ensure_finish_sound() -> None:
+    """Synthesize a short, warm completion chime (an ascending C-major arpeggio with a
+    bell-ish timbre) once, into FINISH_SOUND. No audio assets shipped with the repo."""
+    if FINISH_SOUND.exists():
+        return
+    sr = 44100
+    notes = [(523.25, 0.00), (659.25, 0.12), (783.99, 0.24), (1046.50, 0.40)]
+    dur = 2.0
+    n = int(sr * dur)
+    buf = [0.0] * n
+    for freq, start in notes:
+        s0 = int(start * sr)
+        for i in range(s0, n):
+            t = (i - s0) / sr
+            env = math.exp(-2.6 * t)                       # smooth decay
+            tone = (math.sin(2 * math.pi * freq * t)
+                    + 0.45 * math.sin(2 * math.pi * 2 * freq * t) * math.exp(-5 * t))
+            buf[i] += tone * env * 0.26
+    peak = max(1e-9, max(abs(x) for x in buf))
+    scale = min(1.0, 0.92 / peak)
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(FINISH_SOUND), "w") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            w.writeframes(b"".join(
+                struct.pack("<h", int(max(-1.0, min(1.0, x * scale)) * 32767)) for x in buf
+            ))
+    except (OSError, wave.Error) as exc:  # noqa: BLE001
+        print(f"[rating] couldn't write finish chime: {exc}", flush=True)
+
+
+def play_finish_sound() -> None:
+    """Play the completion chime on the PC's speakers (best-effort, detached)."""
+    custom = (CONFIG.get("FINISH_SOUND") or "").strip()
+    path = custom or str(FINISH_SOUND)
+    if not custom:
+        _ensure_finish_sound()
+    if not os.path.exists(path):
+        return
+    players = [
+        ["mpv", "--no-config", "--no-video", "--force-window=no", "--really-quiet", path],
+        ["paplay", path],
+        ["pw-play", path],
+        ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", path],
+        ["aplay", "-q", path],
+    ]
+    for argv in players:
+        if shutil.which(argv[0]):
+            try:
+                subprocess.Popen(argv, stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 start_new_session=True)
+            except OSError:
+                continue
+            return
+
+
+def begin_rating(gen: int, media_id: int, episode: int, total: int | None,
+                 display: str, cover: str, color: str, banner: str) -> None:
+    """Show the cinematic rating page for a just-finished series + play the chime."""
+    if PLAYBACK["gen"] != gen or not anilist_token():
+        return
+    fmt = fetch_score_format()
+    spec = SCORE_FORMATS.get(fmt, SCORE_FORMATS["POINT_10"])
+    score = spec["default"]
+    with STATE_LOCK:
+        if PLAYBACK["gen"] != gen:
+            return
+        STATE["view"] = "rating"
+        STATE["playing"] = None
+        STATE["rating"] = {
+            "media_id": media_id,
+            "title": display,
+            "cover": cover,
+            "color": color or "#1f2233",
+            "banner": banner,
+            "format": fmt,
+            "score": score,
+            "min": spec["min"],
+            "max": spec["max"],
+            "step": spec["step"],
+            "stars": _stars(score, spec["max"]),
+            "submitting": False,
+            "done": False,
+        }
+    print(f"[rating] {display!r} complete — prompting ({fmt}, default {score})", flush=True)
+    broadcast()
+    play_finish_sound()
+
+
+def _rating_adjust(steps: int) -> bool:
+    """Nudge the pending rating by `steps` of its native step. True if it was handled
+    (i.e. the rating page is up), so the caller skips the normal carousel move."""
+    with STATE_LOCK:
+        r = STATE.get("rating")
+        if STATE["view"] != "rating" or not r or r.get("submitting") or r.get("done"):
+            return STATE["view"] == "rating"  # swallow input while submitting/done
+        step, lo, hi = r["step"], r["min"], r["max"]
+        score = r["score"] + steps * step
+        score = max(lo, min(hi, round(score / step) * step))
+        score = round(score, 2)
+        if abs(score - int(score)) < 1e-9:
+            score = int(score)
+        r["score"] = score
+        r["stars"] = _stars(score, hi)
+    broadcast()
+    return True
+
+
+def submit_rating() -> None:
+    """Save the chosen score to AniList, flash a confirmation, then return to the grid."""
+    with STATE_LOCK:
+        r = STATE.get("rating")
+        if not r or STATE["view"] != "rating" or r.get("submitting") or r.get("done"):
+            return
+        r["submitting"] = True
+        media_id, score, title = r["media_id"], r["score"], r["title"]
+    broadcast()
+
+    ok = False
+    try:
+        _anilist_post(
+            "mutation($id:Int,$s:Float){ SaveMediaListEntry(mediaId:$id, score:$s)"
+            "{ id score } }",
+            {"id": int(media_id), "s": float(score)},
+        )
+        ok = True
+        print(f"[rating] saved {title!r} score={score}", flush=True)
+        subprocess.run(
+            ["notify-send", "★ AniList", f"{title} — rated {score}", "-u", "low", "-t", "2500"],
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[rating] save failed: {exc}", flush=True)
+
+    with STATE_LOCK:
+        r = STATE.get("rating")
+        if r:
+            r["submitting"] = False
+            r["done"] = True
+            r["ok"] = ok
+    broadcast()
+    time.sleep(2.6)  # let the kiosk play the "rated" flourish
+    with STATE_LOCK:
+        STATE["rating"] = None
+    refresh_list()  # back to the grid, now reflecting the new score/status
+
+
+# --------------------------------------------------------------------------- #
 # State broadcast
 # --------------------------------------------------------------------------- #
 def broadcast() -> None:
@@ -918,6 +1134,7 @@ def broadcast() -> None:
             "cursor": STATE["cursor"],
             "sequel": STATE["sequel"],
             "playing": STATE["playing"],
+            "rating": STATE["rating"],
             "message": STATE["message"],
             "history": history,
         }
@@ -943,6 +1160,7 @@ def refresh_list() -> None:
         STATE["_entries"] = entries  # keep raw entries for decisions
         STATE["cursor"] = 0
         STATE["sequel"] = None
+        STATE["rating"] = None
         STATE["view"] = "grid" if cards else "empty"
         STATE["message"] = "" if cards else f"Nothing in your {label} list."
     broadcast()
@@ -1035,6 +1253,7 @@ def back():
     with STATE_LOCK:
         STATE["sequel"] = None
         STATE["playing"] = None
+        STATE["rating"] = None
         STATE["view"] = "grid" if STATE["items"] else "empty"
     broadcast()
     pid = kiosk_pid()
@@ -1048,14 +1267,16 @@ def back():
 @app.route("/left", methods=["POST"])
 @require_auth
 def left():
-    _move(-1)
+    if not _rating_adjust(-1):  # on the rating page, ◀ lowers the score
+        _move(-1)
     return jsonify(ok=True)
 
 
 @app.route("/right", methods=["POST"])
 @require_auth
 def right():
-    _move(1)
+    if not _rating_adjust(1):   # on the rating page, ▶ raises the score
+        _move(1)
     return jsonify(ok=True)
 
 
@@ -1076,6 +1297,11 @@ def select():
         cursor = STATE["cursor"]
         entries = STATE.get("_entries", [])
         sequel = STATE["sequel"]
+
+    # On the rating page: Select submits the chosen score to AniList.
+    if view == "rating":
+        socketio.start_background_task(submit_rating)
+        return jsonify(ok=True, action="rate")
 
     # On the sequel card: a second Select plays the sequel from episode 1.
     if view == "sequel" and sequel:

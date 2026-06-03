@@ -25,6 +25,12 @@ const el = {
   statusMsg: document.getElementById("status-msg"),
   resumeShelf: document.getElementById("resume-shelf"),
   resumeStrip: document.getElementById("resume-strip"),
+  ratingView: document.getElementById("rating-view"),
+  ratingBg: document.getElementById("rating-bg"),
+  ratingTitle: document.getElementById("rating-title"),
+  ratingStars: document.getElementById("rating-stars"),
+  ratingScoreNum: document.getElementById("rating-score-num"),
+  ratingScoreScale: document.getElementById("rating-score-scale"),
 };
 
 // How many continue-watching chips to show on the kiosk's left panel.
@@ -198,8 +204,69 @@ function showOnly(view) {
   el.stage.classList.toggle("hidden", view !== "grid");
   el.sequelView.classList.toggle("hidden", view !== "sequel");
   el.playingView.classList.toggle("hidden", view !== "playing");
+  el.ratingView.classList.toggle("hidden", view !== "rating");
   const isStatus = view === "loading" || view === "empty" || view === "error";
   el.statusView.classList.toggle("hidden", !isStatus);
+}
+
+// --- Series-complete rating -------------------------------------------------
+const STAR_PATH =
+  "M12 2.4l2.97 6.02 6.64.97-4.8 4.68 1.13 6.61L12 17.6l-5.94 3.12 1.13-6.61" +
+  "-4.8-4.68 6.64-.97z";
+let ratingPromptId = "";
+
+function starSvg(cls) {
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="currentColor"><path d="${STAR_PATH}"/></svg>`;
+}
+function buildStars() {
+  el.ratingStars.innerHTML = "";
+  for (let i = 0; i < 5; i++) {
+    const star = document.createElement("div");
+    star.className = "star";
+    star.style.animationDelay = (0.6 + i * 0.09).toFixed(2) + "s";
+    star.innerHTML =
+      starSvg("s-base") + `<div class="s-clip" style="width:0%">${starSvg("s-fill")}</div>`;
+    el.ratingStars.appendChild(star);
+  }
+}
+function setRatingBg(r) {
+  el.ratingBg.style.backgroundColor = r.color || "#17161c";
+  el.ratingBg.style.backgroundImage = r.banner
+    ? `url(${r.banner})`
+    : r.cover
+    ? `url(${r.cover})`
+    : "none";
+}
+function fmtScore(r) {
+  if (r.format === "POINT_10_DECIMAL") return (Math.round(r.score * 10) / 10).toFixed(1);
+  return String(r.score);
+}
+function renderRating(r) {
+  if (!r) return;
+  const id = r.media_id + "|" + r.format;
+  if (id !== ratingPromptId) {
+    // Fresh prompt — (re)build so every entrance animation replays from the top.
+    ratingPromptId = id;
+    el.ratingView.classList.remove("is-done");
+    el.ratingTitle.textContent = r.title || "";
+    setRatingBg(r);
+    buildStars();
+  }
+  el.ratingScoreNum.textContent = fmtScore(r);
+  el.ratingScoreScale.textContent = "/ " + r.max;
+  el.ratingScoreNum.classList.remove("bump");
+  void el.ratingScoreNum.offsetWidth;
+  el.ratingScoreNum.classList.add("bump");
+
+  const clips = el.ratingStars.querySelectorAll(".s-clip");
+  const stars = r.stars || 0;
+  requestAnimationFrame(() => {
+    clips.forEach((c, i) => {
+      const frac = Math.max(0, Math.min(1, stars - i));
+      c.style.width = frac * 100 + "%";
+    });
+  });
+  el.ratingView.classList.toggle("is-done", !!r.done);
 }
 
 let currentList = "watching";
@@ -226,6 +293,9 @@ socket.on("state", (s) => {
     el.seqTitle.textContent = s.sequel.sequel_title;
   } else if (s.view === "playing") {
     el.playingMsg.textContent = s.message || "Launching…";
+  } else if (s.view === "rating") {
+    renderRating(s.rating);
+    el.count.textContent = "";
   } else {
     // loading / empty / error
     el.statusSpinner.style.display = s.view === "loading" ? "block" : "none";

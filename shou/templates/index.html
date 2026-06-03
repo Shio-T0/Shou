@@ -78,6 +78,27 @@
     </div>
   </section>
 
+  <!-- Series complete — cinematic rating (driven from the phone: ◀ ▶ adjust, ● confirm) -->
+  <section id="rating-view" class="overlay hidden">
+    <div id="rating-bg" class="rating-bg"></div>
+    <div class="rating-scrim"></div>
+    <div class="rating-stage">
+      <div class="rating-seal"><span class="rating-seal-kanji">完</span></div>
+      <div class="rating-kicker">SERIES COMPLETE</div>
+      <div class="rating-finished">You finished</div>
+      <h1 id="rating-title" class="rating-title">—</h1>
+      <div id="rating-stars" class="rating-stars" aria-hidden="true"></div>
+      <div class="rating-score">
+        <span id="rating-score-num" class="rating-score-num">—</span>
+        <span id="rating-score-scale" class="rating-score-scale"></span>
+      </div>
+      <div id="rating-hint" class="rating-hint">
+        <b>◀ ▶</b>&nbsp; adjust&nbsp; · &nbsp;<b>●</b>&nbsp; confirm&nbsp; · &nbsp;<b>⤺</b>&nbsp; skip
+      </div>
+      <div id="rating-done" class="rating-done">Rated&nbsp;✓</div>
+    </div>
+  </section>
+
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
