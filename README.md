@@ -1,5 +1,9 @@
 # 🎌 Shou (Windows)
 
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-ff4a32.svg)](LICENSE.md)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-1f1f24.svg?logo=windows&logoColor=white)](#requirements)
+[![Linux version](https://img.shields.io/badge/also%20on-Linux-1f1f24.svg?logo=linux&logoColor=white)](../../tree/main)
+
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse and play episodes from a beautiful phone remote — you never
 touch the computer.
@@ -321,9 +325,9 @@ the virtualenv. It deliberately **leaves `uv`, `mpv`, and your browser installed
 
 ## License
 
-**[PolyForm Noncommercial 1.0.0](LICENSE)** — free for any **noncommercial** use; no
+**[PolyForm Noncommercial 1.0.0](LICENSE.md)** — free for any **noncommercial** use; no
 selling or commercial use; redistributors must **keep the credit** to this repo (the
-`Required Notice:` line in the [LICENSE](LICENSE)). Source-available rather than OSI "open
+`Required Notice:` line in the [LICENSE](LICENSE.md)). Source-available rather than OSI "open
 source." Want a commercial license? Ask.
 
 ## Disclaimer
@@ -334,4 +338,4 @@ and the public **AniList** API. Any streams those tools locate come from third-p
 sites that Shou neither operates nor is affiliated with — you alone are responsible for
 how you use it and for complying with the laws of your jurisdiction. Please support
 creators through official services (Crunchyroll, Netflix, HIDIVE, your local licensors,
-Blu-ray, etc.). Provided "as is", without warranty (see [LICENSE](LICENSE)).
+Blu-ray, etc.). Provided "as is", without warranty (see [LICENSE](LICENSE.md)).

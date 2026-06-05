@@ -9,7 +9,7 @@ commercial purposes (including selling it or selling access to it), and anyone
 you share it with must also receive these terms and the "Required Notice:"
 line above (i.e. keep the credit to the original repository).
 
-================================================================================
+---
 
 # PolyForm Noncommercial License 1.0.0
 
