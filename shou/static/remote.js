@@ -104,6 +104,19 @@ async function resume(mediaId, ep, title) {
   }
 }
 
+async function forgetResume(mediaId, ep, title) {
+  if (navigator.vibrate) navigator.vibrate(8);
+  toast("Removed " + (title || ""));
+  try {
+    await fetch(
+      `/forget?media_id=${encodeURIComponent(mediaId)}&episode=${encodeURIComponent(ep)}&k=${encodeURIComponent(TOKEN)}`,
+      { method: "POST" }
+    );
+  } catch (e) {
+    toast("⚠ no connection");
+  }
+}
+
 let resumeSig = "";
 function renderResume(history) {
   history = history || [];
@@ -126,8 +139,7 @@ function renderResume(history) {
     const coverStyle = e.cover
       ? `background-image:url(${e.cover})`
       : `background-color:${e.color || "#1f2233"}`;
-    const card = document.createElement("button");
-    card.type = "button";
+    const card = document.createElement("div");
     card.className = "rcard";
     card.innerHTML = `
       <span class="rcard-cover" style="${coverStyle}">
@@ -137,8 +149,15 @@ function renderResume(history) {
         <span class="rcard-title">${escapeHtml(e.title)}</span>
         <span class="rcard-ep">EP ${escapeHtml(e.episode)} · ${fmtTime(e.position)}</span>
       </span>
-      <span class="rcard-bar"><span style="width:${pct}%"></span></span>`;
+      <span class="rcard-bar"><span style="width:${pct}%"></span></span>
+      <button type="button" class="rcard-del" aria-label="Remove from Continue Watching">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>`;
     card.addEventListener("click", () => resume(e.media_id, e.episode, e.title));
+    card.querySelector(".rcard-del").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      forgetResume(e.media_id, e.episode, e.title);
+    });
     el.resumeRail.appendChild(card);
   });
   el.resume.classList.remove("hidden");
