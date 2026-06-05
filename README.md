@@ -1,5 +1,9 @@
 # 🎌 Shou
 
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-ff4a32.svg)](LICENSE.md)
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-1f1f24.svg?logo=linux&logoColor=white)](#requirements)
+[![Also on Windows](https://img.shields.io/badge/also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](#windows)
+
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse, play, resume, rate, and even *grow* your list from a beautiful
 phone remote — you never touch the computer. The couch is the only required peripheral.
@@ -397,10 +401,10 @@ to remove those by hand if you want to.
 
 ## License
 
-**[PolyForm Noncommercial 1.0.0](LICENSE)** — use, modify, and share it freely for any
+**[PolyForm Noncommercial 1.0.0](LICENSE.md)** — use, modify, and share it freely for any
 **noncommercial** purpose; you may **not** sell it or use it commercially, and if you
 redistribute it (or a fork) you must **keep the credit** to this repo (the `Required Notice:`
-line in the [LICENSE](LICENSE)). It's source-available rather than OSI "open source" — AUR
+line in the [LICENSE](LICENSE.md)). It's source-available rather than OSI "open source" — AUR
 and Flathub are fine; the official distro repos are not. Want a commercial license? Ask.
 
 ## Disclaimer
@@ -412,4 +416,4 @@ sites that Shou neither operates nor is affiliated with — you alone are respon
 you use it and for complying with the laws of your jurisdiction. Please support creators
 through official services (Crunchyroll, Netflix, HIDIVE, your local licensors, Blu-ray,
 etc.). Provided "as is", without warranty — like most anime adaptations of an ongoing manga
-(see [LICENSE](LICENSE)).
+(see [LICENSE](LICENSE.md)).
