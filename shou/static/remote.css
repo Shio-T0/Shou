@@ -610,8 +610,21 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
   font-size: 13px; padding: 2px 9px;
 }
 
-/* Nav row (up / select / down) — reuses .btn .btn-nav .btn-select */
-.sp-nav { display: flex; gap: 11px; }
+/* Nav row (up / select / down) — bigger, lean-back friendly controls */
+.sp-nav { display: flex; gap: 12px; }
+.sp-nav .btn-nav {
+  flex: 1;
+  padding: 30px 0;
+  color: var(--paper-dim);
+}
+.sp-nav .btn-nav:active { color: var(--paper); }
+.sp-nav .btn-nav svg { width: 32px; height: 32px; }
+.sp-nav .btn-select {
+  flex: 1.7;
+  padding: 30px 0;
+  font-size: 18px;
+}
+.sp-nav .btn-select .select-mark { font-size: 15px; }
 
 /* On-screen keyboard */
 .sp-keyboard { display: flex; flex-direction: column; gap: 7px; padding-top: 2px; }
