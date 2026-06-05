@@ -19,6 +19,7 @@ Control endpoints are reachable from loopback without auth (the kiosk page) and 
 a shared-secret token (?k=…) from any networked client (the phone web-remote).
 """
 
+import difflib
 import hmac
 import json
 import math
@@ -163,6 +164,21 @@ MPV_IPC = r"\\.\pipe\shou-mpv"
 # Source scrapers (anipy_api providers) tried in order. allanime is the same site
 # ani-cli uses; animekai is a genuinely different source as a backstop.
 SOURCE_PROVIDERS = ["allanime", "animekai"]
+
+# allanime API ani-cli searches (replicated here so we can pre-pick the right result
+# instead of blindly taking ani-cli's first hit). Same endpoint/agent/query ani-cli uses.
+ALLANIME_API = "https://api.allanime.day/api"
+ALLANIME_REFERER = "https://allmanga.to"
+ALLANIME_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) "
+                  "Gecko/20100101 Firefox/121.0")
+ALLANIME_SEARCH_GQL = (
+    "query( $search: SearchInput $limit: Int $page: Int "
+    "$translationType: VaildTranslationTypeEnumType "
+    "$countryOrigin: VaildCountryOriginEnumType ) { shows( search: $search "
+    "limit: $limit page: $page translationType: $translationType "
+    "countryOrigin: $countryOrigin ) { edges { _id name availableEpisodes "
+    "__typename } }}"
+)
 
 # ani-cli is the primary source on Windows (a bash script run under Git Bash); anipy is the
 # backup tried when ani-cli finds nothing. ani-cli needs bash + fzf on the system (the
@@ -951,8 +967,89 @@ def anicli_script() -> Path:
     return Path(override) if override else (CONFIG_DIR / "ani-cli")
 
 
+def _norm_title(s: str) -> str:
+    """Lowercase + strip punctuation/space so 'Fate/Zero' ~ 'fate zero' for comparison."""
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+
+def anicli_result_index(search_title: str, total: int | None) -> int | None:
+    """Decide which of ani-cli's search results to play (1-based, for `ani-cli -S N`).
+
+    Replicates ani-cli's allanime search so the ordering — and therefore the index we
+    return — matches what `-S N` will pick. The result list ani-cli builds keeps only
+    shows that have at least one sub episode, in the API's edge order.
+
+    Selection: prefer a result whose name is (near-)identical to the search title — that
+    reliably separates "Fate/Zero" from "Fate/Zero: Onegai...". Among such strong matches,
+    AniList's episode count (`total`) breaks ties: an exact episode-count match wins, else
+    the closest count, else the best name match. allanime episode counts drift by a few
+    (recaps/specials), so they're a tie-breaker, not the primary signal.
+
+    If no result is a strong title match we return None and let the caller keep ani-cli's
+    default (-S 1): that first hit is usually the canonical show, whereas a loose title
+    match mis-picks badly (allanime lists One Piece itself under the name "1P").
+    """
+    query = search_title.replace(" ", "+")
+    payload = {
+        "variables": {
+            "search": {"allowAdult": False, "allowUnknown": False, "query": query},
+            "limit": 40, "page": 1, "translationType": "sub", "countryOrigin": "ALL",
+        },
+        "query": ALLANIME_SEARCH_GQL,
+    }
+    try:
+        resp = requests.post(
+            ALLANIME_API, json=payload,
+            headers={"Referer": ALLANIME_REFERER, "User-Agent": ALLANIME_AGENT},
+            timeout=12,
+        )
+        resp.raise_for_status()
+        edges = resp.json()["data"]["shows"]["edges"]
+    except Exception as exc:  # noqa: BLE001 - any failure -> let ani-cli pick result 1
+        print(f"[pick] allanime search failed for {search_title!r}: {exc}", flush=True)
+        return None
+
+    # Mirror ani-cli's filter: only shows with >=1 sub episode survive, in edge order.
+    candidates = []  # (1-based index, name, sub_episode_count)
+    for edge in edges:
+        sub = ((edge.get("availableEpisodes") or {}).get("sub")) or 0
+        if sub >= 1:
+            candidates.append((len(candidates) + 1, edge.get("name") or "", sub))
+    if not candidates:
+        return None
+
+    target = _norm_title(search_title)
+    # Keep only near-identical titles; below this we don't trust the match (and the
+    # canonical show sometimes has an odd name, where ani-cli's first result is better).
+    STRONG = 0.85
+    strong = [
+        (idx, name, sub,
+         difflib.SequenceMatcher(None, target, _norm_title(name)).ratio())
+        for idx, name, sub in candidates
+    ]
+    strong = [c for c in strong if c[3] >= STRONG]
+    if not strong:
+        return None  # no confident title match -> let ani-cli take result 1
+
+    # Rank strong matches: exact episode count first, then closest count, then best name.
+    def rank(c):
+        idx, name, sub, ratio = c
+        if total:
+            exact = 1 if sub == total else 0
+            closeness = -abs(sub - total)
+        else:
+            exact, closeness = 0, 0
+        return (exact, closeness, ratio, -idx)
+
+    idx, name, sub, ratio = max(strong, key=rank)
+    print(f"[pick] {search_title!r}: -> #{idx} {name!r} "
+          f"(sub={sub}, total={total}, title={ratio:.2f}, "
+          f"{len(strong)} strong of {len(candidates)})", flush=True)
+    return idx
+
+
 def anicli_play(gen: int, search_title: str, episode: int, display: str,
-                start: float = 0.0) -> bool:
+                total: int | None = None, start: float = 0.0) -> bool:
     """Backup source: drive ani-cli (under Git Bash) to resolve + launch mpv on the same
     IPC pipe. Returns True if our mpv came up (or playback was superseded), else False."""
     bash = find_bash()
@@ -972,9 +1069,12 @@ def anicli_play(gen: int, search_title: str, episode: int, display: str,
     player = f"mpv --fs --input-ipc-server={MPV_IPC}"
     if start and start > 0:
         player += f" --start={int(start)}"
-    # -S 1 auto-picks the first search result so ani-cli never needs the fzf TTY menu.
+    # -S N auto-picks the Nth search result so ani-cli never needs the fzf TTY menu. We
+    # pre-pick N by replaying ani-cli's own search and matching episode count + title, so
+    # "Fate/Zero" beats "Fate/Zero: Onegai..." instead of grabbing whatever's first.
+    nth = anicli_result_index(search_title, total) or 1
     cmd = [bash, str(script).replace("\\", "/"),
-           "-S", "1", "-q", quality, "-e", str(episode), search_title]
+           "-S", str(nth), "-q", quality, "-e", str(episode), search_title]
     print(f"[anicli] {search_title!r} ep {episode} via {bash}", flush=True)
     try:
         logf = open(ANI_LOG, "w", encoding="utf-8", errors="ignore")
@@ -1120,7 +1220,7 @@ def _play_task(gen: int, search_title: str, episode: int, display: str,
           f"start={int(start)}s", flush=True)
 
     # Primary: ani-cli (lets it launch mpv itself, on our IPC pipe).
-    if anicli_play(gen, search_title, episode, display, start):
+    if anicli_play(gen, search_title, episode, display, total, start):
         with STATE_LOCK:
             if PLAYBACK["gen"] != gen:
                 return
