@@ -321,7 +321,10 @@ the virtualenv. It deliberately **leaves `uv`, `mpv`, and your browser installed
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**[PolyForm Noncommercial 1.0.0](LICENSE)** — free for any **noncommercial** use; no
+selling or commercial use; redistributors must **keep the credit** to this repo (the
+`Required Notice:` line in the [LICENSE](LICENSE)). Source-available rather than OSI "open
+source." Want a commercial license? Ask.
 
 ## Disclaimer
 
