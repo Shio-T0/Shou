@@ -309,7 +309,7 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
   opacity: 0.92;
 }
 .rcard-play svg { width: 18px; height: 18px; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); }
-.rcard-meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.rcard-meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; padding-right: 20px; }
 .rcard-title {
   font-size: 12.5px; font-weight: 700; line-height: 1.2;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -331,6 +331,30 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
 .rcard-bar > span {
   display: block; height: 100%;
   background: linear-gradient(90deg, var(--acc), var(--acc-2));
+}
+.rcard-del {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: rgba(12,12,16,0.66);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  color: var(--paper-dim);
+  cursor: pointer;
+  opacity: 0.78;
+  transition: transform 0.08s var(--ease), background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+}
+.rcard-del svg { width: 12px; height: 12px; }
+.rcard-del:active {
+  transform: scale(0.86);
+  background: var(--acc);
+  border-color: var(--acc);
+  color: #fff;
+  opacity: 1;
 }
 
 /* ---- Control deck ---- */

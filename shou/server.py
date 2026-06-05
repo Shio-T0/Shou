@@ -1412,6 +1412,22 @@ def resume_play():
     return jsonify(ok=True, action="resume")
 
 
+@app.route("/forget", methods=["POST"])
+@require_auth
+def forget_play():
+    """Remove a single continue-watching entry (the phone taps its × button).
+    Identified by ?media_id=…&episode=…."""
+    try:
+        media_id = int(request.args.get("media_id") or 0)
+        episode = int(request.args.get("episode") or 0)
+    except ValueError:
+        return jsonify(ok=False, reason="bad params")
+
+    forget_resume(media_id, episode)
+    broadcast()
+    return jsonify(ok=True, action="forget")
+
+
 @app.route("/pause", methods=["POST"])
 @require_auth
 def pause():
