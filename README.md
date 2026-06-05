@@ -1,22 +1,47 @@
 # 🎌 Shou
 
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
-screen and lets you browse and play episodes from a beautiful phone remote — you never
-touch the computer.
+screen and lets you browse, play, resume, rate, and even *grow* your list from a beautiful
+phone remote — you never touch the computer. The couch is the only required peripheral.
 
-A long-running Flask + SocketIO server is the single brain. It fetches your public
-AniList list, shows a cinematic 3D-coverflow **kiosk** (a fullscreen browser window) on
-the PC, and serves a touch-first **phone web-remote (PWA)** that mirrors the kiosk live
-over WebSocket. Pick an anime and it auto-plays your next unwatched episode through the
-`anipy` scrapers → `mpv` (fullscreen) — or through `ani-cli` if you have it installed; if
-you're caught up it recommends the sequel, or plays the latest released episode. Optionally
-it ticks episodes off on AniList as you finish them.
+A long-running Flask + SocketIO server is the single brain. It fetches your public AniList
+list, shows a cinematic 3D-coverflow **kiosk** (a fullscreen browser window) on the PC, and
+serves a touch-first **phone web-remote (PWA)** that mirrors the kiosk live over WebSocket.
+Pick an anime and it auto-plays your next unwatched episode through the `anipy` scrapers →
+`mpv` (fullscreen), or through `ani-cli` if you have it. Everything you do on the phone
+shows up on the TV instantly, and vice-versa.
 
-Runs on **most Linux distros** (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, …)
-and any desktop/compositor — it needs only `mpv`, a browser, `curl`, and `uv`. Playback
-control reaches mpv over its own IPC socket, so there's **no `playerctl`/`mpv-mpris`
-requirement**. On **Hyprland** or **Sway** the kiosk also auto-raises/fullscreens; elsewhere
-the browser's own `--kiosk` handles fullscreen.
+Runs on **most Linux distros** (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, …) and
+any desktop/compositor — it needs only `mpv`, a browser, `curl`, and `uv`. Playback control
+reaches mpv over its own IPC socket, so there's **no `playerctl`/`mpv-mpris` requirement**.
+On **Windows**? There's a [`windows` branch](#windows) with its own installer.
+
+---
+
+## What you can do
+
+- 🎞️ **Browse your lists** — your *Currently Watching* and *Plan to Watch* lists as a
+  cinematic 3D coverflow, switched with one tap.
+- ▶️ **One-tap play** — Select an anime and Shou plays your **next unwatched episode**
+  fullscreen. Progress, episode counts, and a progress bar mirror to your phone.
+- ⏯️ **Full playback control** — pause, ±30s seek, and previous/next **episode**, all from
+  the remote, all sent straight to `mpv`.
+- ⏪ **Continue Watching** — left an episode half-finished? Shou remembers where (and which
+  episode) and offers to **resume a few seconds before** you stopped. Because nobody pauses
+  at a sensible moment.
+- 🌟 **Series-complete rating** — finish the *final* episode and the kiosk rolls a cinematic
+  rating page (animated stars, a 完 hanko stamp, a little chime) that you score from the
+  phone. It writes the score back to AniList on your own rating scale.
+- 🔎 **Search New** — search *all* of AniList from the couch using an on-screen keyboard (or
+  the PC's keyboard — they stay in sync), see each result's status, and **set a status**
+  (Watching / Planned / Completed / Paused / Dropped / Remove) without ever alt-tabbing.
+- 🆙 **Caught up?** — Shou recommends the **sequel** (Select again to start it from episode
+  1), or just plays the latest released episode.
+- ✅ **Auto-mark watched** *(optional)* — tick episodes off on AniList as you finish them,
+  and flip a series to *Completed* on the last episode.
+
+The phone remote always **mirrors the kiosk live**, so it confirms every action even when
+you're across the room from the screen.
 
 ---
 
@@ -24,19 +49,20 @@ the browser's own `--kiosk` handles fullscreen.
 
 - [How it works](#how-it-works)
 - [Requirements](#requirements)
-- [Install](#install)
+- [Install — the detailed walkthrough](#install--the-detailed-walkthrough)
+- [First run & connecting your phone](#first-run--connecting-your-phone)
 - [Configuration](#configuration)
 - [Using Shou](#using-shou)
-  - [1. Get it running](#1-get-it-running)
-  - [2. Set up your phone](#2-set-up-your-phone)
-  - [3. The remote at a glance](#3-the-remote-at-a-glance)
-  - [4. Watch something](#4-watch-something)
-  - [5. While an episode is playing](#5-while-an-episode-is-playing)
-  - [6. Watching vs Plan to Watch](#6-watching-vs-plan-to-watch)
+  - [The remote at a glance](#the-remote-at-a-glance)
+  - [Watch something](#watch-something)
+  - [Continue Watching](#continue-watching)
+  - [Search New & set status](#search-new--set-status)
+  - [Rate a finished series](#rate-a-finished-series)
 - [Auto-mark episodes watched on AniList](#auto-mark-episodes-watched-on-anilist)
 - [Control reference (HTTP endpoints)](#control-reference-http-endpoints)
 - [Troubleshooting](#troubleshooting)
 - [Run / restart manually](#run--restart-manually)
+- [Windows](#windows)
 - [Uninstall](#uninstall)
 - [License](#license)
 - [Disclaimer](#disclaimer)
@@ -44,6 +70,8 @@ the browser's own `--kiosk` handles fullscreen.
 ---
 
 ## How it works
+
+You don't really need to know — but here's the gist, so it's not magic.
 
 ```
    PHONE (web remote)            PC (this repo)                      INTERNET
@@ -64,8 +92,9 @@ the browser's own `--kiosk` handles fullscreen.
 ```
 
 The server is the only moving part; the kiosk and the phone remote are both just **views**
-of its live state, and every control is a small HTTP POST to it. Pause / ±30s seek are
-sent straight to `mpv` over its JSON IPC socket — no extra player plugins needed.
+of its live state, and every control is a small HTTP POST. The phone and PC always agree
+because there's one source of truth — which is more than can be said for most group chats
+deciding what to watch.
 
 ## Requirements
 
@@ -76,41 +105,90 @@ sent straight to `mpv` over its JSON IPC socket — no extra player plugins need
 - Your **phone and PC on the same network** (for the web remote).
 - **Hard dependencies** (installed automatically where possible): `mpv`, a **browser**
   (Firefox / Chromium / Brave / …), `curl`, and `uv`. Python deps come from `uv.lock`.
-- **Optional**: `ani-cli` for an extra source (without it the bundled `anipy` scrapers are
-  used — works fine); `libnotify` for desktop notifications; `avahi` + `nss-mdns` to reach
-  the PC as `<hostname>.local` (otherwise just use its LAN IP).
+- **Optional**: `ani-cli` for an extra source (without it the bundled `anipy` scrapers
+  work fine); `libnotify` for desktop notifications; `avahi` + `nss-mdns` to reach the PC
+  as `<hostname>.local` (otherwise just use its LAN IP).
 - **Hyprland** or **Sway** add a kiosk auto-raise/fullscreen nicety; on any other
   compositor/DE the browser's `--kiosk` still goes fullscreen on its own.
 
-## Install
+---
 
-From inside the repo on the target machine:
+## Install — the detailed walkthrough
+
+Clone the repo onto the PC that will do the watching, `cd` into it, and run:
 
 ```bash
 ./install.sh
 ```
 
-The installer is **idempotent** (safe to re-run), **detects your distro's package
-manager**, and asks before each system change. It:
+That's the whole command. The installer is **idempotent** (re-run it as many times as your
+anxiety requires), **detects your distro's package manager**, and **asks before every
+system change** — nothing happens without a `y`. Here's exactly what it does, step by step,
+so you don't lose yourself halfway:
 
-1. Checks you're not root; detects your package manager and compositor.
-2. Installs the dependencies (skips anything already present), mapping package names per
-   distro and falling back to the official `uv` installer where `uv` isn't packaged.
-3. Syncs the Python env (`uv sync`).
-4. Marks the control scripts executable.
-5. Creates/updates `~/.config/shou/shou.conf` — prompts for your **public** AniList
-   username and **backfills any missing settings** with their defaults.
-6. Optionally enables `avahi` + wires `nss-mdns` so the phone can reach `<hostname>.local`.
-7. Adds login autostart — a Hyprland `exec-once` if Hyprland is detected, otherwise an
-   XDG `~/.config/autostart/shou.desktop` entry (honored by GNOME/KDE/XFCE/…).
-8. Optionally sets up AniList write access and starts the server.
+1. **Pre-flight checks** — refuses to run as root, then detects your package manager and
+   compositor. If it can't find a known package manager it keeps going and just asks you to
+   install the handful of system packages yourself.
+2. **System dependencies** — installs `mpv`, `curl`, and a browser if missing, mapping the
+   right package name for your distro. Already have them? It skips them. (No browser found?
+   It offers to install Firefox.)
+3. **`uv`** — the Python tool that runs everything. If your distro doesn't package it, the
+   installer offers to fetch the official one-line installer for you.
+4. **`ani-cli`** *(optional)* — an extra episode source. Skip it freely; `anipy` is the
+   built-in fallback and works on its own.
+5. **`libnotify`** *(optional)* — desktop notifications.
+6. **Python environment** — runs `uv sync` to build the project's virtualenv from the
+   locked dependencies. No system Python pollution.
+7. **Control scripts** — marks the helper scripts executable.
+8. **Configuration** — creates `~/.config/shou/shou.conf` and **prompts for your AniList
+   username**. ⚠️ Your list must be **public** (AniList → Settings → Profile), or the
+   server has nothing to read. Missing settings are backfilled with sensible defaults.
+9. **mDNS** *(optional)* — offers to install/enable `avahi` + wire up `nss-mdns` so your
+   phone can reach the PC as `<hostname>.local`. Decline and you'll just use the LAN IP —
+   equally fine.
+10. **Autostart on login** *(optional)* — adds a Hyprland `exec-once` (if Hyprland is
+    detected) or an XDG `~/.config/autostart/shou.desktop` entry (honored by
+    GNOME/KDE/XFCE/…), so the daemon is always there when you log in.
+11. **AniList write access** *(optional)* — offers to run the OAuth setup so Shou can
+    auto-mark episodes watched. You can always do this later (see
+    [below](#auto-mark-episodes-watched-on-anilist)).
+12. **Start now?** — offers to launch the daemon immediately.
 
-When it finishes it prints your phone remote URL
-(`http://<hostname>.local:4100/remote?k=<token>`) to add to your phone's home screen.
+When it finishes, it prints your **phone remote URL**:
+
+```
+http://<hostname>.local:4100/remote?k=<your-private-token>
+```
+
+Keep that handy for the next section. (It's also saved at the top of
+`~/.config/shou/shou.log` if you scroll away and lose it.)
 
 > **On Sway** (or another wlroots compositor without an XDG-autostart daemon), add
 > `exec ~/path/to/shou_daemon.sh` to your config instead — the installer prints the exact
 > line. Everything else is identical across distros.
+
+> **Updating later?** Just re-run `./install.sh`. It adds any new config keys from the
+> update (with defaults) without clobbering your settings, so you never hand-edit a config
+> to catch up.
+
+## First run & connecting your phone
+
+1. **Make sure the daemon is running.** If you enabled autostart, it already is — log out
+   and back in, or just run `./shou_daemon.sh` once. The server lives in the background; the
+   kiosk window only appears when you press **Open**.
+2. **Open the remote on your phone.** In your phone's browser, go to the URL the installer
+   printed: `http://<hostname>.local:4100/remote?k=<token>`. The dark **Shou remote** loads,
+   and the little dot top-right turns **green “live”** once it's talking to the PC.
+3. **Add it to your home screen** (browser menu → *Add to Home screen* / *Install*). Now
+   it's a one-tap app icon, no URL-typing ever again.
+4. **Press ⏻ Open.** The kiosk fades in on the PC with your list. You're watching anime with
+   your thumbs now. Congratulations.
+
+> If `<hostname>.local` doesn't resolve on the phone, use the PC's **LAN IP** instead, e.g.
+> `http://192.168.1.50:4100/remote?k=<token>` — the installed icon keeps working either way.
+> DNS: the cause of, and solution to, all of life's networking problems. The `?k=<token>` is
+> required from the phone (the PC itself is exempt) — it's your private key, so don't share
+> the URL.
 
 ## Configuration
 
@@ -125,58 +203,27 @@ WATCHED_PERCENT="90"           # auto-mark watched once playback passes this %
 # ANILIST_TOKEN="..."          # OAuth write token — set by ./shou_auth.sh
 ```
 
-`REMOTE_TOKEN` and `ANILIST_TOKEN` are managed for you (the server generates the first
-on launch; `./shou_auth.sh` writes the second) — leave them out and let them appear.
+`REMOTE_TOKEN` and `ANILIST_TOKEN` are managed for you (the server generates the first on
+launch; `./shou_auth.sh` writes the second) — leave them out and let them appear.
 
-Changing `ANILIST_USER` / `QUALITY` only needs an **Open** tap (config reloads); no
-restart. Changing `PORT`, `REMOTE_TOKEN`, or `ANILIST_TOKEN` needs a daemon restart.
-
-**After updating Shou**, just re-run `./install.sh` — it's idempotent and **adds any new
-config keys** introduced by the update (with sensible defaults) without overwriting the
-values you've set, so you never have to hand-edit `shou.conf` to catch up.
+Changing `ANILIST_USER` / `QUALITY` only needs an **Open** tap (config reloads); no restart.
+Changing `PORT`, `REMOTE_TOKEN`, or `ANILIST_TOKEN` needs a daemon restart.
 
 ---
 
 ## Using Shou
 
-### 1. Get it running
-
-If you enabled autostart during install, the daemon launches on login — nothing to do.
-Otherwise start it once:
-
-```bash
-./shou_daemon.sh        # or just log out and back in
-```
-
-The server runs in the background; the kiosk window appears the first time you press
-**Open** from your phone.
-
-### 2. Set up your phone
-
-1. On your phone's browser, open the remote URL the installer printed:
-   `http://<hostname>.local:4100/remote?k=<token>`
-   (find it again anytime at the top of `~/.config/shou/shou.log`).
-2. It should load the dark **Shou remote**. The little dot top-right turns **green
-   “live”** when it's connected to the PC.
-3. **Add it to your home screen** (browser menu → *Add to Home screen* / *Install*) so
-   it's a one-tap icon from then on.
-
-> If `<hostname>.local` doesn't resolve on the phone, use the PC's LAN IP instead, e.g.
-> `http://192.168.1.50:4100/remote?k=<token>` — the installed icon keeps working either
-> way. The `?k=<token>` is required from the phone (loopback on the PC is exempt); it's
-> your private key, so don't share the URL.
-
-### 3. The remote at a glance
+### The remote at a glance
 
 ```
 ┌───────────────────────────────┐
-│ 朱 SHOU            ● live   │   ← brand + connection status
+│ 朱 SHOU            ● live     │   ← brand + connection status
 │ ┌───────────────────────────┐ │
-│ │  cover   NOW WATCHING  3/7│ │   ← live mirror of the kiosk:
-│ │  ▥▥▥▥    F R I E R E N    │ │     what's highlighted, episode,
-│ │          EP 12 / 28       │ │     and a progress bar
+│ │  cover   NOW WATCHING  3/7│ │   ← live mirror of the kiosk
+│ │  ▥▥▥▥    F R I E R E N    │ │
+│ │          EP 12 / 28       │ │
 │ └───────────────────────────┘ │
-│ [ Watching │ Plan to Watch ]  │   ← list switcher
+│ [ Watching │ Planned │ Search]│   ← list / mode switcher
 │   ◀      SELECT       ▶        │   ← browse + choose
 │   ⏻ Open          ⤺ Back      │   ← open the UI / stop & return
 │  ─────── Transport ───────    │
@@ -188,55 +235,74 @@ The server runs in the background; the kiosk window appears the first time you p
 | Button | What it does |
 | --- | --- |
 | **⏻ Open** | (Re)opens Shou: stops anything playing, refreshes your list, shows the kiosk fullscreen. Your “home” button. |
-| **◀ / ▶** | Move the highlight left/right through the coverflow. |
-| **SELECT** | Choose the highlighted anime (see [Watch something](#4-watch-something)). |
-| **⤺ Back** | Stop playback and return to the carousel (re-fullscreens the kiosk). |
-| **Watching / Plan to Watch** | Switch which AniList list the carousel shows. |
+| **◀ / ▶** | Move the highlight through the coverflow (and up/down in Search). |
+| **SELECT** | Choose the highlighted item. |
+| **⤺ Back** | Stop playback / step back a screen and return to the carousel. |
+| **Watching / Planned / Search** | Switch which list the carousel shows, or enter [Search New](#search-new--set-status). |
 | **⏮ / ⏭** | Jump to the previous / next **episode** (relaunches the player). |
 | **⏯** | Play / pause the current episode. |
 | **« 30s / 30s »** | Seek 30 seconds back / forward. |
 
-The hero panel at the top always **mirrors the kiosk live**, so the phone confirms every
-action even if you're across the room from the screen.
+A **Continue Watching** rail also appears on the remote (and as a panel on the kiosk)
+whenever you have half-finished episodes.
 
-### 4. Watch something
+### Watch something
 
-1. Tap **⏻ Open**. The kiosk fades in on the PC with your *Currently Watching* list as a
-   3D coverflow.
+1. Tap **⏻ Open**. The kiosk fades in with your *Currently Watching* list as a 3D coverflow.
 2. Tap **◀ / ▶** to bring the anime you want to the centre.
 3. Tap **SELECT**. Shou:
    - **plays your next unwatched episode** fullscreen (progress + 1), or
-   - if you're **caught up and a sequel exists**, shows a *“✓ All caught up — recommended
-     sequel”* card. Tap **SELECT** again to start the sequel from episode 1, or
+   - if you're **caught up and a sequel exists**, shows an *“✓ All caught up — recommended
+     sequel”* card — tap **SELECT** again to start it from episode 1, or
    - if you're caught up with **no sequel**, plays the latest released episode.
-4. When you're done, tap **⤺ Back** to return to the carousel.
+4. Tap **⤺ Back** to return to the carousel when you're done.
 
-If a source can't be found, Shou automatically tries the backup (`anipy`) scrapers;
-if everything fails it shows a clear error card on the kiosk instead of hanging — press
-**Back** and try another title.
+Tap **Planned** to switch to your *Plan to Watch* list (selecting a planned anime plays
+episode 1). If a source can't be found, Shou tries the backup scrapers automatically and
+shows a clear error card rather than hanging.
 
-### 5. While an episode is playing
+### Continue Watching
 
-The video is fullscreen `mpv`. From the phone:
+Stop an episode partway through (Back, or just close it) and Shou quietly saves your spot —
+which anime, which episode, and how far in. It then shows a **Continue Watching** rail on
+both the remote and the kiosk. Tap an entry on the phone to **resume on the PC**, picking up
+a few seconds *before* you left off so you remember what was happening. Each entry has a
+small **×** to forget it. No "are you still watching?" guilt-trips here.
 
-- **⏯** pause/resume,
-- **« 30s / 30s »** to skip the recap or rewind,
-- **⏮ / ⏭** to switch episodes,
-- **⤺ Back** to stop and return to the Shou carousel.
+### Search New & set status
 
-### 6. Watching vs Plan to Watch
+Tap the **Search** segment to enter search mode — the whole experience changes:
 
-Tap **Plan to Watch** to switch the carousel to your AniList *Planning* list (tap
-**Watching** to switch back). Selecting a planned anime plays **episode 1**. The active
-list is shown both on the remote and as a label on the kiosk. **Open** always returns you
-to the *Watching* list.
+- The **kiosk** shows a vertical, top-to-bottom results list.
+- The **phone** shows a query box, the results, big **▲ / ● Select / ▼** buttons, and an
+  **on-screen keyboard**.
+
+Start typing (on the phone's keyboard *or* the PC's physical keyboard — they stay in
+**perfect sync**, because the server is the one source of truth). Results stream in as you
+type, each showing its format, year, and your current **status** for it. Select one and the
+kiosk zooms into a **cinematic detail page** (banner, synopsis, genres, studio), while the
+phone turns into a **status panel**: tap **Watching / Plan to Watch / Completed / Paused /
+Dropped**, or **Remove from lists**. It writes straight to AniList. Grow your backlog from
+the couch — your future self will resent you appropriately.
+
+> Setting status requires AniList write access — see
+> [the next section](#auto-mark-episodes-watched-on-anilist).
+
+### Rate a finished series
+
+Finish the **final** episode of a series and, once `mpv` closes, the kiosk rolls a
+**cinematic rating page** — a 完 hanko stamp presses in, the title rises, and animated stars
+fill to your score, with a little chime. Adjust the score with **◀ / ▶**, confirm with
+**● Select** (or skip with **Back**). The score is saved to AniList on *your* preferred
+rating scale (100-point, 10-point, 5-star, etc.) with the stars drawn proportionally. It
+only triggers at the true end of a series — not when you merely catch up to what's aired.
 
 ---
 
 ## Auto-mark episodes watched on AniList
 
-By default Shou only **reads** your public list. To have it **tick episodes off on
-AniList automatically** when you finish them, grant write access once:
+By default Shou only **reads** your public list. To have it **tick episodes off on AniList
+automatically** (and to set statuses or scores from the remote), grant write access once:
 
 ```bash
 ./shou_auth.sh
@@ -244,14 +310,14 @@ AniList automatically** when you finish them, grant write access once:
 
 It walks you through creating an AniList API client
 (`https://anilist.co/settings/developer`, redirect URL `https://anilist.co/api/v2/oauth/pin`),
-approving it, and pasting the code. The resulting OAuth token is saved as `ANILIST_TOKEN`
-in `shou.conf` (gitignored, never in the repo). The installer also offers this step.
+approving it, and pasting the code. The resulting OAuth token is saved as `ANILIST_TOKEN` in
+`shou.conf` (gitignored, never in the repo). The installer also offers this step.
 **Restart the daemon afterwards.**
 
-Once enabled, when playback passes `WATCHED_PERCENT` (default 90%) — or `mpv` reaches a
-clean end — Shou sets that episode as your progress (only ever **increasing** it, so a
-rewatch or **⏮** never lowers it) and flips the entry to **Completed** on the final
-episode. Tokens last ~1 year; re-run `./shou_auth.sh` when it expires.
+Once enabled, when playback passes `WATCHED_PERCENT` (default 90%) — or `mpv` reaches a clean
+end — Shou sets that episode as your progress (only ever **increasing** it, so a rewatch or
+**⏮** never lowers it) and flips the entry to **Completed** on the final episode. Tokens last
+~1 year; re-run `./shou_auth.sh` when it expires.
 
 ## Control reference (HTTP endpoints)
 
@@ -261,39 +327,43 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 | Endpoint | Action |
 | --- | --- |
 | `/open` | Reload config, refresh list, show kiosk (resets to *Watching*) |
-| `/left` `/right` | Move carousel selection |
-| `/select` | Play next ep / show or play sequel / play latest |
-| `/back` | Stop playback, return to carousel |
-| `/list?to=watching\|planned` | Switch list (omit `to` to toggle) |
-| `/pause` | Play/pause `mpv` |
-| `/fwd` `/rew` | Seek ±30s |
-| `/next` `/prev` | Previous / next episode |
+| `/left` `/right` | Move carousel selection (up/down in Search) |
+| `/select` | Play next ep / show or play sequel / open Search detail |
+| `/back` | Stop playback, step back a screen, return to carousel |
+| `/list?to=watching\|planned\|search` | Switch list/mode (omit `to` to toggle the two lists) |
+| `/pause` · `/fwd` `/rew` · `/next` `/prev` | Play-pause · seek ±30s · prev/next episode |
+| `/resume?media_id=…&episode=…` | Resume a Continue-Watching entry |
+| `/forget?media_id=…&episode=…` | Remove a Continue-Watching entry |
+| `/search/key?c=…` · `/search/back` · `/search/clear` | Edit the shared search query |
+| `/search/pick?i=…` | Focus a search result and open its detail |
+| `/status?to=CURRENT\|PLANNING\|COMPLETED\|PAUSED\|DROPPED\|REMOVE` | Set the focused anime's list status |
 | `/` | The kiosk page · `/remote?k=…` the phone PWA |
 
 ## Troubleshooting
 
 - **Phone can't reach the PC** — confirm same network; use the **LAN IP** instead of
-  `<hostname>.local` (it always works); if you want `.local`, make sure `avahi-daemon` is
-  running (`systemctl status avahi-daemon`).
+  `<hostname>.local`; for `.local`, ensure `avahi-daemon` is running
+  (`systemctl status avahi-daemon`).
 - **Remote loads but says offline / not live** — the daemon isn't running; start it
   (see [below](#run--restart-manually)) or check `~/.config/shou/shou.log`.
-- **“ANILIST_USER is not set”** — set it in `shou.conf` and make sure the list is
-  **public** (AniList → Settings → Profile).
+- **“ANILIST_USER is not set”** — set it in `shou.conf` and make sure the list is **public**.
+- **Search results / status changes do nothing** — searching works read-only, but **setting
+  a status needs AniList write access** (`./shou_auth.sh`, then restart the daemon).
 - **No kiosk window appears** — install a browser (`firefox`, `chromium`, `brave`, …);
   Shou auto-detects the first one it finds.
-- **Pause / ±30s seek do nothing** — those go to `mpv` over its IPC socket; they only
-  work while an episode launched by Shou is playing.
+- **Pause / ±30s seek do nothing** — those go to `mpv` over its IPC socket; they only work
+  while an episode launched by Shou is playing.
 - **Kiosk shows the old design after an update** — the running browser caches the page.
-  Close the kiosk window and tap **Open** to relaunch it fresh.
-- **Nothing plays / “no playable source”** — the scrapers couldn't find that title. Make
-  sure `mpv` is installed; try another entry; check `~/.config/shou/ani-cli-last.log`.
+  Close the kiosk window and tap **Open** to relaunch it fresh. (Refresh the phone PWA too.)
+- **Nothing plays / “no playable source”** — the scrapers couldn't find that title. Ensure
+  `mpv` is installed; try another entry; check `~/.config/shou/ani-cli-last.log`.
 - **Changed a template / `server.py`** — restart the daemon (templates are cached in the
   running process). Editing only `static/*` just needs a kiosk reload.
 
 ## Run / restart manually
 
 ```bash
-# start (foreground-ish, restart-on-crash wrapper — what autostart runs)
+# start (restart-on-crash wrapper — what autostart runs)
 ./shou_daemon.sh
 
 # restart the daemon (kill the daemon first so it doesn't respawn the old server)
@@ -306,6 +376,14 @@ uv run --project shou python shou/server.py
 
 The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on startup.
 
+## Windows
+
+Shou runs on Windows too — check out the **[`windows` branch](../../tree/windows)**, which
+has its own PowerShell installer (`install.ps1`) and a Windows-specific README. It uses a
+named-pipe IPC for `mpv`, sources episodes through `ani-cli` (under Git Bash) with `anipy`
+as a fallback, and starts hidden on login (no PowerShell window flashing past). Same phone
+remote, same features — different plumbing.
+
 ## Uninstall
 
 ```bash
@@ -314,8 +392,8 @@ The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on s
 
 Stops the server, removes the autostart entry (the Hyprland line — with a backup — and/or
 the XDG `shou.desktop`), and *optionally* deletes your config and the virtualenv. It
-deliberately **leaves system packages and the `nsswitch.conf` entry alone** — it prints
-how to remove those by hand if you want to.
+deliberately **leaves system packages and the `nsswitch.conf` entry alone** — it prints how
+to remove those by hand if you want to.
 
 ## License
 
@@ -325,8 +403,9 @@ MIT — see [LICENSE](LICENSE).
 
 Shou is a personal hobby project. It hosts, stores, and distributes **no** copyrighted
 content. It is a thin controller that drives third-party programs (`anipy-cli`, `ani-cli`,
-`mpv`) and the public **AniList** API. Any streams those tools locate come from
-third-party sites that Shou neither operates nor is affiliated with — you alone are
-responsible for how you use it and for complying with the laws of your jurisdiction.
-Please support creators through official services (Crunchyroll, Netflix, HIDIVE, your
-local licensors, Blu-ray, etc.). Provided "as is", without warranty (see [LICENSE](LICENSE)).
+`mpv`) and the public **AniList** API. Any streams those tools locate come from third-party
+sites that Shou neither operates nor is affiliated with — you alone are responsible for how
+you use it and for complying with the laws of your jurisdiction. Please support creators
+through official services (Crunchyroll, Netflix, HIDIVE, your local licensors, Blu-ray,
+etc.). Provided "as is", without warranty — like most anime adaptations of an ongoing manga
+(see [LICENSE](LICENSE)).
