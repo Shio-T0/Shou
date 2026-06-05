@@ -54,10 +54,11 @@
   </section>
 
   <!-- List switcher -->
-  <div class="seg reveal" id="listseg" style="--d:2">
+  <div class="seg seg-3 reveal" id="listseg" style="--d:2">
     <span class="seg-thumb" aria-hidden="true"></span>
     <button class="seg-btn active" data-list="watching">Watching</button>
-    <button class="seg-btn" data-list="planned">Plan&nbsp;to&nbsp;Watch</button>
+    <button class="seg-btn" data-list="planned">Planned</button>
+    <button class="seg-btn" data-list="search">Search</button>
   </div>
 
   <!-- Continue watching : tap a half-finished episode to resume it on the PC -->
@@ -118,6 +119,49 @@
         </button>
       </div>
     </div>
+  </section>
+
+  <!-- Search new : query box + results + nav + on-screen keyboard -->
+  <section id="search-panel" class="search-panel hidden">
+    <div class="sp-box">
+      <span id="sp-query" class="sp-query"></span>
+      <span class="sp-caret" aria-hidden="true"></span>
+      <span id="sp-ph" class="sp-ph">Search AniList…</span>
+      <button id="sp-clear" class="sp-clear" aria-label="Clear search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <div id="sp-results" class="sp-results"></div>
+
+    <div class="sp-nav">
+      <button class="btn btn-nav" data-act="left" aria-label="Up">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15l7-7 7 7"/></svg>
+      </button>
+      <button class="btn btn-select" data-act="select"><span class="select-mark">●</span><span>SELECT</span></button>
+      <button class="btn btn-nav" data-act="right" aria-label="Down">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"/></svg>
+      </button>
+    </div>
+
+    <div id="sp-keyboard" class="sp-keyboard"></div>
+  </section>
+
+  <!-- Status config : set the focused anime's AniList list status -->
+  <section id="status-panel" class="status-panel hidden">
+    <div class="st-head">
+      <img id="st-cover" class="st-cover" alt="" />
+      <div class="st-head-meta">
+        <div id="st-title" class="st-title"></div>
+        <div id="st-now" class="st-now"></div>
+      </div>
+    </div>
+    <div class="st-label">Set status</div>
+    <div id="st-buttons" class="st-buttons"></div>
+    <button class="btn btn-ghost st-back" data-act="back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+      <span>Back to results</span>
+    </button>
   </section>
 
   <div id="toast" class="toast"></div>
