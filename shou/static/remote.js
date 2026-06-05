@@ -22,6 +22,27 @@ const el = {
   segBtns: Array.from(document.querySelectorAll("#listseg .seg-btn")),
   resume: document.getElementById("resume"),
   resumeRail: document.getElementById("resume-rail"),
+  deck: document.querySelector(".deck"),
+  searchPanel: document.getElementById("search-panel"),
+  spQuery: document.getElementById("sp-query"),
+  spPh: document.getElementById("sp-ph"),
+  spClear: document.getElementById("sp-clear"),
+  spResults: document.getElementById("sp-results"),
+  spKeyboard: document.getElementById("sp-keyboard"),
+  statusPanel: document.getElementById("status-panel"),
+  stCover: document.getElementById("st-cover"),
+  stTitle: document.getElementById("st-title"),
+  stNow: document.getElementById("st-now"),
+  stButtons: document.getElementById("st-buttons"),
+};
+
+const STATUS_LABEL = {
+  CURRENT: "Watching", PLANNING: "Planned", COMPLETED: "Completed",
+  PAUSED: "Paused", DROPPED: "Dropped", REPEATING: "Rewatching",
+};
+const STATUS_CLASS = {
+  CURRENT: "st-current", PLANNING: "st-planning", COMPLETED: "st-completed",
+  PAUSED: "st-paused", DROPPED: "st-dropped", REPEATING: "st-current",
 };
 
 let toastTimer = null;
@@ -61,7 +82,7 @@ document.querySelectorAll("[data-act]").forEach((btn) => {
 });
 
 // List switcher (Watching / Planned) -> POST /list?to=<mode>
-const LIST_LABEL = { watching: "Watching", planned: "Planned" };
+const LIST_LABEL = { watching: "Watching", planned: "Planned", search: "Search New" };
 async function switchList(mode) {
   if (navigator.vibrate) navigator.vibrate(12);
   toast(LIST_LABEL[mode] || mode);
@@ -74,6 +95,8 @@ async function switchList(mode) {
 el.segBtns.forEach((btn) => {
   btn.addEventListener("click", () => switchList(btn.dataset.list));
 });
+
+el.spClear.addEventListener("click", typeClear);
 
 // --- Continue watching ------------------------------------------------------
 function escapeHtml(s) {
@@ -163,12 +186,166 @@ function renderResume(history) {
   el.resume.classList.remove("hidden");
 }
 
+// --- Search new -------------------------------------------------------------
+async function post(path) {
+  const sep = path.includes("?") ? "&" : "?";
+  try {
+    await fetch(path + sep + "k=" + encodeURIComponent(TOKEN), { method: "POST" });
+  } catch (e) {
+    toast("⚠ no connection");
+  }
+}
+function typeKey(c) { if (navigator.vibrate) navigator.vibrate(5); post("/search/key?c=" + encodeURIComponent(c)); }
+function typeBack() { if (navigator.vibrate) navigator.vibrate(6); post("/search/back"); }
+function typeClear() { if (navigator.vibrate) navigator.vibrate(10); post("/search/clear"); }
+function pickResult(i) { if (navigator.vibrate) navigator.vibrate(12); post("/search/pick?i=" + i); }
+function setStatus(to) {
+  if (navigator.vibrate) navigator.vibrate(14);
+  toast(to === "REMOVE" ? "Removing…" : "→ " + (STATUS_LABEL[to] || to));
+  post("/status?to=" + encodeURIComponent(to));
+}
+
+const KB_ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+function buildKeyboard() {
+  if (el.spKeyboard.dataset.built) return;
+  el.spKeyboard.dataset.built = "1";
+  KB_ROWS.forEach((row, ri) => {
+    const r = document.createElement("div");
+    r.className = "kb-row";
+    [...row].forEach((ch) => {
+      const k = document.createElement("button");
+      k.type = "button";
+      k.className = "kb-key";
+      k.textContent = ch;
+      k.addEventListener("click", () => typeKey(ch));
+      r.appendChild(k);
+    });
+    if (ri === 2) {
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "kb-key kb-back";
+      back.setAttribute("aria-label", "Backspace");
+      back.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5H8l-6 7 6 7h13a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M16 9l-5 6M11 9l5 6"/></svg>`;
+      back.addEventListener("click", typeBack);
+      r.appendChild(back);
+    }
+    el.spKeyboard.appendChild(r);
+  });
+  const r = document.createElement("div");
+  r.className = "kb-row";
+  const space = document.createElement("button");
+  space.type = "button";
+  space.className = "kb-key kb-space";
+  space.textContent = "space";
+  space.addEventListener("click", () => typeKey(" "));
+  r.appendChild(space);
+  el.spKeyboard.appendChild(r);
+}
+
+let spResultsSig = "";
+let spCursor = -1;
+function renderSearchPanel(search) {
+  const q = (search && search.query) || "";
+  el.spQuery.textContent = q;
+  el.spPh.classList.toggle("hidden", q.length > 0);
+  el.spClear.classList.toggle("hidden", q.length === 0);
+
+  const results = (search && search.results) || [];
+  const sig = results.map((r) => r.id + ":" + (r.listStatus || "")).join(",");
+  if (sig !== spResultsSig) {
+    spResultsSig = sig;
+    spCursor = -1;
+    el.spResults.innerHTML = "";
+    results.forEach((r, i) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "spcard";
+      const coverStyle = r.cover
+        ? `background-image:url(${r.cover})`
+        : `background-color:${r.color || "#1f2233"}`;
+      const st = r.listStatus;
+      const pill = st
+        ? `<span class="spcard-status ${STATUS_CLASS[st] || ""}">${STATUS_LABEL[st] || st}</span>`
+        : `<span class="spcard-status st-none">＋</span>`;
+      const bits = [r.format, r.year, r.episodes ? r.episodes + " eps" : ""]
+        .filter(Boolean).join(" · ");
+      row.innerHTML = `
+        <span class="spcard-cover" style="${coverStyle}"></span>
+        <span class="spcard-main">
+          <span class="spcard-title">${escapeHtml(r.title)}</span>
+          <span class="spcard-sub">${escapeHtml(bits)}</span>
+        </span>
+        ${pill}`;
+      row.addEventListener("click", () => pickResult(i));
+      el.spResults.appendChild(row);
+    });
+  }
+
+  const cursor = (search && search.cursor) || 0;
+  if (cursor !== spCursor) {
+    const rows = el.spResults.children;
+    if (spCursor >= 0 && rows[spCursor]) rows[spCursor].classList.remove("active");
+    if (rows[cursor]) {
+      rows[cursor].classList.add("active");
+      rows[cursor].scrollIntoView({ block: "nearest" });
+    }
+    spCursor = cursor;
+  }
+}
+
+let stStatusesSig = "";
+let stDetailId = "";
+function renderStatusPanel(search) {
+  const d = search && search.detail;
+  if (!d) return;
+  if (String(d.id) !== stDetailId) {
+    stDetailId = String(d.id);
+    el.stCover.src = d.cover || "";
+    el.stCover.style.opacity = d.cover ? "1" : "0";
+    el.stTitle.textContent = d.title || "";
+  }
+  const st = d.listStatus;
+  el.stNow.textContent = st ? "Currently: " + (STATUS_LABEL[st] || st) : "Not in your lists";
+  el.stNow.className = "st-now " + (st ? STATUS_CLASS[st] || "" : "st-none");
+
+  const statuses = (search && search.statuses) || [];
+  const canWrite = !search || search.canWrite;
+  const sig = statuses.map((s) => s[0]).join(",") + "|" + (st || "") + "|" + canWrite;
+  if (sig === stStatusesSig) return;
+  stStatusesSig = sig;
+  el.stButtons.innerHTML = "";
+  statuses.forEach(([value, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "st-btn " + (STATUS_CLASS[value] || "") + (value === st ? " current" : "");
+    b.textContent = label;
+    b.disabled = !canWrite;
+    b.addEventListener("click", () => setStatus(value));
+    el.stButtons.appendChild(b);
+  });
+  const rm = document.createElement("button");
+  rm.type = "button";
+  rm.className = "st-btn st-remove";
+  rm.textContent = "Remove from lists";
+  rm.disabled = !canWrite || !st;
+  rm.addEventListener("click", () => setStatus("REMOVE"));
+  el.stButtons.appendChild(rm);
+  if (!canWrite) {
+    const note = document.createElement("div");
+    note.className = "st-note";
+    note.textContent = "Set ANILIST_TOKEN in shou.conf to change status.";
+    el.stButtons.appendChild(note);
+  }
+}
+
 // --- Live mirror via SocketIO ----------------------------------------------
 const VIEW_LABEL = {
   grid: "Browsing",
   sequel: "Sequel found",
   playing: "Now playing",
   rating: "Rate it",
+  search: "Search",
+  detail: "Details",
   loading: "Loading",
   empty: "Nothing to watch",
   error: "Error",
@@ -208,8 +385,25 @@ socket.on("state", (s) => {
 
   if (s.list) {
     el.segBtns.forEach((b) => b.classList.toggle("active", b.dataset.list === s.list));
-    el.seg.classList.toggle("is-planned", s.list === "planned");
+    el.seg.classList.remove("is-watching", "is-planned", "is-search");
+    el.seg.classList.add("is-" + s.list);
   }
+
+  // Search/detail take over the whole remote: hide the mirror hero + control deck,
+  // show the search keyboard or the status config instead.
+  const searching = s.view === "search";
+  const detailing = s.view === "detail";
+  el.searchPanel.classList.toggle("hidden", !searching);
+  el.statusPanel.classList.toggle("hidden", !detailing);
+  el.hero.classList.toggle("hidden", searching || detailing);
+  el.deck.classList.toggle("hidden", searching || detailing);
+  if (searching || detailing) el.resume.classList.add("hidden");
+  if (searching) {
+    buildKeyboard();
+    renderSearchPanel(s.search);
+  }
+  if (detailing) renderStatusPanel(s.search);
+  if (searching || detailing) return;  // nothing below applies to these views
 
   setIndex("");
   setProgress(0);

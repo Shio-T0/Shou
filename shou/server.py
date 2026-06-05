@@ -16,6 +16,7 @@ import hmac
 import json
 import math
 import os
+import re
 import shlex
 import secrets
 import signal
@@ -97,8 +98,8 @@ TOKEN = ensure_token()
 # Shared runtime state
 # --------------------------------------------------------------------------- #
 STATE = {
-    "view": "loading",   # loading | grid | sequel | playing | empty | error
-    "list": "watching",  # which AniList list is shown: watching | planned
+    "view": "loading",   # loading | grid | sequel | playing | empty | error | search | detail
+    "list": "watching",  # which list/mode is shown: watching | planned | search
     "items": [],          # list of card dicts
     "cursor": 0,
     "sequel": None,       # {"finished": str, "sequel_title": str}
@@ -111,6 +112,36 @@ STATE = {
 LIST_STATUS = {"watching": "CURRENT", "planned": "PLANNING"}
 LIST_LABEL = {"watching": "Currently Watching", "planned": "Plan to Watch"}
 STATE_LOCK = threading.Lock()
+
+# "Search new" mode: browse all of AniList, focus a result, then set its list status.
+# A single shared query string is the source of truth so the phone's on-screen keyboard
+# and the kiosk's physical keyboard both edit the same text, kept in sync via broadcast.
+SEARCH = {
+    "query": "",       # current search text
+    "results": [],      # list of result dicts (see build_result)
+    "cursor": 0,        # which result is focused (vertical list)
+    "detail": None,     # focused-anime detail dict (see build_detail) or None
+    "busy": False,      # a search / detail / status write is in flight
+    "gen": 0,           # debounce generation — only the newest keystroke's query applies
+}
+SEARCH_MAX = 14            # results kept per query
+SEARCH_DEBOUNCE = 0.28     # secs after the last keystroke before querying AniList
+# AniList MediaListStatus values the phone can set, in display order. "REMOVE" deletes.
+SEARCH_STATUSES = [
+    ("CURRENT", "Watching"),
+    ("PLANNING", "Plan to Watch"),
+    ("COMPLETED", "Completed"),
+    ("PAUSED", "Paused"),
+    ("DROPPED", "Dropped"),
+]
+STATUS_LABELS = {  # short labels for status pills anywhere they're shown
+    "CURRENT": "Watching", "PLANNING": "Planned", "COMPLETED": "Completed",
+    "PAUSED": "Paused", "DROPPED": "Dropped", "REPEATING": "Rewatching",
+}
+FORMAT_LABELS = {
+    "TV": "TV", "TV_SHORT": "TV Short", "MOVIE": "Movie", "OVA": "OVA",
+    "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music",
+}
 
 # Tracks the in-flight playback launch so we can detect "ani-cli found no source"
 # and report it instead of leaving the UI stuck on the "playing" screen.
@@ -341,6 +372,225 @@ def build_card(entry: dict) -> dict:
         "banner": media.get("bannerImage") or "",
         "caughtUp": bool(last and progress >= last),
     }
+
+
+# --------------------------------------------------------------------------- #
+# "Search new" — query all of AniList, focus a result, set its list status
+# --------------------------------------------------------------------------- #
+SEARCH_QUERY = """
+query ($search: String, $perPage: Int) {
+  Page(perPage: $perPage) {
+    media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false) {
+      id
+      title { romaji english }
+      format
+      episodes
+      status
+      seasonYear
+      averageScore
+      coverImage { extraLarge large color }
+      bannerImage
+      mediaListEntry { status }
+    }
+  }
+}
+"""
+
+DETAIL_QUERY = """
+query ($id: Int) {
+  Media(id: $id, type: ANIME) {
+    id
+    title { romaji english }
+    format
+    episodes
+    duration
+    status
+    seasonYear
+    genres
+    averageScore
+    description(asHtml: false)
+    coverImage { extraLarge large color }
+    bannerImage
+    studios(isMain: true) { nodes { name } }
+    mediaListEntry { id status score progress }
+  }
+}
+"""
+
+
+def _public_post(query: str, variables: dict) -> dict:
+    """GraphQL call that uses the token when present (so the viewer's per-anime
+    mediaListEntry status comes back), and falls back to anonymous otherwise."""
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    token = anilist_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    resp = requests.post(ANILIST_URL, json={"query": query, "variables": variables},
+                         headers=headers, timeout=15)
+    resp.raise_for_status()
+    payload = resp.json()
+    if "errors" in payload:
+        raise RuntimeError(payload["errors"][0].get("message", "AniList error"))
+    return payload["data"]
+
+
+def _fmt_label(fmt: str | None) -> str:
+    return FORMAT_LABELS.get(fmt or "", (fmt or "").replace("_", " ").title())
+
+
+def build_result(media: dict) -> dict:
+    """Flatten an AniList search hit into the compact card the search list shows."""
+    art = media.get("coverImage") or {}
+    entry = media.get("mediaListEntry") or {}
+    return {
+        "id": media["id"],
+        "title": _title(media["title"]),
+        "search": _search_title(media["title"]),
+        "format": _fmt_label(media.get("format")),
+        "episodes": media.get("episodes"),
+        "year": media.get("seasonYear"),
+        "score": media.get("averageScore"),
+        "cover": art.get("extraLarge") or art.get("large") or "",
+        "color": art.get("color") or "#1f2233",
+        "banner": media.get("bannerImage") or "",
+        "listStatus": entry.get("status"),  # CURRENT/PLANNING/... or None (= not in lists)
+    }
+
+
+def build_detail(m: dict) -> dict:
+    """Richer payload for the focused-anime detail view."""
+    art = m.get("coverImage") or {}
+    entry = m.get("mediaListEntry") or {}
+    studios = [n.get("name") for n in ((m.get("studios") or {}).get("nodes") or []) if n.get("name")]
+    desc = re.sub(r"<[^>]+>", "", m.get("description") or "").strip()
+    return {
+        "loading": False,
+        "id": m["id"],
+        "title": _title(m["title"]),
+        "search": _search_title(m["title"]),
+        "format": _fmt_label(m.get("format")),
+        "episodes": m.get("episodes"),
+        "duration": m.get("duration"),
+        "year": m.get("seasonYear"),
+        "genres": (m.get("genres") or [])[:4],
+        "score": m.get("averageScore"),
+        "studio": studios[0] if studios else "",
+        "description": desc,
+        "cover": art.get("extraLarge") or art.get("large") or "",
+        "color": art.get("color") or "#1f2233",
+        "banner": m.get("bannerImage") or "",
+        "listStatus": entry.get("status"),
+        "entryId": entry.get("id"),
+        "progress": entry.get("progress") or 0,
+    }
+
+
+def _kick_search() -> None:
+    """Bump the debounce generation and schedule a fresh AniList query for the
+    current text. Safe to call after any edit to SEARCH['query']."""
+    with STATE_LOCK:
+        SEARCH["gen"] += 1
+        gen = SEARCH["gen"]
+        SEARCH["busy"] = True
+        query = SEARCH["query"]
+    broadcast()
+    socketio.start_background_task(run_search, gen, query)
+
+
+def run_search(gen: int, query: str) -> None:
+    """Debounced AniList search worker. Only the newest keystroke's query applies."""
+    time.sleep(SEARCH_DEBOUNCE)
+    with STATE_LOCK:
+        if gen != SEARCH["gen"]:
+            return  # superseded by a newer keystroke
+    q = query.strip()
+    results = []
+    if q:
+        try:
+            data = _public_post(SEARCH_QUERY, {"search": q, "perPage": SEARCH_MAX})
+            media = (data.get("Page") or {}).get("media") or []
+            results = [build_result(m) for m in media]
+        except Exception as exc:  # noqa: BLE001 - search failures shouldn't crash the loop
+            print(f"[search] query {q!r} failed: {exc}", flush=True)
+    with STATE_LOCK:
+        if gen != SEARCH["gen"]:
+            return
+        SEARCH["results"] = results
+        SEARCH["cursor"] = 0
+        SEARCH["busy"] = False
+    broadcast()
+
+
+def _focus_detail(target: dict) -> None:
+    """Enter the detail view for a search result. Caller must hold STATE_LOCK."""
+    STATE["view"] = "detail"
+    SEARCH["busy"] = True
+    SEARCH["detail"] = {  # lightweight placeholder until the full detail lands
+        "loading": True, "id": target["id"], "title": target["title"],
+        "format": target.get("format", ""), "episodes": target.get("episodes"),
+        "year": target.get("year"), "score": target.get("score"),
+        "cover": target["cover"], "color": target["color"],
+        "banner": target["banner"], "listStatus": target.get("listStatus"),
+        "genres": [], "studio": "", "description": "", "entryId": None,
+    }
+
+
+def load_detail(media_id: int) -> None:
+    """Fetch the richer detail for a focused result and broadcast it."""
+    detail = None
+    try:
+        data = _public_post(DETAIL_QUERY, {"id": int(media_id)})
+        detail = build_detail(data.get("Media") or {})
+    except Exception as exc:  # noqa: BLE001
+        print(f"[search] detail {media_id} failed: {exc}", flush=True)
+    with STATE_LOCK:
+        cur = SEARCH["detail"]
+        if STATE["view"] == "detail" and cur and cur.get("id") == int(media_id):
+            if detail:
+                SEARCH["detail"] = detail
+            else:
+                cur["loading"] = False  # keep the lightweight placeholder
+            SEARCH["busy"] = False
+    broadcast()
+
+
+def apply_status(media_id: int, to: str, entry_id) -> None:
+    """Write the chosen list status back to AniList for the focused anime."""
+    new_status = None
+    new_entry_id = entry_id
+    try:
+        if to == "REMOVE":
+            if entry_id:
+                _anilist_post(
+                    "mutation($id:Int){ DeleteMediaListEntry(id:$id){ deleted } }",
+                    {"id": int(entry_id)})
+            new_entry_id = None
+        else:
+            payload = _anilist_post(
+                "mutation($mediaId:Int,$status:MediaListStatus){"
+                " SaveMediaListEntry(mediaId:$mediaId, status:$status){ id status } }",
+                {"mediaId": int(media_id), "status": to})
+            saved = (payload.get("data") or {}).get("SaveMediaListEntry") or {}
+            new_status = saved.get("status") or to
+            new_entry_id = saved.get("id") or entry_id
+        print(f"[status] set {media_id} -> {to}", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[status] {media_id} -> {to} failed: {exc}", flush=True)
+        with STATE_LOCK:
+            SEARCH["busy"] = False
+        broadcast()
+        return
+    with STATE_LOCK:
+        d = SEARCH["detail"]
+        if d and d.get("id") == int(media_id):
+            d["listStatus"] = new_status
+            d["entryId"] = new_entry_id
+            d["justSet"] = to  # lets the UIs play a confirmation flourish
+        for r in SEARCH["results"]:
+            if r.get("id") == int(media_id):
+                r["listStatus"] = new_status
+        SEARCH["busy"] = False
+    broadcast()
 
 
 # --------------------------------------------------------------------------- #
@@ -1155,6 +1405,7 @@ def submit_rating() -> None:
 def broadcast() -> None:
     history = history_snapshot()  # read outside STATE_LOCK (own lock)
     with STATE_LOCK:
+        in_search = STATE["list"] == "search" or STATE["view"] in ("search", "detail")
         snapshot = {
             "view": STATE["view"],
             "list": STATE["list"],
@@ -1165,6 +1416,15 @@ def broadcast() -> None:
             "rating": STATE["rating"],
             "message": STATE["message"],
             "history": history,
+            "search": {
+                "query": SEARCH["query"],
+                "results": SEARCH["results"],
+                "cursor": SEARCH["cursor"],
+                "detail": SEARCH["detail"],
+                "busy": SEARCH["busy"],
+                "statuses": SEARCH_STATUSES,
+                "canWrite": bool(anilist_token()),
+            } if in_search else None,
         }
     socketio.emit("state", snapshot)
 
@@ -1251,6 +1511,7 @@ def open_ui():
     with STATE_LOCK:
         STATE["list"] = "watching"  # a clean Open always starts on the watching list
         STATE.update(view="loading", message="Loading your AniList…")
+        SEARCH.update(query="", results=[], cursor=0, detail=None, busy=False)
     broadcast()
     socketio.start_background_task(refresh_list)
     ensure_kiosk()
@@ -1263,6 +1524,18 @@ def switch_list():
     """Switch which AniList list the grid shows. ?to=watching|planned selects an
     explicit list; with no/unknown target it toggles between the two."""
     target = (request.args.get("to") or "").strip().lower()
+
+    # "Search new" is its own mode: no list fetch, just an empty search box to type into.
+    if target == "search":
+        with STATE_LOCK:
+            STATE["list"] = "search"
+            STATE["view"] = "search"
+            STATE["message"] = ""
+            SEARCH.update(query="", results=[], cursor=0, detail=None, busy=False)
+            SEARCH["gen"] += 1  # invalidate any in-flight query from a previous visit
+        broadcast()
+        return jsonify(ok=True, list="search")
+
     with STATE_LOCK:
         if target not in LIST_STATUS:
             target = "planned" if STATE["list"] == "watching" else "watching"
@@ -1289,6 +1562,31 @@ def back():
         else:
             ensure_kiosk()
         return jsonify(ok=True, action="rate")
+
+    # Search has its own back stack: detail -> results list -> exit to watching grid.
+    with STATE_LOCK:
+        view = STATE["view"]
+    if view == "detail":
+        with STATE_LOCK:
+            STATE["view"] = "search"
+            SEARCH["detail"] = None
+        broadcast()
+        if pid:
+            focus_kiosk(pid)
+        return jsonify(ok=True, action="search")
+    if view == "search":
+        with STATE_LOCK:
+            STATE["list"] = "watching"
+            STATE.update(view="loading", message="Loading…")
+            SEARCH.update(query="", results=[], cursor=0, detail=None, busy=False)
+        broadcast()
+        socketio.start_background_task(refresh_list)
+        if pid:
+            focus_kiosk(pid)
+        else:
+            ensure_kiosk()
+        return jsonify(ok=True, action="exit-search")
+
     with STATE_LOCK:
         STATE["sequel"] = None
         STATE["playing"] = None
@@ -1320,10 +1618,17 @@ def right():
 
 def _move(delta: int) -> None:
     with STATE_LOCK:
-        if STATE["view"] != "grid" or not STATE["items"]:
+        view = STATE["view"]
+        if view == "search":
+            n = len(SEARCH["results"])
+            if not n:
+                return
+            SEARCH["cursor"] = (SEARCH["cursor"] + delta) % n
+        elif view == "grid" and STATE["items"]:
+            n = len(STATE["items"])
+            STATE["cursor"] = (STATE["cursor"] + delta) % n
+        else:
             return
-        n = len(STATE["items"])
-        STATE["cursor"] = (STATE["cursor"] + delta) % n
     broadcast()
 
 
@@ -1340,6 +1645,19 @@ def select():
     if view == "rating":
         socketio.start_background_task(submit_rating)
         return jsonify(ok=True, action="rate")
+
+    # In search: Select focuses the highlighted result and loads its detail page.
+    if view == "search":
+        with STATE_LOCK:
+            results = SEARCH["results"]
+            cur = SEARCH["cursor"]
+            target = results[cur] if 0 <= cur < len(results) else None
+            if not target:
+                return jsonify(ok=False, reason="no result")
+            _focus_detail(target)
+        broadcast()
+        socketio.start_background_task(load_detail, target["id"])
+        return jsonify(ok=True, action="detail")
 
     # On the sequel card: a second Select plays the sequel from episode 1.
     if view == "sequel" and sequel:
@@ -1426,6 +1744,91 @@ def forget_play():
     forget_resume(media_id, episode)
     broadcast()
     return jsonify(ok=True, action="forget")
+
+
+# --------------------------------------------------------------------------- #
+# "Search new" endpoints — the query is edited one character at a time so the
+# phone keyboard and the kiosk's physical keyboard both drive the same text.
+# --------------------------------------------------------------------------- #
+@app.route("/search/key", methods=["POST"])
+@require_auth
+def search_key():
+    """Append one typed character to the shared search query."""
+    c = (request.args.get("c") or "")[:1]
+    if not c or not c.isprintable():
+        return jsonify(ok=False, reason="bad char")
+    with STATE_LOCK:
+        STATE["view"] = "search"
+        STATE["list"] = "search"
+        SEARCH["detail"] = None
+        SEARCH["query"] = (SEARCH["query"] + c)[:80]
+    _kick_search()
+    return jsonify(ok=True)
+
+
+@app.route("/search/back", methods=["POST"])
+@require_auth
+def search_backspace():
+    """Delete the last character of the shared search query."""
+    with STATE_LOCK:
+        STATE["view"] = "search"
+        SEARCH["detail"] = None
+        SEARCH["query"] = SEARCH["query"][:-1]
+    _kick_search()
+    return jsonify(ok=True)
+
+
+@app.route("/search/clear", methods=["POST"])
+@require_auth
+def search_clear():
+    """Wipe the search query and results."""
+    with STATE_LOCK:
+        STATE["view"] = "search"
+        SEARCH.update(query="", results=[], cursor=0, detail=None)
+    _kick_search()
+    return jsonify(ok=True)
+
+
+@app.route("/search/pick", methods=["POST"])
+@require_auth
+def search_pick():
+    """Focus a result by index (the phone taps a result card) and open its detail."""
+    try:
+        i = int(request.args.get("i") or -1)
+    except ValueError:
+        return jsonify(ok=False, reason="bad index")
+    with STATE_LOCK:
+        results = SEARCH["results"]
+        if not (0 <= i < len(results)):
+            return jsonify(ok=False, reason="out of range")
+        SEARCH["cursor"] = i
+        target = results[i]
+        _focus_detail(target)
+    broadcast()
+    socketio.start_background_task(load_detail, target["id"])
+    return jsonify(ok=True, action="detail")
+
+
+@app.route("/status", methods=["POST"])
+@require_auth
+def set_status():
+    """Set (or remove) the AniList list status of the focused-detail anime."""
+    if not anilist_token():
+        return jsonify(ok=False, reason="no token")
+    to = (request.args.get("to") or "").strip().upper()
+    valid = {s for s, _ in SEARCH_STATUSES} | {"REMOVE"}
+    if to not in valid:
+        return jsonify(ok=False, reason="bad status")
+    with STATE_LOCK:
+        detail = SEARCH["detail"]
+        media_id = detail.get("id") if detail else None
+        entry_id = detail.get("entryId") if detail else None
+        if not media_id:
+            return jsonify(ok=False, reason="no anime")
+        SEARCH["busy"] = True
+    broadcast()
+    socketio.start_background_task(apply_status, int(media_id), to, entry_id)
+    return jsonify(ok=True, action="status")
 
 
 @app.route("/pause", methods=["POST"])

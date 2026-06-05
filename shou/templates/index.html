@@ -78,6 +78,43 @@
     </div>
   </section>
 
+  <!-- Search new — vertical AniList results, typed from the phone or kiosk keyboard -->
+  <section id="search-view" class="search-view hidden">
+    <div class="search-head">
+      <span class="search-jp">検索</span>
+      <div class="search-box">
+        <span id="search-query" class="search-query"></span>
+        <span class="search-caret" aria-hidden="true"></span>
+        <span id="search-ph" class="search-ph">Type to search AniList…</span>
+      </div>
+      <span id="search-status" class="search-status"></span>
+    </div>
+    <div id="search-list" class="search-list"></div>
+    <div id="search-empty" class="search-empty">
+      <span class="search-empty-glyph">探</span>
+      <span class="search-empty-text">Start typing — on your phone or this keyboard — to explore all of AniList</span>
+    </div>
+  </section>
+
+  <!-- Search detail — cinematic focus on one anime; status is set from the phone -->
+  <section id="detail-view" class="overlay hidden">
+    <div id="detail-bg" class="detail-bg"></div>
+    <div class="detail-scrim"></div>
+    <div class="detail-stage">
+      <div class="detail-cover-wrap">
+        <img id="detail-cover" class="detail-cover" alt="" />
+      </div>
+      <div class="detail-body">
+        <div id="detail-status" class="detail-status-pill hidden"></div>
+        <h1 id="detail-title" class="detail-title">—</h1>
+        <div id="detail-meta" class="detail-meta"></div>
+        <div id="detail-genres" class="detail-genres"></div>
+        <p id="detail-desc" class="detail-desc"></p>
+        <div class="detail-hint">Set a status on your phone&nbsp; · &nbsp;<b>⤺</b>&nbsp; back</div>
+      </div>
+    </div>
+  </section>
+
   <!-- Series complete — cinematic rating (driven from the phone: ◀ ▶ adjust, ● confirm) -->
   <section id="rating-view" class="overlay hidden">
     <div id="rating-bg" class="rating-bg"></div>

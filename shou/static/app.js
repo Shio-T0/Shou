@@ -31,12 +31,36 @@ const el = {
   ratingStars: document.getElementById("rating-stars"),
   ratingScoreNum: document.getElementById("rating-score-num"),
   ratingScoreScale: document.getElementById("rating-score-scale"),
+  searchView: document.getElementById("search-view"),
+  searchQuery: document.getElementById("search-query"),
+  searchPh: document.getElementById("search-ph"),
+  searchStatus: document.getElementById("search-status"),
+  searchList: document.getElementById("search-list"),
+  searchEmpty: document.getElementById("search-empty"),
+  detailView: document.getElementById("detail-view"),
+  detailBg: document.getElementById("detail-bg"),
+  detailCover: document.getElementById("detail-cover"),
+  detailStatus: document.getElementById("detail-status"),
+  detailTitle: document.getElementById("detail-title"),
+  detailMeta: document.getElementById("detail-meta"),
+  detailGenres: document.getElementById("detail-genres"),
+  detailDesc: document.getElementById("detail-desc"),
+};
+
+// Human labels + accent class for each AniList list status.
+const STATUS_LABEL = {
+  CURRENT: "Watching", PLANNING: "Planned", COMPLETED: "Completed",
+  PAUSED: "Paused", DROPPED: "Dropped", REPEATING: "Rewatching",
+};
+const STATUS_CLASS = {
+  CURRENT: "st-current", PLANNING: "st-planning", COMPLETED: "st-completed",
+  PAUSED: "st-paused", DROPPED: "st-dropped", REPEATING: "st-current",
 };
 
 // How many continue-watching chips to show on the kiosk's left panel.
 const RESUME_SHELF_MAX = 4;
 
-const LIST_LABEL = { watching: "WATCHING", planned: "PLAN TO WATCH" };
+const LIST_LABEL = { watching: "WATCHING", planned: "PLAN TO WATCH", search: "SEARCH NEW" };
 
 let cardEls = [];
 let renderedSig = "";
@@ -205,8 +229,128 @@ function showOnly(view) {
   el.sequelView.classList.toggle("hidden", view !== "sequel");
   el.playingView.classList.toggle("hidden", view !== "playing");
   el.ratingView.classList.toggle("hidden", view !== "rating");
+  el.searchView.classList.toggle("hidden", view !== "search");
+  el.detailView.classList.toggle("hidden", view !== "detail");
   const isStatus = view === "loading" || view === "empty" || view === "error";
   el.statusView.classList.toggle("hidden", !isStatus);
+}
+
+// --- Search new -------------------------------------------------------------
+function metaLine(d) {
+  const bits = [];
+  if (d.format) bits.push(d.format);
+  if (d.year) bits.push(d.year);
+  if (d.episodes) bits.push(d.episodes + (d.episodes === 1 ? " ep" : " eps"));
+  if (d.duration) bits.push(d.duration + "m");
+  if (d.studio) bits.push(d.studio);
+  if (d.score) bits.push("★ " + d.score);
+  return bits.join("  ·  ");
+}
+
+let searchResultsSig = "";
+let searchCursor = -1;
+function renderSearch(search) {
+  const q = (search && search.query) || "";
+  el.searchQuery.textContent = q;
+  el.searchPh.classList.toggle("hidden", q.length > 0);
+
+  const results = (search && search.results) || [];
+  el.searchStatus.textContent = search && search.busy
+    ? "searching…"
+    : results.length
+    ? results.length + " result" + (results.length === 1 ? "" : "s")
+    : "";
+  el.searchEmpty.classList.toggle("hidden", q.length > 0 || (search && search.busy));
+
+  const sig = results.map((r) => r.id + ":" + (r.listStatus || "")).join(",");
+  if (sig !== searchResultsSig) {
+    searchResultsSig = sig;
+    searchCursor = -1;
+    el.searchList.innerHTML = "";
+    results.forEach((r, i) => {
+      const row = document.createElement("div");
+      row.className = "srow intro";
+      row.style.animationDelay = Math.min(i, 12) * 38 + "ms";
+      row.addEventListener("animationend", () => row.classList.remove("intro"), { once: true });
+      const coverStyle = r.cover
+        ? `background-image:url(${r.cover})`
+        : `background-color:${r.color || "#1f2233"}`;
+      const sub = metaLine(r);
+      const st = r.listStatus;
+      const pill = st
+        ? `<span class="srow-status ${STATUS_CLASS[st] || ""}">${STATUS_LABEL[st] || st}</span>`
+        : `<span class="srow-status st-none">Not in list</span>`;
+      row.innerHTML = `
+        <span class="srow-rail" aria-hidden="true"></span>
+        <span class="srow-cover" style="${coverStyle}"></span>
+        <span class="srow-main">
+          <span class="srow-title">${escapeHtml(r.title)}</span>
+          <span class="srow-sub">${escapeHtml(sub)}</span>
+        </span>
+        ${pill}`;
+      el.searchList.appendChild(row);
+    });
+  }
+
+  const cursor = (search && search.cursor) || 0;
+  if (cursor !== searchCursor) {
+    const rows = el.searchList.children;
+    if (searchCursor >= 0 && rows[searchCursor]) rows[searchCursor].classList.remove("active");
+    if (rows[cursor]) {
+      rows[cursor].classList.add("active");
+      rows[cursor].scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    searchCursor = cursor;
+  }
+}
+
+let detailId = "";
+let detailJustSet = "";
+function renderDetail(d) {
+  if (!d) return;
+  const fresh = String(d.id) !== detailId;
+  if (fresh) {
+    detailId = String(d.id);
+    detailJustSet = "";
+    el.detailView.classList.remove("is-fresh");
+    void el.detailView.offsetWidth; // restart the entrance animation
+    el.detailView.classList.add("is-fresh");
+    el.detailBg.style.backgroundColor = d.color || "#17161c";
+    el.detailBg.style.backgroundImage = d.banner
+      ? `url(${d.banner})`
+      : d.cover
+      ? `url(${d.cover})`
+      : "none";
+    el.detailCover.src = d.cover || "";
+    el.detailCover.style.opacity = d.cover ? "1" : "0";
+    el.detailTitle.textContent = d.title || "—";
+  }
+
+  el.detailMeta.textContent = d.loading ? "Loading…" : metaLine(d);
+
+  el.detailGenres.innerHTML = "";
+  (d.genres || []).forEach((g) => {
+    const chip = document.createElement("span");
+    chip.className = "genre-chip";
+    chip.textContent = g;
+    el.detailGenres.appendChild(chip);
+  });
+
+  el.detailDesc.textContent = d.description || "";
+
+  const st = d.listStatus;
+  el.detailStatus.classList.toggle("hidden", false);
+  el.detailStatus.className =
+    "detail-status-pill " + (st ? STATUS_CLASS[st] || "" : "st-none");
+  el.detailStatus.textContent = st ? STATUS_LABEL[st] || st : "Not in your lists";
+
+  // Confirmation flourish whenever a status was just written.
+  if (d.justSet && d.justSet !== detailJustSet) {
+    detailJustSet = d.justSet;
+    el.detailStatus.classList.remove("flash");
+    void el.detailStatus.offsetWidth;
+    el.detailStatus.classList.add("flash");
+  }
 }
 
 // --- Series-complete rating -------------------------------------------------
@@ -270,16 +414,26 @@ function renderRating(r) {
 }
 
 let currentList = "watching";
+let currentView = "loading";
+let searchStatuses = [];
 
 socket.on("state", (s) => {
   showOnly(s.view);
+  currentView = s.view;
   renderResume(s.history, s.view);
+  if (s.search && s.search.statuses) searchStatuses = s.search.statuses;
   if (s.list) {
     currentList = s.list;
     el.listlabel.textContent = LIST_LABEL[s.list] || s.list;
   }
 
-  if (s.view === "grid") {
+  if (s.view === "search") {
+    renderSearch(s.search);
+    el.count.textContent = "";
+  } else if (s.view === "detail") {
+    renderDetail(s.search && s.search.detail);
+    el.count.textContent = "";
+  } else if (s.view === "grid") {
     const sig = s.items.map((i) => i.id).join(",");
     if (sig !== renderedSig) {
       buildCards(s.items);
@@ -303,5 +457,38 @@ socket.on("state", (s) => {
       s.message || (s.view === "empty" ? "Nothing to watch." : "Loading…");
     setBackdrop("", "", "#0e0d11");
     el.count.textContent = "";
+  }
+});
+
+// --- Physical keyboard (search mode) ----------------------------------------
+// The kiosk normally takes no input, but in "search new" the computer's keyboard
+// drives the same shared query the phone keyboard does — the server is the single
+// source of truth, so both screens stay in sync.
+function api(path) {
+  fetch(path, { method: "POST" }).catch(() => {});
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  if (currentView === "search") {
+    if (e.key === "Backspace") { e.preventDefault(); api("/search/back"); }
+    else if (e.key === "Enter") { e.preventDefault(); api("/select"); }
+    else if (e.key === "Escape") { e.preventDefault(); api("/back"); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); api("/left"); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); api("/right"); }
+    else if (e.key.length === 1 && e.key >= " ") {
+      e.preventDefault();
+      api("/search/key?c=" + encodeURIComponent(e.key));
+    }
+  } else if (currentView === "detail") {
+    if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); api("/back"); }
+    else if (/^[1-5]$/.test(e.key) && searchStatuses[+e.key - 1]) {
+      e.preventDefault();
+      api("/status?to=" + searchStatuses[+e.key - 1][0]);
+    } else if (e.key === "0") {
+      e.preventDefault();
+      api("/status?to=REMOVE");
+    }
   }
 });
