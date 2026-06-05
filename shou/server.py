@@ -16,6 +16,7 @@ import hmac
 import json
 import math
 import os
+import difflib
 import re
 import shlex
 import secrets
@@ -163,6 +164,21 @@ LAUNCH_TIMEOUT = 30.0
 # animekai is a genuinely different source; allanime is the same site ani-cli uses but
 # via a different client + smarter result/episode matching (fixes wrong-entry failures).
 FALLBACK_PROVIDERS = ["animekai", "allanime"]
+
+# allanime API ani-cli searches (replicated here so we can pre-pick the right result
+# instead of blindly taking ani-cli's first hit). Same endpoint/agent/query ani-cli uses.
+ALLANIME_API = "https://api.allanime.day/api"
+ALLANIME_REFERER = "https://allmanga.to"
+ALLANIME_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) "
+                  "Gecko/20100101 Firefox/121.0")
+ALLANIME_SEARCH_GQL = (
+    "query( $search: SearchInput $limit: Int $page: Int "
+    "$translationType: VaildTranslationTypeEnumType "
+    "$countryOrigin: VaildCountryOriginEnumType ) { shows( search: $search "
+    "limit: $limit page: $page translationType: $translationType "
+    "countryOrigin: $countryOrigin ) { edges { _id name availableEpisodes "
+    "__typename } }}"
+)
 
 # Continue-watching history: episodes left mid-way get a resume point (episode +
 # playback position) persisted here, so the phone can pick one and resume on the PC.
@@ -917,6 +933,87 @@ def mpv_ipc_command(command: list) -> None:
         pass
 
 
+def _norm_title(s: str) -> str:
+    """Lowercase + strip punctuation/space so 'Fate/Zero' ~ 'fate zero' for comparison."""
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+
+def anicli_result_index(search_title: str, total: int | None) -> int | None:
+    """Decide which of ani-cli's search results to play (1-based, for `ani-cli -S N`).
+
+    Replicates ani-cli's allanime search so the ordering — and therefore the index we
+    return — matches what `-S N` will pick. The result list ani-cli builds keeps only
+    shows that have at least one sub episode, in the API's edge order.
+
+    Selection: prefer a result whose name is (near-)identical to the search title — that
+    reliably separates "Fate/Zero" from "Fate/Zero: Onegai...". Among such strong matches,
+    AniList's episode count (`total`) breaks ties: an exact episode-count match wins, else
+    the closest count, else the best name match. allanime episode counts drift by a few
+    (recaps/specials), so they're a tie-breaker, not the primary signal.
+
+    If no result is a strong title match we return None and let the caller keep ani-cli's
+    default (-S 1): that first hit is usually the canonical show, whereas a loose title
+    match mis-picks badly (allanime lists One Piece itself under the name "1P").
+    """
+    query = search_title.replace(" ", "+")
+    payload = {
+        "variables": {
+            "search": {"allowAdult": False, "allowUnknown": False, "query": query},
+            "limit": 40, "page": 1, "translationType": "sub", "countryOrigin": "ALL",
+        },
+        "query": ALLANIME_SEARCH_GQL,
+    }
+    try:
+        resp = requests.post(
+            ALLANIME_API, json=payload,
+            headers={"Referer": ALLANIME_REFERER, "User-Agent": ALLANIME_AGENT},
+            timeout=12,
+        )
+        resp.raise_for_status()
+        edges = resp.json()["data"]["shows"]["edges"]
+    except Exception as exc:  # noqa: BLE001 - any failure -> let ani-cli pick result 1
+        print(f"[pick] allanime search failed for {search_title!r}: {exc}", flush=True)
+        return None
+
+    # Mirror ani-cli's filter: only shows with >=1 sub episode survive, in edge order.
+    candidates = []  # (1-based index, name, sub_episode_count)
+    for edge in edges:
+        sub = ((edge.get("availableEpisodes") or {}).get("sub")) or 0
+        if sub >= 1:
+            candidates.append((len(candidates) + 1, edge.get("name") or "", sub))
+    if not candidates:
+        return None
+
+    target = _norm_title(search_title)
+    # Keep only near-identical titles; below this we don't trust the match (and the
+    # canonical show sometimes has an odd name, where ani-cli's first result is better).
+    STRONG = 0.85
+    strong = [
+        (idx, name, sub,
+         difflib.SequenceMatcher(None, target, _norm_title(name)).ratio())
+        for idx, name, sub in candidates
+    ]
+    strong = [c for c in strong if c[3] >= STRONG]
+    if not strong:
+        return None  # no confident title match -> let ani-cli take result 1
+
+    # Rank strong matches: exact episode count first, then closest count, then best name.
+    def rank(c):
+        idx, name, sub, ratio = c
+        if total:
+            exact = 1 if sub == total else 0
+            closeness = -abs(sub - total)
+        else:
+            exact, closeness = 0, 0
+        return (exact, closeness, ratio, -idx)
+
+    idx, name, sub, ratio = max(strong, key=rank)
+    print(f"[pick] {search_title!r}: -> #{idx} {name!r} "
+          f"(sub={sub}, total={total}, title={ratio:.2f}, "
+          f"{len(strong)} strong of {len(candidates)})", flush=True)
+    return idx
+
+
 def play(search_title: str, episode: int, display_title: str | None = None,
          media_id: int | None = None, total: int | None = None,
          cover: str = "", color: str = "", banner: str = "",
@@ -937,15 +1034,18 @@ def play(search_title: str, episode: int, display_title: str | None = None,
     kill_players()
     time.sleep(0.4)
     quality = CONFIG.get("QUALITY") or "1080p"
-    # -S 1 picks the first search result non-interactively. ani-cli selects the anime
+    # -S N picks the Nth search result non-interactively. ani-cli selects the anime
     # with fzf, which reads /dev/tty; running detached (no terminal) that aborts with
     # "inappropriate ioctl for device" on any multi-result search (e.g. ONE PIECE, which
     # returns the series plus dozens of films/specials), so nothing plays. Piping a "1"
     # to stdin does NOT help — the picker ignores stdin. --select-nth sets the index
     # directly and never invokes fzf. (Single-result searches skipped fzf already, which
     # is why some titles played while others silently failed.)
+    # We pre-pick N by replaying ani-cli's own search and matching episode count + title,
+    # so "Fate/Zero" beats "Fate/Zero: Onegai..." instead of grabbing whatever's first.
+    nth = anicli_result_index(search_title, total) or 1
     cmd = (
-        f"ani-cli -S 1 -q {shlex.quote(quality)} "
+        f"ani-cli -S {nth} -q {shlex.quote(quality)} "
         f"-e {episode} {shlex.quote(search_title)}"
     )
     print(f"[play] ani-cli search={search_title!r} episode={episode} "
