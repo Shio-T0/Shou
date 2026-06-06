@@ -61,7 +61,7 @@ body {
   background: radial-gradient(50% 50% at 50% 50%, var(--acc-soft) 0%, transparent 70%);
   filter: blur(10px);
 }
-body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
+body > *:not(.grain):not(.aura):not(.remotes) { position: relative; z-index: 1; }
 
 /* ---- Entrance ---- */
 @keyframes rise {
