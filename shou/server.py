@@ -139,13 +139,40 @@ SEARCH = {
 }
 SEARCH_MAX = 14            # results fetched per page (appended as you scroll)
 SEARCH_LOAD_AHEAD = 5      # start loading the next page this many rows from the end
-# AniList's non-adult genre vocabulary, in the order the phone's filter grid shows them.
-# Selecting several narrows results (AniList's genre_in is an AND filter).
+# The phone's filter grid is AniList's 18 non-adult genres (broad buckets) followed by a
+# curated set of its most recognizable *tags* (finer themes), ordered famous -> niche.
+# Genres filter via genre_in, tags via tag_in; both are AND, so picking several narrows.
 GENRES = [
-    "Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy",
-    "Horror", "Mahou Shoujo", "Mecha", "Music", "Mystery", "Psychological",
-    "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller",
+    "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Romance",
+    "Sci-Fi", "Slice of Life", "Supernatural", "Mystery", "Horror",
+    "Psychological", "Sports", "Mecha", "Music", "Ecchi", "Thriller",
+    "Mahou Shoujo",
 ]
+TAGS = [
+    "Shounen", "Seinen", "Shoujo", "Josei",
+    "Isekai", "Super Power", "Magic", "Mythology", "Superhero", "Cultivation",
+    "Wuxia", "Henshin", "Kaiju",
+    "School", "School Club", "College",
+    "Martial Arts", "Swordplay", "Guns", "Espionage", "Battle Royale",
+    "Military", "Police", "Mafia", "Yakuza", "Assassins", "Gangs", "Cult",
+    "Historical", "Medieval", "Dystopian",
+    "Space", "Space Opera", "Cyberpunk", "Steampunk", "Post-Apocalyptic",
+    "Virtual World", "Time Loop",
+    "Survival", "Death Game", "Revenge", "Gore", "War", "Crime", "Politics",
+    "Coming of Age", "Found Family", "Memory Manipulation",
+    "Demons", "Vampire", "Witch", "Ninja", "Samurai", "Gods", "Dragons",
+    "Robots", "Aliens", "Zombie", "Werewolf", "Elf", "Maids", "Idol",
+    "Detective", "Pirates", "Tsundere", "Yandere",
+    "Love Triangle", "Female Harem", "Yuri", "Boys' Love",
+    "Iyashikei", "Cute Girls Doing Cute Things", "Cute Boys Doing Cute Things",
+    "Super Robot", "Real Robot", "Tokusatsu",
+    "Video Games", "E-Sports", "Band", "Food", "Fashion",
+    "Parody", "Slapstick", "Satire",
+]
+GENRES_SET = set(GENRES)
+TAGS_SET = set(TAGS)
+FILTERS = GENRES + TAGS          # full ordered list the phone offers
+FILTERS_SET = GENRES_SET | TAGS_SET
 SEARCH_DEBOUNCE = 0.28     # secs after the last keystroke before querying AniList
 # AniList MediaListStatus values the phone can set, in display order. "REMOVE" deletes.
 SEARCH_STATUSES = [
@@ -419,10 +446,10 @@ def build_card(entry: dict) -> dict:
 # "Search new" — query all of AniList, focus a result, set its list status
 # --------------------------------------------------------------------------- #
 SEARCH_QUERY = """
-query ($search: String, $perPage: Int, $page: Int, $genres: [String], $sort: [MediaSort]) {
+query ($search: String, $perPage: Int, $page: Int, $genres: [String], $tags: [String], $sort: [MediaSort]) {
   Page(page: $page, perPage: $perPage) {
     pageInfo { hasNextPage }
-    media(search: $search, genre_in: $genres, type: ANIME, sort: $sort, isAdult: false) {
+    media(search: $search, genre_in: $genres, tag_in: $tags, type: ANIME, sort: $sort, isAdult: false) {
       id
       title { romaji english }
       format
@@ -553,8 +580,13 @@ def _search_variables(query: str, genres: list, page: int) -> dict:
         variables["sort"] = ["SEARCH_MATCH"]
     else:
         variables["sort"] = ["SCORE_DESC"]
-    if genres:
-        variables["genres"] = genres
+    # `genres` here is the active filter set — split into AniList genres vs tags.
+    gs = [g for g in genres if g in GENRES_SET]
+    ts = [g for g in genres if g in TAGS_SET]
+    if gs:
+        variables["genres"] = gs
+    if ts:
+        variables["tags"] = ts
     return variables
 
 
@@ -1626,7 +1658,7 @@ def broadcast() -> None:
             "search": {
                 "query": SEARCH["query"],
                 "genres": SEARCH["genres"],
-                "allGenres": GENRES,
+                "allGenres": FILTERS,
                 "results": SEARCH["results"],
                 "cursor": SEARCH["cursor"],
                 "hasMore": SEARCH["hasMore"],
@@ -1984,8 +2016,8 @@ def search_clear():
 def search_genre():
     """Toggle one genre filter on/off, then re-run the search/browse."""
     g = (request.args.get("g") or "").strip()
-    if g not in GENRES:
-        return jsonify(ok=False, reason="unknown genre")
+    if g not in FILTERS_SET:
+        return jsonify(ok=False, reason="unknown filter")
     with STATE_LOCK:
         STATE["view"] = "search"
         STATE["list"] = "search"
