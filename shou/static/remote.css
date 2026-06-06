@@ -707,6 +707,9 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
 }
 .sp-genres::-webkit-scrollbar { display: none; }
 .gchip {
+  flex: 1 1 auto;            /* grow to share each row's width evenly */
+  white-space: nowrap;
+  text-align: center;
   border: 1px solid var(--line-2);
   background: linear-gradient(170deg, var(--ink-4), var(--ink-3));
   color: var(--paper-dim);
