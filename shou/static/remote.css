@@ -701,9 +701,11 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
 .sp-filters-clear:active { color: var(--acc); }
 .sp-genres {
   display: flex; flex-wrap: wrap; gap: 8px;
-  max-height: 192px; overflow-y: auto;
+  max-height: 46vh; overflow-y: auto;
   scrollbar-width: none;
   padding-bottom: 2px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
 }
 .sp-genres::-webkit-scrollbar { display: none; }
 .gchip {
