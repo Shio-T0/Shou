@@ -689,6 +689,10 @@ html, body {
      have room: overflow-y:auto also clips overflow-x, so a tight box cuts the hovered
      row on the sides (and the first/last row at the top/bottom). */
   padding: 2vh 2vw 2.4vh;
+  /* scrollIntoView({block:"nearest"}) otherwise parks the first/last active row flush
+     against the scrollport edge — clipping the scaled-up row's top/bottom. scroll-padding
+     keeps it inset so the whole row (and a little of its shadow) stays visible. */
+  scroll-padding: 3vh 0;
   scrollbar-width: none;
 }
 .search-list::-webkit-scrollbar { display: none; }
