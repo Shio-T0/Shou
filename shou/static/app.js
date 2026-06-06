@@ -248,9 +248,28 @@ function metaLine(d) {
   return bits.join("  ·  ");
 }
 
-let searchResultsSig = "";
+let searchRows = [];      // [{id, status, el}] currently in the DOM, in order
 let searchCursor = -1;
 let searchGenresSig = "";
+function srowPill(r) {
+  const st = r.listStatus;
+  return st
+    ? `<span class="srow-status ${STATUS_CLASS[st] || ""}">${STATUS_LABEL[st] || st}</span>`
+    : `<span class="srow-status st-none">Not in list</span>`;
+}
+function srowInner(r) {
+  const coverStyle = r.cover
+    ? `background-image:url(${r.cover})`
+    : `background-color:${r.color || "#1f2233"}`;
+  return `
+    <span class="srow-rail" aria-hidden="true"></span>
+    <span class="srow-cover" style="${coverStyle}"></span>
+    <span class="srow-main">
+      <span class="srow-title">${escapeHtml(r.title)}</span>
+      <span class="srow-sub">${escapeHtml(metaLine(r))}</span>
+    </span>
+    ${srowPill(r)}`;
+}
 function renderSearch(search) {
   const q = (search && search.query) || "";
   el.searchQuery.textContent = q;
@@ -293,34 +312,34 @@ function renderSearch(search) {
     : "";
   el.searchEmpty.classList.toggle("hidden", busy || results.length > 0);
 
-  const sig = results.map((r) => r.id + ":" + (r.listStatus || "")).join(",");
-  if (sig !== searchResultsSig) {
-    searchResultsSig = sig;
-    searchCursor = -1;
+  // Incremental render: keep existing rows and append newly-loaded ones, so streaming in
+  // more anime never resets scroll position or re-runs the intro animation. Full rebuild
+  // only when the prefix changed (a new query/filter replaced the list).
+  let prefixOk = results.length >= searchRows.length;
+  for (let i = 0; prefixOk && i < searchRows.length; i++) {
+    if (!results[i] || results[i].id !== searchRows[i].id) prefixOk = false;
+  }
+  if (!prefixOk) {
     el.searchList.innerHTML = "";
-    results.forEach((r, i) => {
-      const row = document.createElement("div");
-      row.className = "srow intro";
-      row.style.animationDelay = Math.min(i, 12) * 38 + "ms";
-      row.addEventListener("animationend", () => row.classList.remove("intro"), { once: true });
-      const coverStyle = r.cover
-        ? `background-image:url(${r.cover})`
-        : `background-color:${r.color || "#1f2233"}`;
-      const sub = metaLine(r);
-      const st = r.listStatus;
-      const pill = st
-        ? `<span class="srow-status ${STATUS_CLASS[st] || ""}">${STATUS_LABEL[st] || st}</span>`
-        : `<span class="srow-status st-none">Not in list</span>`;
-      row.innerHTML = `
-        <span class="srow-rail" aria-hidden="true"></span>
-        <span class="srow-cover" style="${coverStyle}"></span>
-        <span class="srow-main">
-          <span class="srow-title">${escapeHtml(r.title)}</span>
-          <span class="srow-sub">${escapeHtml(sub)}</span>
-        </span>
-        ${pill}`;
-      el.searchList.appendChild(row);
-    });
+    searchRows = [];
+    searchCursor = -1;
+  }
+  for (let i = 0; i < searchRows.length; i++) {  // refresh pills that changed in place
+    if (searchRows[i].status !== (results[i].listStatus || null)) {
+      searchRows[i].el.querySelector(".srow-status").outerHTML = srowPill(results[i]);
+      searchRows[i].status = results[i].listStatus || null;
+    }
+  }
+  const base = searchRows.length;
+  for (let i = base; i < results.length; i++) {
+    const r = results[i];
+    const row = document.createElement("div");
+    row.className = "srow intro";
+    row.style.animationDelay = Math.min(i - base, 12) * 38 + "ms";
+    row.addEventListener("animationend", () => row.classList.remove("intro"), { once: true });
+    row.innerHTML = srowInner(r);
+    el.searchList.appendChild(row);
+    searchRows.push({ id: r.id, status: r.listStatus || null, el: row });
   }
 
   const cursor = (search && search.cursor) || 0;

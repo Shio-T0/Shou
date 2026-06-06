@@ -125,8 +125,12 @@ SEARCH = {
     "detail": None,     # focused-anime detail dict (see build_detail) or None
     "busy": False,      # a search / detail / status write is in flight
     "gen": 0,           # debounce generation — only the newest keystroke's query applies
+    "page": 1,          # last AniList page fetched into results
+    "hasMore": False,   # AniList reports a further page (infinite scroll)
+    "loadingMore": False,  # a load-more append is in flight
 }
-SEARCH_MAX = 14            # results kept per query
+SEARCH_MAX = 14            # results fetched per page (appended as you scroll)
+SEARCH_LOAD_AHEAD = 5      # start loading the next page this many rows from the end
 # AniList's non-adult genre vocabulary, in the order the phone's filter grid shows them.
 # Selecting several narrows results (AniList's genre_in is an AND filter).
 GENRES = [
@@ -402,8 +406,9 @@ def build_card(entry: dict) -> dict:
 # "Search new" — query all of AniList, focus a result, set its list status
 # --------------------------------------------------------------------------- #
 SEARCH_QUERY = """
-query ($search: String, $perPage: Int, $genres: [String], $sort: [MediaSort]) {
-  Page(perPage: $perPage) {
+query ($search: String, $perPage: Int, $page: Int, $genres: [String], $sort: [MediaSort]) {
+  Page(page: $page, perPage: $perPage) {
+    pageInfo { hasNextPage }
     media(search: $search, genre_in: $genres, type: ANIME, sort: $sort, isAdult: false) {
       id
       title { romaji english }
@@ -523,39 +528,91 @@ def _kick_search() -> None:
     socketio.start_background_task(run_search, gen, query, genres)
 
 
-def run_search(gen: int, query: str, genres: list) -> None:
-    """Debounced AniList query worker. Only the newest keystroke/filter applies.
+def _search_variables(query: str, genres: list, page: int) -> dict:
+    """Build the AniList query variables for one page of search/browse results.
 
-    With text, sorts by relevance (SEARCH_MATCH). With no text it becomes a browse:
-    the top-rated anime overall, or — when genres are active — the top-rated of those
-    genres. So the results list is never empty just because nothing's been typed."""
-    time.sleep(SEARCH_DEBOUNCE)
-    with STATE_LOCK:
-        if gen != SEARCH["gen"]:
-            return  # superseded by a newer keystroke / filter toggle
+    With text, sorts by relevance (SEARCH_MATCH). With no text it's a browse: the
+    top-rated anime overall (SCORE_DESC), narrowed by any active genres."""
+    variables = {"perPage": SEARCH_MAX, "page": page}
     q = query.strip()
-    variables = {"perPage": SEARCH_MAX}
     if q:
         variables["search"] = q
         variables["sort"] = ["SEARCH_MATCH"]
     else:
-        variables["sort"] = ["SCORE_DESC"]  # browse: best-rated first
+        variables["sort"] = ["SCORE_DESC"]
     if genres:
         variables["genres"] = genres
+    return variables
+
+
+def run_search(gen: int, query: str, genres: list) -> None:
+    """Debounced AniList query worker (page 1). Only the newest keystroke/filter applies.
+
+    Always runs, so the results list is never empty just because nothing's been typed."""
+    time.sleep(SEARCH_DEBOUNCE)
+    with STATE_LOCK:
+        if gen != SEARCH["gen"]:
+            return  # superseded by a newer keystroke / filter toggle
     results = []
+    has_more = False
     try:
-        data = _public_post(SEARCH_QUERY, variables)
-        media = (data.get("Page") or {}).get("media") or []
-        results = [build_result(m) for m in media]
+        data = _public_post(SEARCH_QUERY, _search_variables(query, genres, 1))
+        page = data.get("Page") or {}
+        results = [build_result(m) for m in (page.get("media") or [])]
+        has_more = bool((page.get("pageInfo") or {}).get("hasNextPage"))
     except Exception as exc:  # noqa: BLE001 - search failures shouldn't crash the loop
-        print(f"[search] query {q!r} genres={genres} failed: {exc}", flush=True)
+        print(f"[search] query {query.strip()!r} genres={genres} failed: {exc}", flush=True)
     with STATE_LOCK:
         if gen != SEARCH["gen"]:
             return
         SEARCH["results"] = results
         SEARCH["cursor"] = 0
+        SEARCH["page"] = 1
+        SEARCH["hasMore"] = has_more
+        SEARCH["loadingMore"] = False
         SEARCH["busy"] = False
     broadcast()
+
+
+def load_more(gen: int) -> None:
+    """Append the next AniList page to the current results (infinite scroll)."""
+    with STATE_LOCK:
+        if gen != SEARCH["gen"] or not SEARCH["hasMore"]:
+            SEARCH["loadingMore"] = False
+            return
+        query = SEARCH["query"]
+        genres = list(SEARCH["genres"])
+        next_page = SEARCH["page"] + 1
+    new_results = []
+    has_more = False
+    try:
+        data = _public_post(SEARCH_QUERY, _search_variables(query, genres, next_page))
+        page = data.get("Page") or {}
+        new_results = [build_result(m) for m in (page.get("media") or [])]
+        has_more = bool((page.get("pageInfo") or {}).get("hasNextPage"))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[search] load page {next_page} failed: {exc}", flush=True)
+    with STATE_LOCK:
+        if gen != SEARCH["gen"]:
+            return  # query changed under us; discard this page
+        seen = {r["id"] for r in SEARCH["results"]}
+        SEARCH["results"].extend(r for r in new_results if r["id"] not in seen)
+        SEARCH["page"] = next_page
+        SEARCH["hasMore"] = has_more
+        SEARCH["loadingMore"] = False
+    broadcast()
+
+
+def _kick_more_if_needed() -> bool:
+    """Schedule a load-more page if we're in search, there's more, and none is in flight.
+    Caller must NOT hold STATE_LOCK. Returns True if a load was scheduled."""
+    with STATE_LOCK:
+        if STATE["view"] != "search" or not SEARCH["hasMore"] or SEARCH["loadingMore"]:
+            return False
+        SEARCH["loadingMore"] = True
+        gen = SEARCH["gen"]
+    socketio.start_background_task(load_more, gen)
+    return True
 
 
 def _focus_detail(target: dict) -> None:
@@ -1543,6 +1600,7 @@ def broadcast() -> None:
                 "allGenres": GENRES,
                 "results": SEARCH["results"],
                 "cursor": SEARCH["cursor"],
+                "hasMore": SEARCH["hasMore"],
                 "detail": SEARCH["detail"],
                 "busy": SEARCH["busy"],
                 "statuses": SEARCH_STATUSES,
@@ -1739,19 +1797,24 @@ def right():
 
 
 def _move(delta: int) -> None:
+    near_end = False
     with STATE_LOCK:
         view = STATE["view"]
         if view == "search":
             n = len(SEARCH["results"])
             if not n:
                 return
-            SEARCH["cursor"] = (SEARCH["cursor"] + delta) % n
+            # Clamp (don't wrap) so scrolling down approaches the end and pulls more.
+            SEARCH["cursor"] = max(0, min(SEARCH["cursor"] + delta, n - 1))
+            near_end = SEARCH["cursor"] >= n - SEARCH_LOAD_AHEAD
         elif view == "grid" and STATE["items"]:
             n = len(STATE["items"])
             STATE["cursor"] = (STATE["cursor"] + delta) % n
         else:
             return
     broadcast()
+    if near_end:
+        _kick_more_if_needed()
 
 
 @app.route("/select", methods=["POST"])
@@ -1940,6 +2003,14 @@ def search_genres_clear():
         SEARCH["genres"] = []
     _kick_search()
     return jsonify(ok=True)
+
+
+@app.route("/search/more", methods=["POST"])
+@require_auth
+def search_more():
+    """Append the next page of results, if any (infinite scroll from the phone)."""
+    loading = _kick_more_if_needed()
+    return jsonify(ok=True, loading=loading)
 
 
 @app.route("/search/pick", methods=["POST"])
