@@ -51,13 +51,8 @@ const STATUS_CLASS = {
   PAUSED: "st-paused", DROPPED: "st-dropped", REPEATING: "st-current",
 };
 
-let toastTimer = null;
-function toast(msg) {
-  el.toast.textContent = msg;
-  el.toast.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.toast.classList.remove("show"), 1100);
-}
+// Action popups are disabled — the live mirror + haptics are feedback enough.
+function toast(_msg) {}
 
 // --- Commands ---------------------------------------------------------------
 const LABELS = {
@@ -285,18 +280,29 @@ function buildKeyboard() {
   el.spKeyboard.appendChild(r);
 }
 
-function buildFilters(allGenres) {
-  if (el.spGenres.dataset.built || !allGenres || !allGenres.length) return;
+function buildFilters(genres, tags) {
+  if (el.spGenres.dataset.built || !genres || !genres.length) return;
   el.spGenres.dataset.built = "1";
-  allGenres.forEach((g) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "gchip";
-    chip.dataset.genre = g;
-    chip.textContent = g;
-    chip.addEventListener("click", () => toggleGenre(g));
-    el.spGenres.appendChild(chip);
-  });
+  const section = (label, items) => {
+    const head = document.createElement("div");
+    head.className = "gsec-head";
+    head.textContent = label;
+    el.spGenres.appendChild(head);
+    const sec = document.createElement("div");
+    sec.className = "gsec";
+    items.forEach((g) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "gchip";
+      chip.dataset.genre = g;
+      chip.textContent = g;
+      chip.addEventListener("click", () => toggleGenre(g));
+      sec.appendChild(chip);
+    });
+    el.spGenres.appendChild(sec);
+  };
+  section("Genres", genres);
+  if (tags && tags.length) section("Tags", tags);
 }
 
 let spRows = [];        // [{id, status, el}] currently in the DOM, in order
@@ -330,8 +336,8 @@ function renderSearchPanel(search) {
 
   // Genre filters: build the grid once, then reflect the server's active set.
   const genres = (search && search.genres) || [];
-  buildFilters(search && search.allGenres);
-  for (const chip of el.spGenres.children) {
+  buildFilters(search && search.genreList, search && search.tagList);
+  for (const chip of el.spGenres.querySelectorAll(".gchip")) {
     chip.classList.toggle("active", genres.includes(chip.dataset.genre));
   }
   const fbtn = document.getElementById("kb-filter");

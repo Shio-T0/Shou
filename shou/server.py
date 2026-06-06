@@ -1704,6 +1704,8 @@ def broadcast() -> None:
                 "query": SEARCH["query"],
                 "genres": SEARCH["genres"],
                 "allGenres": FILTERS,
+                "genreList": GENRES,
+                "tagList": TAGS,
                 "results": SEARCH["results"],
                 "cursor": SEARCH["cursor"],
                 "hasMore": SEARCH["hasMore"],
