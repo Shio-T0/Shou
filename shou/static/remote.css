@@ -628,6 +628,7 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
 
 /* On-screen keyboard */
 .sp-keyboard { display: flex; flex-direction: column; gap: 7px; padding-top: 2px; }
+.sp-keyboard.hidden { display: none; }
 .kb-row { display: flex; justify-content: center; gap: 6px; }
 .kb-key {
   flex: 1;
