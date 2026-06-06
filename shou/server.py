@@ -1004,16 +1004,53 @@ def kiosk_pid() -> int | None:
     return pid
 
 
+def _hypr_is_fullscreen(pid: int) -> bool:
+    """True if the Hyprland window for `pid` is already fullscreen."""
+    try:
+        out = subprocess.run(["hyprctl", "clients", "-j"],
+                             capture_output=True, text=True, timeout=3)
+        for c in json.loads(out.stdout or "[]"):
+            if c.get("pid") == pid:
+                fs = c.get("fullscreen")
+                return fs is True or (isinstance(fs, int) and fs >= 2)
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
+def _sway_is_fullscreen(pid: int) -> bool:
+    """True if the Sway window for `pid` is already fullscreen."""
+    try:
+        out = subprocess.run(["swaymsg", "-t", "get_tree"],
+                             capture_output=True, text=True, timeout=3)
+        stack = [json.loads(out.stdout or "{}")]
+        while stack:
+            node = stack.pop()
+            if node.get("pid") == pid and node.get("fullscreen_mode"):
+                return True
+            stack.extend(node.get("nodes") or [])
+            stack.extend(node.get("floating_nodes") or [])
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
 def focus_kiosk(pid: int) -> None:
     """Best-effort raise + fullscreen of the kiosk window. Supports Hyprland and Sway;
     a no-op on other compositors/DEs — the browser was already opened with --kiosk, so
-    it stays fullscreen on its own. This is purely a 'bring it back to front' nicety."""
+    it stays fullscreen on its own. This is purely a 'bring it back to front' nicety.
+
+    The fullscreen toggle is only applied when the window ISN'T already fullscreen —
+    re-dispatching it on an already-fullscreen window would flip it back out (which is
+    what made Back un-fullscreen the kiosk)."""
     if shutil.which("hyprctl"):
         subprocess.run(["hyprctl", "dispatch", "focuswindow", f"pid:{pid}"], check=False)
-        subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "2", "-1"], check=False)
+        if not _hypr_is_fullscreen(pid):
+            subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "2", "-1"], check=False)
     elif shutil.which("swaymsg"):
         subprocess.run(["swaymsg", f"[pid={pid}]", "focus"], check=False)
-        subprocess.run(["swaymsg", "fullscreen", "enable"], check=False)
+        if not _sway_is_fullscreen(pid):
+            subprocess.run(["swaymsg", "fullscreen", "enable"], check=False)
 
 
 # Browser candidates, in preference order. Each entry: (binaries, argv-builder, env).
