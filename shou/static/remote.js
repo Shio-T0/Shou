@@ -17,6 +17,10 @@ const el = {
   title: document.getElementById("mirror-title"),
   episode: document.getElementById("mirror-episode"),
   progress: document.getElementById("mirror-progress"),
+  epProgress: document.getElementById("ep-progress"),
+  epBarFill: document.getElementById("ep-bar-fill"),
+  epCur: document.getElementById("ep-cur"),
+  epDur: document.getElementById("ep-dur"),
   toast: document.getElementById("toast"),
   seg: document.getElementById("listseg"),
   segBtns: Array.from(document.querySelectorAll("#listseg .seg-btn")),
@@ -566,6 +570,8 @@ socket.on("state", (s) => {
   if (detailing) renderStatusPanel(s.search);
   if (searching || detailing) return;  // nothing below applies to these views
 
+  renderEpProgress(s.playing);
+
   setIndex("");
   setProgress(0);
   el.hero.classList.remove("is-caughtup");
@@ -607,6 +613,28 @@ function setIndex(text) {
 }
 function setProgress(pct) {
   if (el.progress) el.progress.style.width = pct + "%";
+}
+
+function fmtTime(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const mm = h ? String(m).padStart(2, "0") : String(m);
+  return (h ? h + ":" : "") + mm + ":" + String(s).padStart(2, "0");
+}
+
+// Live playback bar for the current episode (position/duration come from the
+// server's mpv watcher, ~1/second). Hidden whenever nothing is playing.
+function renderEpProgress(playing) {
+  const dur = playing && playing.duration;
+  const has = !!(dur && dur > 0);
+  el.epProgress.classList.toggle("hidden", !has);
+  if (!has) return;
+  const pos = Math.max(0, Math.min(playing.position || 0, dur));
+  el.epBarFill.style.width = (pos / dur) * 100 + "%";
+  el.epCur.textContent = fmtTime(pos);
+  el.epDur.textContent = fmtTime(dur);
 }
 
 let lastCover = null;
