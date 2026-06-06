@@ -13,7 +13,8 @@ list, shows a cinematic 3D-coverflow **kiosk** (a fullscreen browser window) on 
 serves a touch-first **phone web-remote (PWA)** that mirrors the kiosk live over WebSocket.
 Pick an anime and it auto-plays your next unwatched episode through the `anipy` scrapers →
 `mpv` (fullscreen), or through `ani-cli` if you have it. Everything you do on the phone
-shows up on the TV instantly, and vice-versa.
+shows up on the TV instantly, and vice-versa. The remote is a **PWA**, but there's also an
+optional **native Android app** that keeps your screen awake and finds the PC by itself.
 
 Runs on **most Linux distros** (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, …) and
 any desktop/compositor — it needs only `mpv`, a browser, `curl`, and `uv`. Playback control
@@ -36,13 +37,17 @@ On **Windows**? There's a [`windows` branch](#windows) with its own installer.
 - 🌟 **Series-complete rating** — finish the *final* episode and the kiosk rolls a cinematic
   rating page (animated stars, a 完 hanko stamp, a little chime) that you score from the
   phone. It writes the score back to AniList on your own rating scale.
-- 🔎 **Search New** — search *all* of AniList from the couch using an on-screen keyboard (or
-  the PC's keyboard — they stay in sync), see each result's status, and **set a status**
-  (Watching / Planned / Completed / Paused / Dropped / Remove) without ever alt-tabbing.
+- 🔎 **Search New** — search *all* of AniList from the couch (on-screen keyboard or the PC's
+  — they stay in sync), **filter by genre & tag**, browse a **top-rated** list when nothing's
+  in mind, hop between a show's **seasons**, and **set a status** (Watching / Planned /
+  Completed / Paused / Dropped / Remove) without ever alt-tabbing.
 - 🆙 **Caught up?** — Shou recommends the **sequel** (Select again to start it from episode
   1), or just plays the latest released episode.
 - ✅ **Auto-mark watched** *(optional)* — tick episodes off on AniList as you finish them,
   and flip a series to *Completed* on the last episode.
+- 📱 **Phone app** *(optional)* — the remote is a PWA; there's also a tiny **native Android
+  app** that keeps your screen awake and **auto-discovers the PC on your network**. See
+  [The phone remote](#the-phone-remote-pwa-or-native-app).
 
 The phone remote always **mirrors the kiosk live**, so it confirms every action even when
 you're across the room from the screen.
@@ -55,6 +60,7 @@ you're across the room from the screen.
 - [Requirements](#requirements)
 - [Install — the detailed walkthrough](#install--the-detailed-walkthrough)
 - [First run & connecting your phone](#first-run--connecting-your-phone)
+- [The phone remote: PWA or native app](#the-phone-remote-pwa-or-native-app)
 - [Configuration](#configuration)
 - [Using Shou](#using-shou)
   - [The remote at a glance](#the-remote-at-a-glance)
@@ -194,6 +200,32 @@ Keep that handy for the next section. (It's also saved at the top of
 > required from the phone (the PC itself is exempt) — it's your private key, so don't share
 > the URL.
 
+## The phone remote: PWA or native app
+
+The remote is a **web app** — open `…/remote?k=<token>` in your phone's browser and **Add to
+Home Screen** for a one-tap PWA. That's all most people need.
+
+There's also an optional **native Android app, “Shou Remote”** (source in
+[`android/`](android/)) — a thin full-screen WebView around the *same* remote whose one job
+is to **keep the phone screen awake** the whole time it's open. (Browsers can't reliably do
+that over plain HTTP, so the screen dims mid-episode; the native app uses
+`FLAG_KEEP_SCREEN_ON` instead.) Install it if your screen keeps sleeping on you:
+
+1. **Get the APK.** Download the latest `shou-remote-*.apk` from the
+   [**Releases**](../../releases/latest) page and open it (GrapheneOS/Android installs it
+   directly), **or** add the repo to **[Obtainium](https://github.com/ImranR98/Obtainium)**
+   (`https://github.com/Shio-T0/Shou`) for one-tap auto-updates.
+2. **Point it at the PC.** Open **Settings** and tap **Scan network for Shou** — the server
+   advertises itself over mDNS (`_shou._tcp`), so the app fills in the PC's host + port for
+   you. (No mDNS? Just type the LAN IP and port `4100`.)
+3. **Enter your token** — the `REMOTE_TOKEN` from `~/.config/shou/shou.conf` — and **Save**.
+   The remote loads and the screen stays awake.
+
+> There's also an *Allow self-signed certificate* toggle, for the rare case you serve Shou
+> behind your own TLS cert. On the default plain-HTTP LAN you can ignore it. The native app
+> is just a frame: the web remote is still the single source of truth, so it mirrors the
+> kiosk live exactly like the PWA. Build it yourself from [`android/`](android/README.md).
+
 ## Configuration
 
 `~/.config/shou/shou.conf`:
@@ -289,6 +321,18 @@ phone turns into a **status panel**: tap **Watching / Plan to Watch / Completed 
 Dropped**, or **Remove from lists**. It writes straight to AniList. Grow your backlog from
 the couch — your future self will resent you appropriately.
 
+A few touches make browsing from the couch actually pleasant:
+
+- **Browse without typing** — leave the box empty and Shou shows a **top-rated** list to
+  scroll, so there's always something to look at.
+- **Genre & tag filters** — tap the **filter** key on the phone's keyboard to swap it for a
+  grid of **genres and tags**. Pick a few to narrow things down (they combine as *AND*), with
+  or without a search term; your active filters show on the kiosk.
+- **Infinite scroll** — the list keeps loading more results as you near the end.
+- **Other seasons** — when a result belongs to a franchise, the kiosk detail shows a vertical
+  **season carousel**; use **▲ / ▼** on the phone to move between seasons (each with its own
+  big art + synopsis), then set a status on whichever one you mean.
+
 > Setting status requires AniList write access — see
 > [the next section](#auto-mark-episodes-watched-on-anilist).
 
@@ -339,7 +383,9 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 | `/resume?media_id=…&episode=…` | Resume a Continue-Watching entry |
 | `/forget?media_id=…&episode=…` | Remove a Continue-Watching entry |
 | `/search/key?c=…` · `/search/back` · `/search/clear` | Edit the shared search query |
-| `/search/pick?i=…` | Focus a search result and open its detail |
+| `/search/genre?g=…` · `/search/genres/clear` | Toggle a genre/tag filter · clear all filters |
+| `/search/more` | Load the next page of results (infinite scroll) |
+| `/search/pick?i=…` | Focus a search result and open its detail (▲ / ▼ switch seasons) |
 | `/status?to=CURRENT\|PLANNING\|COMPLETED\|PAUSED\|DROPPED\|REMOVE` | Set the focused anime's list status |
 | `/` | The kiosk page · `/remote?k=…` the phone PWA |
 
