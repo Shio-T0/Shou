@@ -387,6 +387,14 @@ html, body {
 }
 .sequel-hint b, .playing-hint b { color: var(--acc-2); }
 
+/* Inline "back" arrow drawn as SVG (font arrow glyphs render as tofu/odd symbols
+   in the page's Japanese serif). Scales with the surrounding text via 1em. */
+.hint-back {
+  width: 1em; height: 1em;
+  vertical-align: -0.16em;
+  margin-right: 0.1em;
+}
+
 .playing-msg {
   font-family: "Shippori Mincho B1", serif;
   margin-top: 3.4vh;
