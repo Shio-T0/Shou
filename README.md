@@ -20,7 +20,11 @@ over WebSocket. Pick an anime and it auto-plays your next unwatched episode thro
 plays the latest released episode. Optionally it ticks episodes off on AniList as you
 finish them.
 
-Built for **Windows 10/11**. The phone remote works from any phone on the same network.
+You can also **search all of AniList** from the couch and set statuses, all from the phone.
+
+Built for **Windows 10/11**. The phone remote works from any phone on the same network — as
+a browser PWA, or an optional **native Android app** that keeps the screen awake and
+auto-discovers the PC.
 
 ---
 
@@ -38,6 +42,8 @@ Built for **Windows 10/11**. The phone remote works from any phone on the same n
   - [4. Watch something](#4-watch-something)
   - [5. While an episode is playing](#5-while-an-episode-is-playing)
   - [6. Watching vs Plan to Watch](#6-watching-vs-plan-to-watch)
+  - [7. Search New & set status](#7-search-new--set-status)
+  - [8. A native app, optional](#8-a-native-app-optional)
 - [Auto-mark episodes watched on AniList](#auto-mark-episodes-watched-on-anilist)
 - [Control reference (HTTP endpoints)](#control-reference-http-endpoints)
 - [Troubleshooting](#troubleshooting)
@@ -238,6 +244,49 @@ Tap **Plan to Watch** to switch the carousel to your AniList *Planning* list (ta
 list is shown both on the remote and as a label on the kiosk. **Open** always returns you
 to the *Watching* list.
 
+### 7. Search New & set status
+
+Tap the **Search** segment to search *all* of AniList from the couch — not just your own
+lists. The kiosk shows a vertical results list; the phone shows a query box, the results
+with big **▲ / ● Select / ▼** buttons, and an on-screen keyboard. Type on the phone *or* the
+PC's keyboard — they stay in **perfect sync**, since the server is the one source of truth.
+
+Each result shows its format, year, and your current **status**. Select one and the kiosk
+opens a **detail page** (banner, synopsis, genres, studio) while the phone becomes a
+**status panel**: set **Watching / Plan to Watch / Completed / Paused / Dropped**, or
+**Remove from lists** — written straight to AniList. A few extras:
+
+- **Browse without typing** — leave the box empty for a **top-rated** list to scroll.
+- **Genre & tag filters** — tap the **filter** key to swap the keyboard for a grid of genres
+  and tags; pick a few to narrow results (combined as *AND*), shown on the kiosk.
+- **Infinite scroll** — more results load as you reach the end of the list.
+- **Other seasons** — for a franchise, the kiosk detail shows a vertical **season carousel**;
+  **▲ / ▼** on the phone jump between seasons, each with its own art + synopsis.
+
+> Setting a status needs AniList write access — see
+> [Auto-mark episodes watched](#auto-mark-episodes-watched-on-anilist). Searching itself is
+> read-only and always available.
+
+### 8. A native app, optional
+
+The remote is a browser PWA, but there's also a small **native Android app, “Shou Remote”**
+(source in [`android/`](android/)) whose job is to **keep the phone screen awake** while you
+watch — browsers can't reliably do that over plain HTTP, so the screen dims mid-episode. To
+use it:
+
+1. **Get the APK** from the [**Releases**](../../releases/latest) page (open it on the phone
+   to install), or add `https://github.com/Shio-T0/Shou` to
+   **[Obtainium](https://github.com/ImranR98/Obtainium)** for auto-updates.
+2. In the app's **Settings**, tap **Scan network for Shou** — the server advertises itself
+   over mDNS (`_shou._tcp`), so the app fills in the PC's host + port. (No mDNS? Type the LAN
+   IP and port `4100`.)
+3. Enter your **token** — the `REMOTE_TOKEN` from `%USERPROFILE%\.config\shou\shou.conf` —
+   and **Save**.
+
+It's just a frame around the same web remote, so it mirrors the kiosk live exactly like the
+PWA. (An *Allow self-signed certificate* toggle is there for serving Shou behind your own TLS
+cert; ignore it on a plain-HTTP LAN.)
+
 ---
 
 ## Auto-mark episodes watched on AniList
@@ -268,13 +317,18 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 | Endpoint | Action |
 | --- | --- |
 | `/open` | Reload config, refresh list, show kiosk (resets to *Watching*) |
-| `/left` `/right` | Move carousel selection |
-| `/select` | Play next ep / show or play sequel / play latest |
-| `/back` | Stop playback, return to carousel |
-| `/list?to=watching\|planned` | Switch list (omit `to` to toggle) |
+| `/left` `/right` | Move carousel selection (up/down in Search; ▲/▼ switch seasons in detail) |
+| `/select` | Play next ep / show or play sequel / play latest / open Search detail |
+| `/back` | Stop playback, step back a screen, return to carousel |
+| `/list?to=watching\|planned\|search` | Switch list/mode (omit `to` to toggle the two lists) |
 | `/pause` | Play/pause `mpv` (over IPC) |
 | `/fwd` `/rew` | Seek ±30s (over IPC) |
 | `/next` `/prev` | Previous / next episode |
+| `/search/key?c=…` · `/search/back` · `/search/clear` | Edit the shared search query |
+| `/search/genre?g=…` · `/search/genres/clear` | Toggle a genre/tag filter · clear all filters |
+| `/search/more` | Load the next page of results (infinite scroll) |
+| `/search/pick?i=…` | Focus a search result and open its detail |
+| `/status?to=CURRENT\|PLANNING\|COMPLETED\|PAUSED\|DROPPED\|REMOVE` | Set the focused anime's list status |
 | `/` | The kiosk page · `/remote?k=…` the phone PWA |
 
 ## Troubleshooting
