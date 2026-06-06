@@ -298,7 +298,7 @@ function renderSearch(search) {
     if (searchCursor >= 0 && rows[searchCursor]) rows[searchCursor].classList.remove("active");
     if (rows[cursor]) {
       rows[cursor].classList.add("active");
-      rows[cursor].scrollIntoView({ block: "nearest", behavior: "smooth" });
+      rows[cursor].scrollIntoView({ block: "center", behavior: "smooth" });
     }
     searchCursor = cursor;
   }
