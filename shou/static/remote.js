@@ -65,12 +65,18 @@ let nosleepVideo = null;
 function playNoSleep() {
   if (!nosleepVideo) {
     const v = document.createElement("video");
-    v.muted = true; v.loop = true;
+    v.muted = true; v.loop = true; v.autoplay = true;
     v.setAttribute("playsinline", ""); v.setAttribute("aria-hidden", "true");
-    v.style.cssText = "position:fixed;left:-2px;bottom:-2px;width:1px;height:1px;opacity:0;pointer-events:none;";
+    // Must be genuinely rendered in the viewport (not opacity:0 / off-screen) or
+    // Chromium won't keep the screen awake for it — so a 2px near-invisible corner sliver.
+    v.style.cssText = "position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0.01;border:0;pointer-events:none;z-index:-1;";
     for (const [src, type] of [["/static/nosleep.webm", "video/webm"], ["/static/nosleep.mp4", "video/mp4"]]) {
       const s = document.createElement("source"); s.src = src; s.type = type; v.appendChild(s);
     }
+    // If the browser pauses it, restart while we're still the visible tab.
+    v.addEventListener("pause", () => {
+      if (document.visibilityState === "visible") v.play().catch(() => {});
+    });
     document.body.appendChild(v);
     nosleepVideo = v;
   }
