@@ -506,8 +506,11 @@ socket.on("state", (s) => {
   el.deck.classList.toggle("hidden", searching || detailing);
   // Authoritative each tick: hidden in search/detail, else shown when there's history.
   // (renderResume short-circuits on unchanged history, so it can't re-show this itself.)
-  el.resume.classList.toggle(
-    "hidden", searching || detailing || !(s.history && s.history.length));
+  const hasResume = !!(s.history && s.history.length);
+  el.resume.classList.toggle("hidden", searching || detailing || !hasResume);
+  // With Continue Watching present, collapse the hero to its image height so the page
+  // doesn't need to scroll.
+  document.body.classList.toggle("has-resume", hasResume);
   if (searching) {
     buildKeyboard();
     if (!prevSearching) filterMode = false;  // fresh entry always starts on the keyboard

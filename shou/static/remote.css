@@ -126,6 +126,9 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
   isolation: isolate;
   box-shadow: 0 22px 50px -22px rgba(0,0,0,0.9);
 }
+/* With Continue Watching shown, shrink the hero to just the cover + its padding so the
+   page still fits without scrolling. */
+body.has-resume .hero { min-height: 0; }
 .hero-bg {
   position: absolute; inset: -14%;
   z-index: -2;
