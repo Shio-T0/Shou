@@ -895,7 +895,7 @@ html, body {
 .detail-body {
   min-width: 0;
   flex: 1;
-  max-width: 50vw;
+  max-width: 42vw;  /* leave room for the season rail on the right */
 }
 .detail-status-pill {
   display: inline-block;
@@ -945,7 +945,7 @@ html, body {
   font-size: 1.02vw;
   line-height: 1.7;
   color: var(--paper-dim);
-  max-width: 46vw;
+  max-width: 40vw;
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
@@ -975,3 +975,77 @@ html, body {
   from { opacity: 0; transform: translateY(1.6vh); filter: blur(2px); }
   to   { opacity: 1; transform: none; filter: none; }
 }
+
+/* Season switch — vertical carousel slide of the focused content (cover + text). */
+#detail-view.slide-up .detail-cover, #detail-view.slide-up .detail-body { animation: seasonUp 0.5s var(--ease) both; }
+#detail-view.slide-down .detail-cover, #detail-view.slide-down .detail-body { animation: seasonDown 0.5s var(--ease) both; }
+@keyframes seasonUp   { from { opacity: 0; transform: translateY(4.5vh); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes seasonDown { from { opacity: 0; transform: translateY(-4.5vh); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+
+/* Vertical season rail (the carousel track) on the right edge of the detail stage. */
+.detail-seasons {
+  position: absolute;
+  right: 3.5vw; top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 17vw;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  animation: seasonRailIn 0.7s var(--ease) 0.5s both;
+}
+.detail-seasons.hidden { display: none; }
+@keyframes seasonRailIn { from { opacity: 0; transform: translate(1.5vw, -50%); } to { opacity: 1; transform: translate(0, -50%); } }
+.dseasons-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.82vw; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--paper-dim);
+  padding: 0 0.4vw 0.4vh;
+}
+.dseasons-keys { color: var(--acc-2); letter-spacing: 0.05em; }
+.dseasons-list {
+  display: flex; flex-direction: column; gap: 0.8vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 0.6vh 0.3vw;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 7%, #000 93%, transparent);
+}
+.dseasons-list::-webkit-scrollbar { display: none; }
+.dseason {
+  display: flex; align-items: center; gap: 0.7vw;
+  padding: 0.9vh 0.9vw;
+  border-radius: 0.7vw;
+  border: 1px solid var(--line);
+  background: linear-gradient(165deg, rgba(32,30,38,0.5), rgba(16,15,19,0.45));
+  opacity: 0.62;
+  transition: opacity 0.3s ease, transform 0.3s var(--ease), border-color 0.3s ease, background 0.3s ease;
+}
+.dseason-no {
+  flex: none;
+  width: 1.6vw; height: 1.6vw;
+  display: grid; place-items: center;
+  font-size: 0.82vw; font-weight: 800;
+  border-radius: 50%;
+  color: var(--paper-dim);
+  background: rgba(255,255,255,0.05);
+  font-variant-numeric: tabular-nums;
+}
+.dseason-main { min-width: 0; display: flex; flex-direction: column; gap: 0.2vh; }
+.dseason-title {
+  font-size: 0.92vw; font-weight: 700; color: var(--paper);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dseason-sub {
+  font-size: 0.72vw; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--paper-dim);
+}
+.dseason.active {
+  opacity: 1;
+  transform: scale(1.04);
+  border-color: rgba(255,74,50,0.5);
+  background: linear-gradient(165deg, rgba(45,30,30,0.82), rgba(22,17,19,0.7));
+  box-shadow: 0 1.6vh 4vh -1.6vh rgba(0,0,0,0.7), 0 0 0 1px rgba(255,74,50,0.22);
+}
+.dseason.active .dseason-no { color: #fff; background: var(--acc); }

@@ -754,6 +754,32 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
 .st-now.st-none, .st-now.st-paused { color: var(--paper-dim); }
 .st-now.st-dropped { color: #d98b8b; }
 
+/* Season switcher: ▲  Season i of n  ▼ */
+.st-seasons {
+  display: flex; align-items: stretch; gap: 10px;
+  margin-top: 12px;
+}
+.st-seasons.hidden { display: none; }
+.st-season-btn {
+  flex: none; width: 56px; padding: 0;
+  color: var(--paper-dim);
+}
+.st-season-btn svg { width: 24px; height: 24px; }
+.st-season-btn:active { color: #fff; border-color: var(--acc); background: linear-gradient(165deg, var(--acc), #d63b27); }
+.st-season-info {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  border: 1px solid var(--line-2); border-radius: 16px;
+  background: linear-gradient(165deg, var(--ink-3), var(--ink-2));
+}
+.st-season-pos {
+  font-size: 14.5px; font-weight: 800; letter-spacing: 0.04em; color: var(--paper);
+}
+.st-season-sub {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--acc-2);
+}
+
 .st-label {
   margin-top: 6px;
   font-size: 11px; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase;
