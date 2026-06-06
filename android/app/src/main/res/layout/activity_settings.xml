@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
@@ -9,103 +10,167 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="28dp">
+        android:gravity="center_horizontal"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="52dp"
+        android:paddingBottom="32dp">
+
+        <!-- Brand -->
+        <ImageView
+            android:layout_width="74dp"
+            android:layout_height="74dp"
+            android:src="@mipmap/ic_launcher"
+            android:contentDescription="@string/app_name" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
             android:text="@string/app_name"
-            android:textColor="@color/accent"
-            android:textSize="22sp"
+            android:textColor="@color/paper"
+            android:textSize="26sp"
             android:textStyle="bold"
-            android:letterSpacing="0.04" />
+            android:letterSpacing="0.03" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:text="@string/tagline"
+            android:textColor="@color/accent"
+            android:textSize="12sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.22" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:layout_marginBottom="22dp"
+            android:layout_marginTop="14dp"
+            android:gravity="center"
             android:text="@string/settings_blurb"
             android:textColor="@color/paperDim"
             android:textSize="13sp"
             android:lineSpacingMultiplier="1.3" />
 
-        <EditText
-            android:id="@+id/host"
+        <!-- Connection card -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/host_hint"
-            android:inputType="textUri"
-            android:textColor="@color/paper"
-            android:autofillHints="" />
+            android:layout_marginTop="26dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="20dp">
 
-        <Button
-            android:id="@+id/scan"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:background="@android:color/transparent"
-            android:text="@string/scan_network"
-            android:textColor="@color/accent"
-            android:textStyle="bold"
-            android:textAllCaps="false" />
+            <TextView
+                style="@style/FieldLabel"
+                android:text="@string/label_computer" />
 
-        <TextView
-            android:id="@+id/scan_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/paperDim"
-            android:textSize="12sp" />
+            <EditText
+                android:id="@+id/host"
+                style="@style/Field"
+                android:hint="@string/host_hint"
+                android:inputType="textUri" />
 
-        <EditText
-            android:id="@+id/port"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:hint="@string/port_hint"
-            android:inputType="number"
-            android:textColor="@color/paper"
-            android:autofillHints="" />
+            <Button
+                android:id="@+id/scan"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="50dp"
+                android:background="@drawable/bg_btn_ghost"
+                android:drawableStart="@drawable/ic_scan"
+                android:drawablePadding="9dp"
+                android:gravity="center"
+                android:paddingHorizontal="16dp"
+                android:text="@string/scan_network"
+                android:textColor="@color/accent"
+                android:textStyle="bold"
+                android:textAllCaps="false"
+                android:textSize="14sp" />
 
-        <EditText
-            android:id="@+id/token"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:hint="@string/token_hint"
-            android:inputType="text"
-            android:textColor="@color/paper"
-            android:autofillHints="" />
+            <TextView
+                android:id="@+id/scan_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:textColor="@color/paperDim"
+                android:textSize="12sp" />
 
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/https"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:text="@string/use_https"
-            android:textColor="@color/paper"
-            android:textSize="15sp" />
+            <TextView
+                style="@style/FieldLabel"
+                android:layout_marginTop="20dp"
+                android:text="@string/label_port" />
 
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/allow_certs"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/allow_bad_certs"
-            android:textColor="@color/paper"
-            android:textSize="15sp" />
+            <EditText
+                android:id="@+id/port"
+                style="@style/Field"
+                android:hint="@string/port_hint"
+                android:inputType="number" />
+
+            <TextView
+                style="@style/FieldLabel"
+                android:layout_marginTop="20dp"
+                android:text="@string/label_token" />
+
+            <EditText
+                android:id="@+id/token"
+                style="@style/Field"
+                android:hint="@string/token_hint"
+                android:inputType="text" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="7dp"
+                android:text="@string/token_help"
+                android:textColor="@color/paperDim"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="22dp"
+                android:background="@color/stroke" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/https"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="@string/use_https"
+                android:textColor="@color/paper"
+                android:textSize="15sp"
+                app:thumbTint="@color/accent"
+                app:trackTint="@color/stroke" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/allow_certs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/allow_bad_certs"
+                android:textColor="@color/paper"
+                android:textSize="15sp"
+                app:thumbTint="@color/accent"
+                app:trackTint="@color/stroke" />
+
+        </LinearLayout>
 
         <Button
             android:id="@+id/save"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
-            android:backgroundTint="@color/accent"
+            android:layout_marginTop="22dp"
+            android:minHeight="56dp"
+            android:background="@drawable/bg_btn_accent"
             android:text="@string/save"
             android:textColor="#FFFFFF"
             android:textStyle="bold"
-            android:padding="14dp" />
+            android:textAllCaps="false"
+            android:textSize="16sp"
+            android:letterSpacing="0.02" />
 
     </LinearLayout>
 </ScrollView>
