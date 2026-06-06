@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
@@ -38,6 +39,21 @@ class MainActivity : AppCompatActivity() {
 
         // Keep the screen awake the entire time the remote is open.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Draw into the display cutout / notch area too. Without this a fullscreen
+        // (no system bars) window is letterboxed below the cutout, leaving a dark
+        // strip at the top — the WebView background wouldn't reach the screen edge.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
 
         // Edge-to-edge + immersive: hide the system bars, swipe to reveal them.
         WindowCompat.setDecorFitsSystemWindows(window, false)
