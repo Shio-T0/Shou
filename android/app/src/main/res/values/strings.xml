@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shou Remote</string>
+    <string name="settings">Settings</string>
+    <string name="settings_blurb">Point the remote at the computer running Shou. The token is the REMOTE_TOKEN from ~/.config/shou/shou.conf.</string>
+    <string name="host_hint">Computer IP (e.g. 192.168.1.20)</string>
+    <string name="port_hint">Port (default 4100)</string>
+    <string name="token_hint">Remote token</string>
+    <string name="use_https">Use HTTPS</string>
+    <string name="save">Save &amp; connect</string>
+</resources>
