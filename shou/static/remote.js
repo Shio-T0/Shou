@@ -54,21 +54,40 @@ const STATUS_CLASS = {
 // Action popups are disabled — the live mirror + haptics are feedback enough.
 function toast(_msg) {}
 
-// Keep the phone screen awake while the remote is open. The OS releases the wake lock
-// whenever the tab is hidden (screen off / app switch), so re-request it on every return
-// to visibility, and also on the first tap in case the browser wants a user gesture.
+// Keep the phone screen awake while the remote is open.
+//   1. Screen Wake Lock API — clean, but only works in a secure context (HTTPS/localhost).
+//   2. Fallback for plain-http LAN access: a muted looping inline video. Playing media
+//      keeps mobile screens awake even on insecure origins.
+// The OS releases both when the tab is hidden, so re-arm on every return to visibility,
+// and on the first tap in case the browser wants a user gesture to start playback.
 let wakeLock = null;
-async function keepAwake() {
-  try {
-    if ("wakeLock" in navigator && document.visibilityState === "visible") {
-      wakeLock = await navigator.wakeLock.request("screen");
+let nosleepVideo = null;
+function playNoSleep() {
+  if (!nosleepVideo) {
+    const v = document.createElement("video");
+    v.muted = true; v.loop = true;
+    v.setAttribute("playsinline", ""); v.setAttribute("aria-hidden", "true");
+    v.style.cssText = "position:fixed;left:-2px;bottom:-2px;width:1px;height:1px;opacity:0;pointer-events:none;";
+    for (const [src, type] of [["/static/nosleep.webm", "video/webm"], ["/static/nosleep.mp4", "video/mp4"]]) {
+      const s = document.createElement("source"); s.src = src; s.type = type; v.appendChild(s);
     }
-  } catch (e) { /* unsupported or denied — nothing we can do */ }
+    document.body.appendChild(v);
+    nosleepVideo = v;
+  }
+  nosleepVideo.play().catch(() => {});
+}
+async function keepAwake() {
+  if (document.visibilityState !== "visible") return;
+  if ("wakeLock" in navigator) {
+    try { wakeLock = await navigator.wakeLock.request("screen"); return; }
+    catch (e) { /* fall through to the video fallback */ }
+  }
+  playNoSleep();  // insecure origin or unsupported API
 }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") keepAwake();
 });
-document.addEventListener("click", () => { if (!wakeLock) keepAwake(); }, { once: true });
+document.addEventListener("click", keepAwake, { once: true });  // gesture, in case it's needed
 keepAwake();
 
 // --- Commands ---------------------------------------------------------------
