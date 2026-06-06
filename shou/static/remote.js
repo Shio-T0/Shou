@@ -37,6 +37,9 @@ const el = {
   stTitle: document.getElementById("st-title"),
   stNow: document.getElementById("st-now"),
   stButtons: document.getElementById("st-buttons"),
+  stSeasons: document.getElementById("st-seasons"),
+  stSeasonPos: document.getElementById("st-season-pos"),
+  stSeasonSub: document.getElementById("st-season-sub"),
 };
 
 const STATUS_LABEL = {
@@ -394,6 +397,17 @@ function renderStatusPanel(search) {
   const st = d.listStatus;
   el.stNow.textContent = st ? "Currently: " + (STATUS_LABEL[st] || st) : "Not in your lists";
   el.stNow.className = "st-now " + (st ? STATUS_CLASS[st] || "" : "st-none");
+
+  // Season switcher (▲ / ▼) — only when the franchise has more than one entry.
+  const seasons = (search && search.seasons) || [];
+  const sIdx = (search && search.seasonIdx) || 0;
+  el.stSeasons.classList.toggle("hidden", seasons.length < 2);
+  if (seasons.length >= 2) {
+    const cur = seasons[sIdx] || {};
+    el.stSeasonPos.textContent = "Season " + (sIdx + 1) + " of " + seasons.length;
+    el.stSeasonSub.textContent =
+      [cur.format, cur.year].filter(Boolean).join(" · ") || "Switch season";
+  }
 
   const statuses = (search && search.statuses) || [];
   const canWrite = !search || search.canWrite;

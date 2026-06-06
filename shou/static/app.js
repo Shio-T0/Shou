@@ -46,6 +46,8 @@ const el = {
   detailMeta: document.getElementById("detail-meta"),
   detailGenres: document.getElementById("detail-genres"),
   detailDesc: document.getElementById("detail-desc"),
+  detailSeasons: document.getElementById("detail-seasons"),
+  dseasonsList: document.getElementById("dseasons-list"),
 };
 
 // Human labels + accent class for each AniList list status.
@@ -356,15 +358,33 @@ function renderSearch(search) {
 
 let detailId = "";
 let detailJustSet = "";
-function renderDetail(d) {
+let detailSeasonsSig = "";
+let detailSeasonIdx = 0;
+function renderDetail(search) {
+  const d = search && search.detail;
   if (!d) return;
-  const fresh = String(d.id) !== detailId;
-  if (fresh) {
+  const seasons = (search && search.seasons) || [];
+  const sIdx = (search && search.seasonIdx) || 0;
+  const seasonsSig = seasons.map((s) => s.id).join(",");
+  const idChanged = String(d.id) !== detailId;
+  const sameCarousel = seasonsSig !== "" && seasonsSig === detailSeasonsSig;
+
+  if (idChanged && !sameCarousel) {
+    // Brand-new anime focused — full cinematic entrance.
+    el.detailView.classList.remove("is-fresh", "slide-up", "slide-down");
+    void el.detailView.offsetWidth;
+    el.detailView.classList.add("is-fresh");
+  } else if (idChanged && sameCarousel) {
+    // Flipped to another season — vertical carousel slide in the move direction.
+    const cls = sIdx > detailSeasonIdx ? "slide-up" : "slide-down";
+    el.detailView.classList.remove("is-fresh", "slide-up", "slide-down");
+    void el.detailView.offsetWidth;
+    el.detailView.classList.add(cls);
+  }
+
+  if (idChanged) {
     detailId = String(d.id);
     detailJustSet = "";
-    el.detailView.classList.remove("is-fresh");
-    void el.detailView.offsetWidth; // restart the entrance animation
-    el.detailView.classList.add("is-fresh");
     el.detailBg.style.backgroundColor = d.color || "#17161c";
     el.detailBg.style.backgroundImage = d.banner
       ? `url(${d.banner})`
@@ -375,6 +395,29 @@ function renderDetail(d) {
     el.detailCover.style.opacity = d.cover ? "1" : "0";
     el.detailTitle.textContent = d.title || "—";
   }
+
+  // Season rail (the vertical carousel track).
+  if (seasonsSig !== detailSeasonsSig) {
+    detailSeasonsSig = seasonsSig;
+    el.dseasonsList.innerHTML = "";
+    seasons.forEach((s, i) => {
+      const row = document.createElement("div");
+      row.className = "dseason";
+      const bits = [s.format, s.year].filter(Boolean).join(" · ");
+      row.innerHTML = `
+        <span class="dseason-no">${i + 1}</span>
+        <span class="dseason-main">
+          <span class="dseason-title">${escapeHtml(s.title || "")}</span>
+          <span class="dseason-sub">${escapeHtml(bits)}</span>
+        </span>`;
+      el.dseasonsList.appendChild(row);
+    });
+  }
+  el.detailSeasons.classList.toggle("hidden", seasons.length < 2);
+  const srows = el.dseasonsList.children;
+  for (let i = 0; i < srows.length; i++) srows[i].classList.toggle("active", i === sIdx);
+  if (srows[sIdx]) srows[sIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
+  detailSeasonIdx = sIdx;
 
   el.detailMeta.textContent = d.loading ? "Loading…" : metaLine(d);
 
@@ -481,7 +524,7 @@ socket.on("state", (s) => {
     renderSearch(s.search);
     el.count.textContent = "";
   } else if (s.view === "detail") {
-    renderDetail(s.search && s.search.detail);
+    renderDetail(s.search);
     el.count.textContent = "";
   } else if (s.view === "grid") {
     const sig = s.items.map((i) => i.id).join(",");
@@ -533,6 +576,8 @@ document.addEventListener("keydown", (e) => {
     }
   } else if (currentView === "detail") {
     if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); api("/back"); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); api("/left"); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); api("/right"); }
     else if (/^[1-5]$/.test(e.key) && searchStatuses[+e.key - 1]) {
       e.preventDefault();
       api("/status?to=" + searchStatuses[+e.key - 1][0]);

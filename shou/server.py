@@ -123,12 +123,17 @@ SEARCH = {
     "results": [],      # list of result dicts (see build_result)
     "cursor": 0,        # which result is focused (vertical list)
     "detail": None,     # focused-anime detail dict (see build_detail) or None
+    "seasons": [],      # the focused anime's franchise chain (detail dicts), chronological
+    "seasonIdx": 0,     # which season in `seasons` is focused (== detail)
     "busy": False,      # a search / detail / status write is in flight
     "gen": 0,           # debounce generation — only the newest keystroke's query applies
     "page": 1,          # last AniList page fetched into results
     "hasMore": False,   # AniList reports a further page (infinite scroll)
     "loadingMore": False,  # a load-more append is in flight
 }
+SEASON_MAX = 16            # cap franchise-chain traversal (prequel/sequel hops)
+# Relations that chain a franchise into ordered "seasons/parts".
+SEASON_RELATIONS = {"PREQUEL", "SEQUEL", "PARENT", "SIDE_STORY"}
 SEARCH_MAX = 14            # results fetched per page (appended as you scroll)
 SEARCH_LOAD_AHEAD = 5      # start loading the next page this many rows from the end
 # The phone's filter grid is AniList's 18 non-adult genres (broad buckets) followed by a
@@ -462,6 +467,7 @@ query ($id: Int) {
     duration
     status
     seasonYear
+    startDate { year month }
     genres
     averageScore
     description(asHtml: false)
@@ -469,6 +475,7 @@ query ($id: Int) {
     bannerImage
     studios(isMain: true) { nodes { name } }
     mediaListEntry { id status score progress }
+    relations { edges { relationType node { id type format } } }
   }
 }
 """
@@ -651,6 +658,8 @@ def _focus_detail(target: dict) -> None:
     """Enter the detail view for a search result. Caller must hold STATE_LOCK."""
     STATE["view"] = "detail"
     SEARCH["busy"] = True
+    SEARCH["seasons"] = []
+    SEARCH["seasonIdx"] = 0
     SEARCH["detail"] = {  # lightweight placeholder until the full detail lands
         "loading": True, "id": target["id"], "title": target["title"],
         "format": target.get("format", ""), "episodes": target.get("episodes"),
@@ -661,22 +670,83 @@ def _focus_detail(target: dict) -> None:
     }
 
 
+def _season_sort_key(m: dict):
+    """Chronological-ish ordering for a franchise's seasons."""
+    sd = m.get("startDate") or {}
+    return (
+        m.get("seasonYear") or sd.get("year") or 9999,
+        sd.get("month") or 0,
+        m.get("id") or 0,
+    )
+
+
+def collect_chain(focus_id: int, seed: dict | None) -> list:
+    """Walk PREQUEL/SEQUEL/PARENT/SIDE_STORY links out from the focused anime to gather
+    the whole franchise as ordered "seasons". Each node is fetched once (full detail).
+    Returns chronologically-sorted media dicts. `seed` is the already-fetched focus."""
+    fetched: dict[int, dict] = {}
+    queue: list[int] = [int(focus_id)]
+    if seed:
+        fetched[int(focus_id)] = seed
+        queue = [int(focus_id)]  # still visit so we read its relations below
+    while queue and len(fetched) < SEASON_MAX:
+        mid = queue.pop(0)
+        media = fetched.get(mid)
+        if media is None:
+            try:
+                media = _public_post(DETAIL_QUERY, {"id": mid}).get("Media")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[season] fetch {mid} failed: {exc}", flush=True)
+                continue
+            if not media:
+                continue
+            fetched[mid] = media
+        for edge in ((media.get("relations") or {}).get("edges") or []):
+            if edge.get("relationType") not in SEASON_RELATIONS:
+                continue
+            node = edge.get("node") or {}
+            nid = node.get("id")
+            if (node.get("type") == "ANIME" and nid and nid not in fetched
+                    and nid not in queue and len(fetched) + len(queue) < SEASON_MAX):
+                queue.append(nid)
+    return sorted(fetched.values(), key=_season_sort_key)
+
+
 def load_detail(media_id: int) -> None:
-    """Fetch the richer detail for a focused result and broadcast it."""
-    detail = None
+    """Fetch the focused anime's detail (shown quickly), then assemble its franchise
+    season chain so the kiosk/phone can flip between seasons."""
+    media_id = int(media_id)
+    focus = None
     try:
-        data = _public_post(DETAIL_QUERY, {"id": int(media_id)})
-        detail = build_detail(data.get("Media") or {})
+        focus = _public_post(DETAIL_QUERY, {"id": media_id}).get("Media")
     except Exception as exc:  # noqa: BLE001
         print(f"[search] detail {media_id} failed: {exc}", flush=True)
+    # Show the focused season right away.
     with STATE_LOCK:
         cur = SEARCH["detail"]
-        if STATE["view"] == "detail" and cur and cur.get("id") == int(media_id):
-            if detail:
-                SEARCH["detail"] = detail
-            else:
-                cur["loading"] = False  # keep the lightweight placeholder
-            SEARCH["busy"] = False
+        on_target = STATE["view"] == "detail" and cur and cur.get("id") == media_id
+        if not on_target:
+            return  # user moved on before the fetch landed
+        if focus:
+            SEARCH["detail"] = build_detail(focus)
+        else:
+            cur["loading"] = False
+        SEARCH["busy"] = False
+    broadcast()
+    if not focus:
+        return
+    # Then build the rest of the franchise chain (more network hops) in the background.
+    chain = collect_chain(media_id, focus)
+    seasons = [build_detail(m) for m in chain]
+    idx = next((i for i, s in enumerate(seasons) if s["id"] == media_id), 0)
+    with STATE_LOCK:
+        cur = SEARCH["detail"]
+        if not (STATE["view"] == "detail" and cur and cur.get("id") == media_id):
+            return  # focus changed during traversal — discard
+        SEARCH["seasons"] = seasons
+        SEARCH["seasonIdx"] = idx
+        if seasons:
+            SEARCH["detail"] = seasons[idx]
     broadcast()
 
 
@@ -715,6 +785,10 @@ def apply_status(media_id: int, to: str, entry_id) -> None:
         for r in SEARCH["results"]:
             if r.get("id") == int(media_id):
                 r["listStatus"] = new_status
+        for s in SEARCH["seasons"]:  # keep the carousel's copy in sync
+            if s.get("id") == int(media_id):
+                s["listStatus"] = new_status
+                s["entryId"] = new_entry_id
         SEARCH["busy"] = False
     broadcast()
 
@@ -1634,6 +1708,12 @@ def broadcast() -> None:
                 "cursor": SEARCH["cursor"],
                 "hasMore": SEARCH["hasMore"],
                 "detail": SEARCH["detail"],
+                "seasons": [
+                    {"id": s["id"], "title": s["title"], "year": s.get("year"),
+                     "format": s.get("format"), "episodes": s.get("episodes")}
+                    for s in SEARCH["seasons"]
+                ],
+                "seasonIdx": SEARCH["seasonIdx"],
                 "busy": SEARCH["busy"],
                 "statuses": SEARCH_STATUSES,
                 "canWrite": bool(anilist_token()),
@@ -1782,6 +1862,8 @@ def back():
         with STATE_LOCK:
             STATE["view"] = "search"
             SEARCH["detail"] = None
+            SEARCH["seasons"] = []
+            SEARCH["seasonIdx"] = 0
         broadcast()
         if pid:
             focus_kiosk(pid)
@@ -1839,6 +1921,13 @@ def _move(delta: int) -> None:
             # Clamp (don't wrap) so scrolling down approaches the end and pulls more.
             SEARCH["cursor"] = max(0, min(SEARCH["cursor"] + delta, n - 1))
             near_end = SEARCH["cursor"] >= n - SEARCH_LOAD_AHEAD
+        elif view == "detail":
+            # Up/down flips between the focused anime's seasons (vertical carousel).
+            seasons = SEARCH["seasons"]
+            if len(seasons) < 2:
+                return
+            SEARCH["seasonIdx"] = max(0, min(SEARCH["seasonIdx"] + delta, len(seasons) - 1))
+            SEARCH["detail"] = seasons[SEARCH["seasonIdx"]]
         elif view == "grid" and STATE["items"]:
             n = len(STATE["items"])
             STATE["cursor"] = (STATE["cursor"] + delta) % n
