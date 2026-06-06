@@ -6,4 +6,8 @@
     <color name="paper">#F4F1EA</color>
     <color name="paperDim">#9A94A6</color>
     <color name="iconBg">#17141A</color>
+    <color name="card">#100D16</color>
+    <color name="field">#1B1822</color>
+    <color name="stroke">#2A2733</color>
+    <color name="accentSoft">#22FF4A32</color>
 </resources>

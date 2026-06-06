@@ -152,6 +152,6 @@ class SettingsActivity : AppCompatActivity() {
 
     companion object {
         private const val SERVICE_TYPE = "_shou._tcp."
-        private const val SCAN_TIMEOUT_MS = 6000L
+        private const val SCAN_TIMEOUT_MS = 9000L
     }
 }
