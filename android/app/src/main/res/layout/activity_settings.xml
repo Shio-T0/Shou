@@ -39,6 +39,25 @@
             android:textColor="@color/paper"
             android:autofillHints="" />
 
+        <Button
+            android:id="@+id/scan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@android:color/transparent"
+            android:text="@string/scan_network"
+            android:textColor="@color/accent"
+            android:textStyle="bold"
+            android:textAllCaps="false" />
+
+        <TextView
+            android:id="@+id/scan_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/paperDim"
+            android:textSize="12sp" />
+
         <EditText
             android:id="@+id/port"
             android:layout_width="match_parent"
@@ -65,6 +84,15 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="22dp"
             android:text="@string/use_https"
+            android:textColor="@color/paper"
+            android:textSize="15sp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/allow_certs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/allow_bad_certs"
             android:textColor="@color/paper"
             android:textSize="15sp" />
 

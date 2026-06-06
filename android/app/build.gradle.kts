@@ -11,12 +11,35 @@ android {
         applicationId = "io.github.shiot0.shou"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // CI overrides these from the git tag (-PversionCode / -PversionName) so
+        // Obtainium sees a monotonically increasing version on each release.
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
+    }
+
+    // Release signing: in CI a keystore is materialised from secrets and pointed
+    // at by SHOU_KEYSTORE; locally (no secrets) the release build falls back to
+    // the debug key so `assembleRelease` still produces an installable APK.
+    val keystorePath = System.getenv("SHOU_KEYSTORE")
+    val hasReleaseKeystore = !keystorePath.isNullOrBlank() && file(keystorePath).exists()
+    if (hasReleaseKeystore) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = System.getenv("SHOU_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SHOU_KEY_ALIAS")
+                keyPassword = System.getenv("SHOU_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

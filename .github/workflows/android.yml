@@ -1,0 +1,97 @@
+name: Android Release
+
+# Build the Shou Remote APK and publish it to a GitHub Release.
+# Push a tag like `v1.2.0` to cut a release; Obtainium (or a plain download)
+# then picks up the attached APK. `workflow_dispatch` builds without releasing,
+# handy for checking the pipeline.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          # On a tag push, GITHUB_REF_NAME is the tag (e.g. v1.2.0).
+          name="${GITHUB_REF_NAME#v}"
+          if [ -z "$name" ] || ! printf '%s' "$name" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+            name="0.0.0"
+          fi
+          IFS='.' read -r major minor patch <<EOF
+          $name
+          EOF
+          patch="${patch:-0}"
+          code=$(( major * 10000 + minor * 100 + patch ))
+          [ "$code" -lt 1 ] && code=1
+          echo "name=$name"  >> "$GITHUB_OUTPUT"
+          echo "code=$code"  >> "$GITHUB_OUTPUT"
+          echo "Building versionName=$name versionCode=$code"
+
+      - name: Decode release keystore (if configured)
+        id: keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.SHOU_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/shou-release.jks"
+            echo "path=$RUNNER_TEMP/shou-release.jks" >> "$GITHUB_OUTPUT"
+            echo "Release keystore configured."
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "No release keystore secret — build will use the debug key."
+          fi
+
+      - name: Build release APK
+        env:
+          SHOU_KEYSTORE: ${{ steps.keystore.outputs.path }}
+          SHOU_KEYSTORE_PASSWORD: ${{ secrets.SHOU_KEYSTORE_PASSWORD }}
+          SHOU_KEY_ALIAS: ${{ secrets.SHOU_KEY_ALIAS }}
+          SHOU_KEY_PASSWORD: ${{ secrets.SHOU_KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon assembleRelease \
+            -PversionName="${{ steps.ver.outputs.name }}" \
+            -PversionCode="${{ steps.ver.outputs.code }}"
+
+      - name: Stage APK
+        id: apk
+        run: |
+          src=$(find app/build/outputs/apk/release -name '*.apk' | head -n1)
+          out="shou-remote-${{ steps.ver.outputs.name }}.apk"
+          cp "$src" "$out"
+          echo "file=android/$out" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shou-remote-apk
+          path: ${{ steps.apk.outputs.file }}
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.apk.outputs.file }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true

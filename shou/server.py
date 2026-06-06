@@ -27,6 +27,7 @@ import os
 import re
 import secrets
 import shutil
+import socket
 import struct
 import subprocess
 import threading
@@ -2237,9 +2238,62 @@ def on_connect():
     return None
 
 
+def _lan_ip() -> str:
+    """Best-effort primary LAN IPv4 — the local address used to reach the network.
+    No packets are actually sent; connect() just selects the outgoing interface."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
+def start_mdns():
+    """Advertise this server over mDNS as `_shou._tcp` so the phone app can find
+    host+port without typing an IP. The token is NEVER broadcast — it stays secret;
+    the app still asks the user for it. Returns a cleanup callable (a no-op if
+    zeroconf isn't installed, so the server runs fine either way)."""
+    try:
+        from zeroconf import ServiceInfo, Zeroconf
+    except Exception:
+        print("  mDNS    : zeroconf not installed — auto-discovery off", flush=True)
+        return lambda: None
+    try:
+        ip = _lan_ip()
+        hostname = socket.gethostname().split(".")[0] or "shou"
+        info = ServiceInfo(
+            "_shou._tcp.local.",
+            f"Shou ({hostname})._shou._tcp.local.",
+            addresses=[socket.inet_aton(ip)],
+            port=PORT,
+            properties={"path": "/remote", "app": "shou"},
+            server=f"{hostname}.local.",
+        )
+        zc = Zeroconf()
+        zc.register_service(info)
+        print(f"  mDNS    : advertising _shou._tcp at {ip}:{PORT}", flush=True)
+
+        def _close():
+            try:
+                zc.unregister_service(info)
+            finally:
+                zc.close()
+        return _close
+    except Exception as exc:  # pragma: no cover - best effort
+        print(f"  mDNS    : could not advertise ({exc})", flush=True)
+        return lambda: None
+
+
 if __name__ == "__main__":
     local_url = f"http://127.0.0.1:{PORT}/remote?k={TOKEN}"
     print("Shou server listening on 0.0.0.0:%d" % PORT)
     print(f"  remote (local) : {local_url}")
     print(f"  remote (phone) : http://<this-pc-ip>:{PORT}/remote?k={TOKEN}")
-    socketio.run(app, host="0.0.0.0", port=PORT, allow_unsafe_werkzeug=True)
+    mdns_close = start_mdns()
+    try:
+        socketio.run(app, host="0.0.0.0", port=PORT, allow_unsafe_werkzeug=True)
+    finally:
+        mdns_close()
