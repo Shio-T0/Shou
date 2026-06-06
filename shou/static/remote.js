@@ -103,6 +103,20 @@ el.spClear.addEventListener("click", typeClear);
 document.querySelector("[data-filter-back]").addEventListener("click", () => setFilterMode(false));
 el.spFiltersClear.addEventListener("click", clearGenres);
 
+// Infinite scroll: ask the server for more results as the list nears its bottom.
+// The endpoint is a no-op when there's nothing more or a load is already in flight.
+let moreCooldown = 0;
+function requestMore() {
+  const now = Date.now();
+  if (now - moreCooldown < 600) return;
+  moreCooldown = now;
+  post("/search/more");
+}
+el.spResults.addEventListener("scroll", () => {
+  const e = el.spResults;
+  if (e.scrollHeight - e.scrollTop - e.clientHeight < 260) requestMore();
+}, { passive: true });
+
 // --- Continue watching ------------------------------------------------------
 function escapeHtml(s) {
   const d = document.createElement("div");
@@ -282,9 +296,29 @@ function buildFilters(allGenres) {
   });
 }
 
-let spResultsSig = "";
+let spRows = [];        // [{id, status, el}] currently in the DOM, in order
 let spCursor = -1;
 let prevSearching = false;
+function spcardPill(r) {
+  const st = r.listStatus;
+  return st
+    ? `<span class="spcard-status ${STATUS_CLASS[st] || ""}">${STATUS_LABEL[st] || st}</span>`
+    : `<span class="spcard-status st-none">＋</span>`;
+}
+function spcardInner(r) {
+  const coverStyle = r.cover
+    ? `background-image:url(${r.cover})`
+    : `background-color:${r.color || "#1f2233"}`;
+  const bits = [r.format, r.year, r.episodes ? r.episodes + " eps" : ""]
+    .filter(Boolean).join(" · ");
+  return `
+    <span class="spcard-cover" style="${coverStyle}"></span>
+    <span class="spcard-main">
+      <span class="spcard-title">${escapeHtml(r.title)}</span>
+      <span class="spcard-sub">${escapeHtml(bits)}</span>
+    </span>
+    ${spcardPill(r)}`;
+}
 function renderSearchPanel(search) {
   const q = (search && search.query) || "";
   el.spQuery.textContent = q;
@@ -304,35 +338,34 @@ function renderSearchPanel(search) {
   }
   el.spFiltersClear.classList.toggle("hidden", genres.length === 0);
 
+  // Incremental render: append newly-loaded results, keep existing rows (so finger-scroll
+  // position survives). Full rebuild only when the list's prefix changed (new query/filter).
   const results = (search && search.results) || [];
-  const sig = results.map((r) => r.id + ":" + (r.listStatus || "")).join(",");
-  if (sig !== spResultsSig) {
-    spResultsSig = sig;
-    spCursor = -1;
+  let prefixOk = results.length >= spRows.length;
+  for (let i = 0; prefixOk && i < spRows.length; i++) {
+    if (!results[i] || results[i].id !== spRows[i].id) prefixOk = false;
+  }
+  if (!prefixOk) {
     el.spResults.innerHTML = "";
-    results.forEach((r, i) => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "spcard";
-      const coverStyle = r.cover
-        ? `background-image:url(${r.cover})`
-        : `background-color:${r.color || "#1f2233"}`;
-      const st = r.listStatus;
-      const pill = st
-        ? `<span class="spcard-status ${STATUS_CLASS[st] || ""}">${STATUS_LABEL[st] || st}</span>`
-        : `<span class="spcard-status st-none">＋</span>`;
-      const bits = [r.format, r.year, r.episodes ? r.episodes + " eps" : ""]
-        .filter(Boolean).join(" · ");
-      row.innerHTML = `
-        <span class="spcard-cover" style="${coverStyle}"></span>
-        <span class="spcard-main">
-          <span class="spcard-title">${escapeHtml(r.title)}</span>
-          <span class="spcard-sub">${escapeHtml(bits)}</span>
-        </span>
-        ${pill}`;
-      row.addEventListener("click", () => pickResult(i));
-      el.spResults.appendChild(row);
-    });
+    spRows = [];
+    spCursor = -1;
+    el.spResults.scrollTop = 0;
+  }
+  for (let i = 0; i < spRows.length; i++) {  // refresh pills that changed in place
+    if (spRows[i].status !== (results[i].listStatus || null)) {
+      spRows[i].el.querySelector(".spcard-status").outerHTML = spcardPill(results[i]);
+      spRows[i].status = results[i].listStatus || null;
+    }
+  }
+  for (let i = spRows.length; i < results.length; i++) {
+    const r = results[i];
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "spcard";
+    row.innerHTML = spcardInner(r);
+    row.addEventListener("click", () => pickResult(i));
+    el.spResults.appendChild(row);
+    spRows.push({ id: r.id, status: r.listStatus || null, el: row });
   }
 
   const cursor = (search && search.cursor) || 0;
