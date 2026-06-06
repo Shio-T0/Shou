@@ -110,18 +110,20 @@ const LABELS = {
   fwd: "30s »",
 };
 
-async function send(act) {
+async function send(act, secs) {
   if (navigator.vibrate) navigator.vibrate(12);
   toast(LABELS[act] || act);
   try {
-    await fetch(`/${act}?k=${encodeURIComponent(TOKEN)}`, { method: "POST" });
+    let url = `/${act}?k=${encodeURIComponent(TOKEN)}`;
+    if (secs) url += `&s=${encodeURIComponent(secs)}`;  // seek step (rew/fwd)
+    await fetch(url, { method: "POST" });
   } catch (e) {
     toast("⚠ no connection");
   }
 }
 
 document.querySelectorAll("[data-act]").forEach((btn) => {
-  btn.addEventListener("click", () => send(btn.dataset.act));
+  btn.addEventListener("click", () => send(btn.dataset.act, btn.dataset.secs));
 });
 
 // List switcher (Watching / Planned) -> POST /list?to=<mode>

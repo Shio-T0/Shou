@@ -446,17 +446,18 @@ body.has-resume .hero { min-height: 0; }
 }
 .transport-row .btn-tp-main svg { width: 26px; height: 26px; }
 
-.seek-row { margin-top: 11px; }
+.seek-row { margin-top: 11px; gap: 8px; }
 .btn-seek {
   flex: 1;
+  gap: 5px;
   padding: 14px 0;
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.04em;
   color: var(--paper-dim);
   font-variant-numeric: tabular-nums;
 }
-.btn-seek svg { width: 17px; height: 17px; }
+.btn-seek svg { width: 16px; height: 16px; }
 .btn-seek:active { color: var(--paper); }
 
 /* ---- Toast ---- */

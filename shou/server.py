@@ -2191,17 +2191,26 @@ def pause():
     return jsonify(ok=True)
 
 
+def _seek_seconds() -> int:
+    """Seek step in seconds from ?s=… (default 30), clamped to a sane range."""
+    try:
+        s = int(request.args.get("s", 30))
+    except (TypeError, ValueError):
+        s = 30
+    return max(1, min(s, 600))
+
+
 @app.route("/fwd", methods=["POST"])
 @require_auth
 def seek_forward():
-    mpv_ipc_command(["seek", 30, "relative"])
+    mpv_ipc_command(["seek", _seek_seconds(), "relative"])
     return jsonify(ok=True)
 
 
 @app.route("/rew", methods=["POST"])
 @require_auth
 def seek_backward():
-    mpv_ipc_command(["seek", -30, "relative"])
+    mpv_ipc_command(["seek", -_seek_seconds(), "relative"])
     return jsonify(ok=True)
 
 
