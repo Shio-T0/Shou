@@ -713,4 +713,16 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
 .st-remove { color: #d98b8b; text-align: center; font-size: 13px; letter-spacing: 0.1em; }
 .st-btn:disabled { opacity: 0.4; pointer-events: none; }
 .st-note { font-size: 11px; color: var(--paper-dim); text-align: center; padding: 4px; }
-.st-back { margin-top: auto; }
+/* Same ghost-button look as the hero Back, but full-width in the status column.
+   (.btn-ghost's sizing is scoped to .ghost-row, which this button isn't inside.) */
+.st-back {
+  margin-top: auto;
+  width: 100%;
+  padding: 16px 0;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--paper-dim);
+  background: transparent;
+}
+.st-back svg { width: 18px; height: 18px; }
+.st-back:active { color: var(--paper); }
