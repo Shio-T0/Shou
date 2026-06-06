@@ -504,7 +504,10 @@ socket.on("state", (s) => {
   el.statusPanel.classList.toggle("hidden", !detailing);
   el.hero.classList.toggle("hidden", searching || detailing);
   el.deck.classList.toggle("hidden", searching || detailing);
-  if (searching || detailing) el.resume.classList.add("hidden");
+  // Authoritative each tick: hidden in search/detail, else shown when there's history.
+  // (renderResume short-circuits on unchanged history, so it can't re-show this itself.)
+  el.resume.classList.toggle(
+    "hidden", searching || detailing || !(s.history && s.history.length));
   if (searching) {
     buildKeyboard();
     if (!prevSearching) filterMode = false;  // fresh entry always starts on the keyboard
