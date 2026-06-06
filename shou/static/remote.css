@@ -460,6 +460,31 @@ body.has-resume .hero { min-height: 0; }
 .btn-seek svg { width: 16px; height: 16px; }
 .btn-seek:active { color: var(--paper); }
 
+/* ---- Playback progress (current episode) ---- */
+.ep-progress { margin: 3px 0 14px; }
+.ep-progress.hidden { display: none; }
+.ep-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.ep-bar-fill {
+  display: block; height: 100%; width: 0%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--acc), var(--acc-2));
+  transition: width 1s linear;
+}
+.ep-times {
+  display: flex; justify-content: space-between;
+  margin-top: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- Toast ---- */
 .toast {
   position: fixed;

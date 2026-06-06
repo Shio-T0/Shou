@@ -919,6 +919,7 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
     last_pos = 0.0     # furthest percent seen
     last_time = 0.0    # furthest time-pos seen (seconds)
     duration = 0.0
+    last_emit_sec = -1  # throttle live-position broadcasts to ~1/second
     is_final = bool(total) and episode >= total and bool(anilist_token())
 
     def _finish():
@@ -959,6 +960,22 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
                         _finish()
                 elif name == "time-pos" and isinstance(data, (int, float)):
                     last_time = max(last_time, data)
+                    # Surface live position to the remotes' progress bar, once a
+                    # second, only while this play is still the current one.
+                    sec = int(data)
+                    if sec != last_emit_sec and PLAYBACK["gen"] == gen:
+                        last_emit_sec = sec
+                        with STATE_LOCK:
+                            p = STATE.get("playing")
+                            if (p and p.get("media_id") == media_id
+                                    and p.get("episode") == episode):
+                                p["position"] = round(data, 1)
+                                p["duration"] = round(duration, 1)
+                                emit = True
+                            else:
+                                emit = False
+                        if emit:
+                            broadcast()
                 elif name == "duration" and isinstance(data, (int, float)):
                     duration = data
             elif ev == "end-file" and msg.get("reason") == "eof" and not completed:
