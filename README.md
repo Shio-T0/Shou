@@ -28,8 +28,43 @@ auto-discovers the PC.
 
 ---
 
+## A look at Shou
+
+The big screen (**PC kiosk**, left) and what's in your hand (**phone remote**, right) are
+always two views of the same live state — pick a list, search, or play, and they move together.
+
+**Watching** — your *Currently Watching* list as a 3D coverflow, mirrored to the remote:
+
+<table>
+<tr>
+<td width="66%"><img src="docs/screenshots/Watching_PC.png" alt="Shou kiosk — Currently Watching coverflow on the PC" width="100%"></td>
+<td width="34%"><img src="docs/screenshots/Watching_Mobile.png" alt="Shou phone remote — Watching" width="100%"></td>
+</tr>
+</table>
+
+**Planned** — one tap flips both screens to your *Plan to Watch* backlog:
+
+<table>
+<tr>
+<td width="66%"><img src="docs/screenshots/Planned_PC.png" alt="Shou kiosk — Plan to Watch coverflow on the PC" width="100%"></td>
+<td width="34%"><img src="docs/screenshots/Planned_Mobile.png" alt="Shou phone remote — Planned" width="100%"></td>
+</tr>
+</table>
+
+**Search New** — search all of AniList from the couch; the keyboard and results stay in sync:
+
+<table>
+<tr>
+<td width="66%"><img src="docs/screenshots/Search_PC.png" alt="Shou kiosk — Search New results on the PC" width="100%"></td>
+<td width="34%"><img src="docs/screenshots/Search_Mobile.png" alt="Shou phone remote — Search" width="100%"></td>
+</tr>
+</table>
+
+---
+
 ## Contents
 
+- [A look at Shou](#a-look-at-shou)
 - [How it works](#how-it-works)
 - [What's different from the Linux version](#whats-different-from-the-linux-version)
 - [Requirements](#requirements)
