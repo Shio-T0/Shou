@@ -54,6 +54,23 @@ const STATUS_CLASS = {
 // Action popups are disabled — the live mirror + haptics are feedback enough.
 function toast(_msg) {}
 
+// Keep the phone screen awake while the remote is open. The OS releases the wake lock
+// whenever the tab is hidden (screen off / app switch), so re-request it on every return
+// to visibility, and also on the first tap in case the browser wants a user gesture.
+let wakeLock = null;
+async function keepAwake() {
+  try {
+    if ("wakeLock" in navigator && document.visibilityState === "visible") {
+      wakeLock = await navigator.wakeLock.request("screen");
+    }
+  } catch (e) { /* unsupported or denied — nothing we can do */ }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") keepAwake();
+});
+document.addEventListener("click", () => { if (!wakeLock) keepAwake(); }, { once: true });
+keepAwake();
+
 // --- Commands ---------------------------------------------------------------
 const LABELS = {
   open: "Opening…",
