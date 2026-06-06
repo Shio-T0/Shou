@@ -29,6 +29,9 @@ const el = {
   spClear: document.getElementById("sp-clear"),
   spResults: document.getElementById("sp-results"),
   spKeyboard: document.getElementById("sp-keyboard"),
+  spFilters: document.getElementById("sp-filters"),
+  spGenres: document.getElementById("sp-genres"),
+  spFiltersClear: document.getElementById("sp-filters-clear"),
   statusPanel: document.getElementById("status-panel"),
   stCover: document.getElementById("st-cover"),
   stTitle: document.getElementById("st-title"),
@@ -97,6 +100,8 @@ el.segBtns.forEach((btn) => {
 });
 
 el.spClear.addEventListener("click", typeClear);
+document.querySelector("[data-filter-back]").addEventListener("click", () => setFilterMode(false));
+el.spFiltersClear.addEventListener("click", clearGenres);
 
 // --- Continue watching ------------------------------------------------------
 function escapeHtml(s) {
@@ -198,6 +203,17 @@ async function post(path) {
 function typeKey(c) { if (navigator.vibrate) navigator.vibrate(5); post("/search/key?c=" + encodeURIComponent(c)); }
 function typeBack() { if (navigator.vibrate) navigator.vibrate(6); post("/search/back"); }
 function typeClear() { if (navigator.vibrate) navigator.vibrate(10); post("/search/clear"); }
+function toggleGenre(g) { if (navigator.vibrate) navigator.vibrate(8); post("/search/genre?g=" + encodeURIComponent(g)); }
+function clearGenres() { if (navigator.vibrate) navigator.vibrate(10); post("/search/genres/clear"); }
+
+// Local-only toggle between the keyboard and the genre filters (same panel slot).
+let filterMode = false;
+function setFilterMode(on) {
+  filterMode = on;
+  if (navigator.vibrate) navigator.vibrate(8);
+  el.spKeyboard.classList.toggle("hidden", on);
+  el.spFilters.classList.toggle("hidden", !on);
+}
 function pickResult(i) { if (navigator.vibrate) navigator.vibrate(12); post("/search/pick?i=" + i); }
 function setStatus(to) {
   if (navigator.vibrate) navigator.vibrate(14);
@@ -233,6 +249,16 @@ function buildKeyboard() {
   });
   const r = document.createElement("div");
   r.className = "kb-row";
+  const filter = document.createElement("button");
+  filter.type = "button";
+  filter.className = "kb-key kb-filter";
+  filter.id = "kb-filter";
+  filter.setAttribute("aria-label", "Filter by genre");
+  filter.innerHTML =
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>` +
+    `<span class="kb-filter-count"></span>`;
+  filter.addEventListener("click", () => setFilterMode(true));
+  r.appendChild(filter);
   const space = document.createElement("button");
   space.type = "button";
   space.className = "kb-key kb-space";
@@ -242,13 +268,41 @@ function buildKeyboard() {
   el.spKeyboard.appendChild(r);
 }
 
+function buildFilters(allGenres) {
+  if (el.spGenres.dataset.built || !allGenres || !allGenres.length) return;
+  el.spGenres.dataset.built = "1";
+  allGenres.forEach((g) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "gchip";
+    chip.dataset.genre = g;
+    chip.textContent = g;
+    chip.addEventListener("click", () => toggleGenre(g));
+    el.spGenres.appendChild(chip);
+  });
+}
+
 let spResultsSig = "";
 let spCursor = -1;
+let prevSearching = false;
 function renderSearchPanel(search) {
   const q = (search && search.query) || "";
   el.spQuery.textContent = q;
   el.spPh.classList.toggle("hidden", q.length > 0);
   el.spClear.classList.toggle("hidden", q.length === 0);
+
+  // Genre filters: build the grid once, then reflect the server's active set.
+  const genres = (search && search.genres) || [];
+  buildFilters(search && search.allGenres);
+  for (const chip of el.spGenres.children) {
+    chip.classList.toggle("active", genres.includes(chip.dataset.genre));
+  }
+  const fbtn = document.getElementById("kb-filter");
+  if (fbtn) {
+    fbtn.querySelector(".kb-filter-count").textContent = genres.length || "";
+    fbtn.classList.toggle("has-filters", genres.length > 0);
+  }
+  el.spFiltersClear.classList.toggle("hidden", genres.length === 0);
 
   const results = (search && search.results) || [];
   const sig = results.map((r) => r.id + ":" + (r.listStatus || "")).join(",");
@@ -400,8 +454,12 @@ socket.on("state", (s) => {
   if (searching || detailing) el.resume.classList.add("hidden");
   if (searching) {
     buildKeyboard();
+    if (!prevSearching) filterMode = false;  // fresh entry always starts on the keyboard
+    el.spKeyboard.classList.toggle("hidden", filterMode);
+    el.spFilters.classList.toggle("hidden", !filterMode);
     renderSearchPanel(s.search);
   }
+  prevSearching = searching;
   if (detailing) renderStatusPanel(s.search);
   if (searching || detailing) return;  // nothing below applies to these views
 

@@ -119,6 +119,7 @@ STATE_LOCK = threading.Lock()
 # and the kiosk's physical keyboard both edit the same text, kept in sync via broadcast.
 SEARCH = {
     "query": "",       # current search text
+    "genres": [],       # active genre filters (subset of GENRES)
     "results": [],      # list of result dicts (see build_result)
     "cursor": 0,        # which result is focused (vertical list)
     "detail": None,     # focused-anime detail dict (see build_detail) or None
@@ -126,6 +127,13 @@ SEARCH = {
     "gen": 0,           # debounce generation — only the newest keystroke's query applies
 }
 SEARCH_MAX = 14            # results kept per query
+# AniList's non-adult genre vocabulary, in the order the phone's filter grid shows them.
+# Selecting several narrows results (AniList's genre_in is an AND filter).
+GENRES = [
+    "Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy",
+    "Horror", "Mahou Shoujo", "Mecha", "Music", "Mystery", "Psychological",
+    "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller",
+]
 SEARCH_DEBOUNCE = 0.28     # secs after the last keystroke before querying AniList
 # AniList MediaListStatus values the phone can set, in display order. "REMOVE" deletes.
 SEARCH_STATUSES = [
@@ -394,9 +402,9 @@ def build_card(entry: dict) -> dict:
 # "Search new" — query all of AniList, focus a result, set its list status
 # --------------------------------------------------------------------------- #
 SEARCH_QUERY = """
-query ($search: String, $perPage: Int) {
+query ($search: String, $perPage: Int, $genres: [String], $sort: [MediaSort]) {
   Page(perPage: $perPage) {
-    media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false) {
+    media(search: $search, genre_in: $genres, type: ANIME, sort: $sort, isAdult: false) {
       id
       title { romaji english }
       format
@@ -503,31 +511,44 @@ def build_detail(m: dict) -> dict:
 
 def _kick_search() -> None:
     """Bump the debounce generation and schedule a fresh AniList query for the
-    current text. Safe to call after any edit to SEARCH['query']."""
+    current text + genre filters. Safe to call after any edit to SEARCH['query']
+    or SEARCH['genres']."""
     with STATE_LOCK:
         SEARCH["gen"] += 1
         gen = SEARCH["gen"]
         SEARCH["busy"] = True
         query = SEARCH["query"]
+        genres = list(SEARCH["genres"])
     broadcast()
-    socketio.start_background_task(run_search, gen, query)
+    socketio.start_background_task(run_search, gen, query, genres)
 
 
-def run_search(gen: int, query: str) -> None:
-    """Debounced AniList search worker. Only the newest keystroke's query applies."""
+def run_search(gen: int, query: str, genres: list) -> None:
+    """Debounced AniList query worker. Only the newest keystroke/filter applies.
+
+    With text, sorts by relevance (SEARCH_MATCH). With no text it becomes a browse:
+    the top-rated anime overall, or — when genres are active — the top-rated of those
+    genres. So the results list is never empty just because nothing's been typed."""
     time.sleep(SEARCH_DEBOUNCE)
     with STATE_LOCK:
         if gen != SEARCH["gen"]:
-            return  # superseded by a newer keystroke
+            return  # superseded by a newer keystroke / filter toggle
     q = query.strip()
-    results = []
+    variables = {"perPage": SEARCH_MAX}
     if q:
-        try:
-            data = _public_post(SEARCH_QUERY, {"search": q, "perPage": SEARCH_MAX})
-            media = (data.get("Page") or {}).get("media") or []
-            results = [build_result(m) for m in media]
-        except Exception as exc:  # noqa: BLE001 - search failures shouldn't crash the loop
-            print(f"[search] query {q!r} failed: {exc}", flush=True)
+        variables["search"] = q
+        variables["sort"] = ["SEARCH_MATCH"]
+    else:
+        variables["sort"] = ["SCORE_DESC"]  # browse: best-rated first
+    if genres:
+        variables["genres"] = genres
+    results = []
+    try:
+        data = _public_post(SEARCH_QUERY, variables)
+        media = (data.get("Page") or {}).get("media") or []
+        results = [build_result(m) for m in media]
+    except Exception as exc:  # noqa: BLE001 - search failures shouldn't crash the loop
+        print(f"[search] query {q!r} genres={genres} failed: {exc}", flush=True)
     with STATE_LOCK:
         if gen != SEARCH["gen"]:
             return
@@ -1518,6 +1539,8 @@ def broadcast() -> None:
             "history": history,
             "search": {
                 "query": SEARCH["query"],
+                "genres": SEARCH["genres"],
+                "allGenres": GENRES,
                 "results": SEARCH["results"],
                 "cursor": SEARCH["cursor"],
                 "detail": SEARCH["detail"],
@@ -1611,7 +1634,7 @@ def open_ui():
     with STATE_LOCK:
         STATE["list"] = "watching"  # a clean Open always starts on the watching list
         STATE.update(view="loading", message="Loading your AniList…")
-        SEARCH.update(query="", results=[], cursor=0, detail=None, busy=False)
+        SEARCH.update(query="", genres=[], results=[], cursor=0, detail=None, busy=False)
     broadcast()
     socketio.start_background_task(refresh_list)
     ensure_kiosk()
@@ -1631,9 +1654,8 @@ def switch_list():
             STATE["list"] = "search"
             STATE["view"] = "search"
             STATE["message"] = ""
-            SEARCH.update(query="", results=[], cursor=0, detail=None, busy=False)
-            SEARCH["gen"] += 1  # invalidate any in-flight query from a previous visit
-        broadcast()
+            SEARCH.update(query="", genres=[], results=[], cursor=0, detail=None, busy=False)
+        _kick_search()  # populate the browse list (top-rated) right away
         return jsonify(ok=True, list="search")
 
     with STATE_LOCK:
@@ -1678,7 +1700,7 @@ def back():
         with STATE_LOCK:
             STATE["list"] = "watching"
             STATE.update(view="loading", message="Loading…")
-            SEARCH.update(query="", results=[], cursor=0, detail=None, busy=False)
+            SEARCH.update(query="", genres=[], results=[], cursor=0, detail=None, busy=False)
         broadcast()
         socketio.start_background_task(refresh_list)
         if pid:
@@ -1885,6 +1907,37 @@ def search_clear():
     with STATE_LOCK:
         STATE["view"] = "search"
         SEARCH.update(query="", results=[], cursor=0, detail=None)
+    _kick_search()
+    return jsonify(ok=True)
+
+
+@app.route("/search/genre", methods=["POST"])
+@require_auth
+def search_genre():
+    """Toggle one genre filter on/off, then re-run the search/browse."""
+    g = (request.args.get("g") or "").strip()
+    if g not in GENRES:
+        return jsonify(ok=False, reason="unknown genre")
+    with STATE_LOCK:
+        STATE["view"] = "search"
+        STATE["list"] = "search"
+        SEARCH["detail"] = None
+        if g in SEARCH["genres"]:
+            SEARCH["genres"].remove(g)
+        else:
+            SEARCH["genres"].append(g)
+    _kick_search()
+    return jsonify(ok=True)
+
+
+@app.route("/search/genres/clear", methods=["POST"])
+@require_auth
+def search_genres_clear():
+    """Drop all active genre filters and re-run."""
+    with STATE_LOCK:
+        STATE["view"] = "search"
+        SEARCH["detail"] = None
+        SEARCH["genres"] = []
     _kick_search()
     return jsonify(ok=True)
 

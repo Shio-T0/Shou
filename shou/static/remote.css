@@ -652,7 +652,74 @@ body > *:not(.grain):not(.aura) { position: relative; z-index: 1; }
 }
 .kb-back { flex: 1.5; color: var(--paper-dim); }
 .kb-back svg { width: 22px; height: 22px; }
-.kb-space { flex: 6; text-transform: none; font-size: 13px; letter-spacing: 0.2em; color: var(--paper-dim); }
+.kb-space { flex: 5; text-transform: none; font-size: 13px; letter-spacing: 0.2em; color: var(--paper-dim); }
+.kb-filter { flex: 1.5; position: relative; color: var(--paper-dim); }
+.kb-filter svg { width: 21px; height: 21px; }
+.kb-filter.has-filters {
+  color: #fff;
+  border-color: var(--acc);
+  background: linear-gradient(170deg, var(--acc), #d63b27);
+}
+.kb-filter-count {
+  position: absolute; top: 4px; right: 6px;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; line-height: 1;
+  color: #fff; background: var(--acc);
+  border-radius: 999px;
+}
+.kb-filter-count:empty { display: none; }
+.kb-filter.has-filters .kb-filter-count { background: #fff; color: var(--acc); }
+
+/* ---- Genre filter panel (swaps in for the keyboard) ---- */
+.sp-filters { display: flex; flex-direction: column; gap: 12px; padding-top: 2px; }
+.sp-filters.hidden { display: none; }
+.sp-filters-head {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+}
+.sp-filters-back {
+  justify-self: start;
+  display: flex; align-items: center; gap: 5px;
+  border: none; background: none; cursor: pointer;
+  color: var(--paper-dim); font-family: inherit; font-size: 13px; font-weight: 700;
+  padding: 4px 2px;
+}
+.sp-filters-back svg { width: 17px; height: 17px; }
+.sp-filters-back:active { color: var(--paper); }
+.sp-filters-title {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--paper);
+}
+.sp-filters-clear {
+  justify-self: end;
+  border: none; background: none; cursor: pointer;
+  color: var(--acc-2); font-family: inherit; font-size: 12px; font-weight: 700;
+  letter-spacing: 0.08em; padding: 4px 2px;
+}
+.sp-filters-clear.hidden { display: none; }
+.sp-filters-clear:active { color: var(--acc); }
+.sp-genres {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  max-height: 192px; overflow-y: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.sp-genres::-webkit-scrollbar { display: none; }
+.gchip {
+  border: 1px solid var(--line-2);
+  background: linear-gradient(170deg, var(--ink-4), var(--ink-3));
+  color: var(--paper-dim);
+  font-family: inherit; font-size: 13.5px; font-weight: 600;
+  padding: 9px 14px; border-radius: 999px; cursor: pointer;
+  transition: transform 0.07s var(--ease), background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.gchip:active { transform: scale(0.94); }
+.gchip.active {
+  color: #fff;
+  border-color: var(--acc);
+  background: linear-gradient(150deg, var(--acc), #d63b27);
+  box-shadow: 0 8px 20px -10px var(--acc);
+}
 
 /* ---- Status config panel ---- */
 .st-head {
