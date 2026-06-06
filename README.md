@@ -60,6 +60,23 @@ always two views of the same live state — pick a list, search, or play, and th
 </tr>
 </table>
 
+**Many PCs, one phone** — tap the brand to switch between saved Shou servers. Each remote
+keeps only its key and re-finds the PC on whatever network you're on, so it survives
+moving between homes and Wi-Fis:
+
+<table>
+<tr>
+<td width="66%">
+One phone can drive several Shou PCs — living room, bedroom, a friend's place. Tapping the
+<strong>朱&nbsp;SHOU</strong> wordmark opens the <strong>Remotes</strong> page, where you
+add, name, and switch between servers. Because each entry stores just its key (never a
+fixed IP), Shou auto-detects the PC's current address — via its <code>&lt;name&gt;.local</code>
+— so you never re-add a remote after changing networks.
+</td>
+<td width="34%"><img src="docs/screenshots/Remotes_Mobile.png" alt="Shou phone remote — Remotes switcher" width="100%"></td>
+</tr>
+</table>
+
 ---
 
 ## Contents
