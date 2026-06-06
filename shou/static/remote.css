@@ -862,3 +862,163 @@ body.has-resume .hero { min-height: 0; }
 }
 .st-back svg { width: 18px; height: 18px; }
 .st-back:active { color: var(--paper); }
+
+/* ---- Brand is a button : opens the Remotes drawer ---- */
+.brand {
+  -webkit-appearance: none; appearance: none;
+  background: none; border: 0; color: inherit; font: inherit;
+  text-align: left; cursor: pointer;
+  padding: 4px; margin: -4px; border-radius: 12px;
+  transition: background 0.2s ease;
+}
+.brand:active { background: var(--line); }
+.brand-caret {
+  width: 15px; height: 15px; margin-left: 1px;
+  color: var(--paper-dim); opacity: 0.7;
+}
+
+/* ---- Remotes drawer ---- */
+.remotes {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 18px);
+  background: radial-gradient(120% 70% at 50% -8%, #16131b 0%, var(--ink) 58%);
+  overflow-y: auto;
+  animation: rmtIn 0.34s var(--ease) both;
+}
+.remotes.hidden { display: none; }
+body.rmt-open { overflow: hidden; }
+@keyframes rmtIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.rmt-top { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; }
+.rmt-back, .rmt-add {
+  width: 40px; height: 40px; display: grid; place-items: center;
+  background: linear-gradient(160deg, var(--ink-3), var(--ink-2));
+  border: 1px solid var(--line-2); border-radius: 12px; color: var(--paper);
+  cursor: pointer; transition: transform 0.08s var(--ease), border-color 0.2s ease;
+}
+.rmt-back:active, .rmt-add:active { transform: scale(0.92); }
+.rmt-add { color: var(--acc-2); }
+.rmt-back svg, .rmt-add svg { width: 20px; height: 20px; }
+.rmt-head { text-align: center; display: flex; flex-direction: column; line-height: 1.05; }
+.rmt-jp {
+  font-family: "Shippori Mincho B1", serif; font-size: 11px;
+  letter-spacing: 0.4em; color: var(--acc-2);
+}
+.rmt-title { font-weight: 900; font-size: 16px; letter-spacing: 0.22em; margin-top: 3px; }
+
+.rmt-tagline {
+  font-size: 12px; line-height: 1.5; color: var(--paper-dim);
+  text-align: center; max-width: 30em; margin: -2px auto 0; padding: 0 6px;
+}
+
+.rmt-error {
+  font-size: 12px; line-height: 1.45; text-align: center;
+  padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--line-2); background: var(--ink-2); color: var(--paper-dim);
+}
+.rmt-error.is-error {
+  color: var(--acc-2); border-color: rgba(255, 74, 50, 0.4); background: var(--acc-soft);
+}
+.rmt-error.hidden { display: none; }
+
+.rmt-list { display: flex; flex-direction: column; gap: 11px; }
+.rmt-list.dim { opacity: 0.4; pointer-events: none; }
+.rmt-empty { text-align: center; color: var(--paper-dim); font-size: 13px; line-height: 1.7; padding: 26px 0; }
+
+.rmt-card {
+  border: 1px solid var(--line); border-radius: var(--r); overflow: hidden;
+  background: linear-gradient(160deg, var(--ink-3), var(--ink-2));
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.rmt-card.active {
+  border-color: rgba(255, 74, 50, 0.5);
+  box-shadow: 0 10px 30px -16px var(--acc), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.rmt-pick {
+  width: 100%; display: flex; align-items: center; gap: 13px;
+  padding: 14px 14px 12px;
+  background: none; border: 0; color: inherit; cursor: pointer; text-align: left;
+}
+.rmt-glyph {
+  flex: none; width: 42px; height: 42px; display: grid; place-items: center;
+  font-family: "Shippori Mincho B1", serif; font-weight: 800; font-size: 22px;
+  color: var(--acc); border: 1px solid var(--line-2); border-radius: 12px; background: var(--ink);
+}
+.rmt-card.active .rmt-glyph {
+  color: var(--acc-2);
+  background: radial-gradient(120% 120% at 30% 0%, rgba(255, 74, 50, 0.18), var(--ink));
+}
+.rmt-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rmt-name {
+  font-weight: 800; font-size: 15px; letter-spacing: 0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rmt-host {
+  font-size: 11.5px; color: var(--paper-dim); letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rmt-badge {
+  flex: none; font-size: 9.5px; font-weight: 800; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--live);
+  padding: 4px 9px; border-radius: 999px;
+  border: 1px solid rgba(90, 214, 160, 0.4); background: rgba(90, 214, 160, 0.1);
+}
+.rmt-go { flex: none; width: 20px; height: 20px; color: var(--paper-dim); }
+
+.rmt-card-actions { display: flex; border-top: 1px solid var(--line); }
+.rmt-mini {
+  flex: 1; padding: 10px; background: none; border: 0; cursor: pointer;
+  color: var(--paper-dim); font: inherit; font-size: 12px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.rmt-mini + .rmt-mini { border-left: 1px solid var(--line); }
+.rmt-mini:active { background: var(--line); }
+.rmt-del[data-armed] { color: var(--acc-2); background: var(--acc-soft); }
+
+.rmt-form {
+  display: flex; flex-direction: column; gap: 12px;
+  border: 1px solid var(--line-2); border-radius: var(--r);
+  background: linear-gradient(160deg, var(--ink-3), var(--ink-2));
+  padding: 16px 15px 15px;
+  animation: rmtIn 0.26s var(--ease) both;
+}
+.rmt-form.hidden { display: none; }
+.rmt-form-title {
+  font-weight: 800; font-size: 14px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--acc-2);
+}
+.rmt-row { display: flex; gap: 11px; }
+.rmt-field { display: flex; flex-direction: column; gap: 6px; }
+.rmt-grow { flex: 1 1 auto; }
+.rmt-port { width: 84px; flex: none; }
+.rmt-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--paper-dim);
+}
+.rmt-label em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: 0.7; }
+.rmt-input {
+  width: 100%; padding: 11px 12px;
+  background: var(--ink); border: 1px solid var(--line-2); border-radius: 12px;
+  color: var(--paper); font: inherit; font-size: 14px;
+  -webkit-appearance: none; appearance: none;
+  -webkit-user-select: text; user-select: text;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.rmt-input:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+.rmt-form-actions { display: flex; gap: 11px; margin-top: 2px; }
+.rmt-btn {
+  flex: 1; padding: 13px; border-radius: 13px; cursor: pointer;
+  font: inherit; font-weight: 800; font-size: 13.5px; letter-spacing: 0.04em;
+  border: 1px solid var(--line-2);
+  transition: transform 0.08s var(--ease), box-shadow 0.2s ease;
+}
+.rmt-btn:active { transform: scale(0.97); }
+.rmt-btn-ghost { background: var(--ink-3); color: var(--paper); flex: 0 0 38%; }
+.rmt-btn-accent {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(150deg, var(--acc), #d63b27);
+  box-shadow: 0 8px 22px -10px var(--acc);
+}

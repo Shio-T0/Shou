@@ -1808,7 +1808,34 @@ def index():
 @app.route("/remote")
 @require_auth
 def remote():
-    return render_template("remote.html", token=request.args.get("k", ""))
+    hostname = socket.gethostname().split(".")[0] or "shou"
+    return render_template(
+        "remote.html",
+        token=request.args.get("k", ""),
+        server_ip=_lan_ip(),
+        server_host=f"{hostname}.local",
+        server_name=hostname,
+        server_port=PORT,
+    )
+
+
+@app.route("/whoami")
+def whoami():
+    """Tiny, unauthenticated, CORS-open identity probe. The phone remote tries it
+    on candidate hosts to re-find this server after a network change — it carries
+    NO token, only enough to confirm 'a Shou server lives here' and report the
+    current LAN IP / hostname so a saved remote can self-heal its address."""
+    hostname = socket.gethostname().split(".")[0] or "shou"
+    data = {
+        "app": "shou",
+        "name": hostname,
+        "host": f"{hostname}.local",
+        "ip": _lan_ip(),
+        "port": PORT,
+    }
+    resp = Response(json.dumps(data), mimetype="application/json")
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
 
 
 @app.route("/manifest.webmanifest")

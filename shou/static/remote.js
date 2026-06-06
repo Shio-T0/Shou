@@ -651,6 +651,242 @@ function setCover(cover, banner, color) {
     : "none";
 }
 
+// --- Remotes : store / name / switch between Shou servers ------------------
+// One phone can drive several Shou PCs. Each saved remote keeps only its key;
+// the address is self-healing — on every successful load we refresh it to the
+// host that just worked (and remember the portable <name>.local), so changing
+// networks doesn't mean re-adding it. The set follows you across origins via a
+// short-lived URL fragment, since localStorage is per-origin.
+const RMT_KEY = "shou.remotes.v1";
+
+function b64encode(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64decode(b)   { return decodeURIComponent(escape(atob(b))); }
+function rmtUid()       { return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+function rmtLoad() {
+  try { const a = JSON.parse(localStorage.getItem(RMT_KEY)); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function rmtSave(list) { try { localStorage.setItem(RMT_KEY, JSON.stringify(list)); } catch (e) {} }
+
+// Union an incoming set (carried in the URL fragment) into our own, keyed by token.
+function rmtMerge(incoming) {
+  if (!Array.isArray(incoming)) return;
+  const list = rmtLoad();
+  const byKey = new Map(list.map((r) => [r.key, r]));
+  for (const inc of incoming) {
+    if (!inc || !inc.key) continue;
+    const ex = byKey.get(inc.key);
+    if (ex) {                              // keep our (fresher) address, fill any gaps
+      if (!ex.name && inc.name) ex.name = inc.name;
+      if (!ex.hostname && inc.hostname) ex.hostname = inc.hostname;
+      if (!ex.host && inc.host) ex.host = inc.host;
+      if (!ex.port && inc.port) ex.port = inc.port;
+    } else {
+      const r = { id: inc.id || rmtUid(), name: inc.name || "", key: inc.key,
+                  host: inc.host || "", hostname: inc.hostname || "", port: inc.port || "4100" };
+      list.push(r); byKey.set(r.key, r);
+    }
+  }
+  rmtSave(list);
+}
+
+function rmtIngestHash() {
+  const m = location.hash.match(/(?:^#|&)shou=([^&]+)/);
+  if (!m) return;
+  try { rmtMerge(JSON.parse(b64decode(decodeURIComponent(m[1])))); } catch (e) {}
+  history.replaceState(null, "", location.pathname + location.search);  // don't let it linger
+}
+
+// Record the server that's serving this page: self-heal its address, or auto-add
+// it the first time. Returns the active remote.
+function rmtRegisterCurrent() {
+  if (!TOKEN) return null;
+  const s = window.SHOU_SERVER || {};
+  const reached = location.hostname;                       // the address that just worked
+  const port = (location.port || s.port || "4100") + "";
+  const list = rmtLoad();
+  let cur = list.find((r) => r.key === TOKEN);
+  if (!cur) {
+    cur = { id: rmtUid(), name: s.name || reached || "Shou", key: TOKEN,
+            host: reached, hostname: s.host || "", port };
+    list.push(cur);
+  } else {
+    if (reached) cur.host = reached;
+    if (s.host) cur.hostname = s.host;                     // portable <name>.local
+    if (s.port) cur.port = s.port + "";
+    if (!cur.name) cur.name = s.name || reached;
+  }
+  rmtSave(list);
+  return cur;
+}
+
+function rmtUpdateBrand(cur) {
+  const node = document.getElementById("brand-remote");
+  if (node && cur && cur.name) node.textContent = cur.name;
+}
+
+// Reachability + identity check against a candidate host (CORS-open /whoami).
+function rmtProbe(host, port) {
+  return new Promise((res) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; res(v); } };
+    const t = setTimeout(() => finish(false), 2600);
+    fetch(`http://${host}:${port}/whoami`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { clearTimeout(t); finish(!!(j && j.app === "shou")); })
+      .catch(() => { clearTimeout(t); finish(false); });
+  });
+}
+
+function rmtNote(msg, isErr) {
+  const e = document.getElementById("rmt-error");
+  if (!e) return;
+  e.textContent = msg || "";
+  e.classList.toggle("hidden", !msg);
+  e.classList.toggle("is-error", !!isErr);
+}
+
+// Find the remote on the current network and hop to it, carrying the whole set
+// across the origin boundary in the fragment.
+async function rmtSwitch(remote) {
+  if (remote.key === TOKEN) { rmtClose(); return; }       // already here
+  if (navigator.vibrate) navigator.vibrate(12);
+  const port = (remote.port || "4100") + "";
+  const cands = [];
+  if (remote.host) cands.push(remote.host);
+  if (remote.hostname && !cands.includes(remote.hostname)) cands.push(remote.hostname);
+  if (!cands.length) { rmtNote("This remote has no address — edit it to add one.", true); return; }
+
+  rmtNote("Finding “" + (remote.name || "Shou") + "” on your network…", false);
+  let reach = null;
+  for (const h of cands) { if (await rmtProbe(h, port)) { reach = h; break; } }
+  if (!reach) {
+    rmtNote("Couldn't reach “" + (remote.name || "Shou") + "”. Is its PC on, on this network, and running Shou?", true);
+    return;
+  }
+  remote.host = reach;                                     // remember what worked
+  const list = rmtLoad();
+  const i = list.findIndex((r) => r.key === remote.key);
+  if (i >= 0) { list[i].host = reach; rmtSave(list); }
+  const bundle = encodeURIComponent(b64encode(JSON.stringify(rmtLoad())));
+  location.href = `http://${reach}:${port}/remote?k=${encodeURIComponent(remote.key)}#shou=${bundle}`;
+}
+
+function rmtDelete(remote) {
+  if (navigator.vibrate) navigator.vibrate(10);
+  rmtSave(rmtLoad().filter((r) => r.id !== remote.id));
+  rmtRender();
+}
+
+let rmtEditing = null;  // remote being edited, or null when adding
+function rmtOpenForm(remote) {
+  rmtEditing = remote || null;
+  document.getElementById("rmt-form-title").textContent = remote ? "Edit remote" : "Add a remote";
+  document.getElementById("rmt-f-name").value = (remote && remote.name) || "";
+  document.getElementById("rmt-f-host").value = (remote && (remote.host || remote.hostname)) || "";
+  document.getElementById("rmt-f-port").value = (remote && remote.port) || "4100";
+  document.getElementById("rmt-f-key").value = (remote && remote.key) || "";
+  document.getElementById("rmt-form").classList.remove("hidden");
+  document.getElementById("rmt-list").classList.add("dim");
+  rmtNote("", false);
+  document.getElementById("rmt-f-name").focus();
+}
+function rmtCloseForm() {
+  rmtEditing = null;
+  document.getElementById("rmt-form").classList.add("hidden");
+  document.getElementById("rmt-list").classList.remove("dim");
+}
+function rmtFormSubmit() {
+  const name = document.getElementById("rmt-f-name").value.trim();
+  const host = document.getElementById("rmt-f-host").value.trim();
+  const port = document.getElementById("rmt-f-port").value.trim() || "4100";
+  const key  = document.getElementById("rmt-f-key").value.trim();
+  if (!host || !key) { rmtNote("Host and key are both required.", true); return; }
+  const list = rmtLoad();
+  let saved;
+  if (rmtEditing) {
+    const i = list.findIndex((r) => r.id === rmtEditing.id);
+    if (i >= 0) { list[i] = { ...list[i], name: name || list[i].name, host, port, key }; saved = list[i]; }
+  } else {
+    const ex = list.find((r) => r.key === key);           // de-dup by token
+    if (ex) { ex.name = name || ex.name; ex.host = host; ex.port = port; saved = ex; }
+    else { saved = { id: rmtUid(), name: name || host, key, host, hostname: "", port }; list.push(saved); }
+  }
+  rmtSave(list);
+  rmtCloseForm();
+  rmtRender();
+  if (saved && saved.key !== TOKEN) rmtSwitch(saved);      // "Save & connect"
+}
+
+function rmtRender() {
+  const wrap = document.getElementById("rmt-list");
+  if (!wrap) return;
+  const list = rmtLoad();
+  wrap.innerHTML = "";
+  if (!list.length) {
+    wrap.innerHTML = `<div class="rmt-empty">No remotes saved yet.<br>Tap ＋ to add one.</div>`;
+    return;
+  }
+  list.forEach((r) => {
+    const active = r.key === TOKEN;
+    const addr = (r.host || r.hostname || "?") + ":" + (r.port || "4100");
+    const card = document.createElement("div");
+    card.className = "rmt-card" + (active ? " active" : "");
+    card.innerHTML = `
+      <button type="button" class="rmt-pick">
+        <span class="rmt-glyph">朱</span>
+        <span class="rmt-info">
+          <span class="rmt-name">${escapeHtml(r.name || "Shou")}</span>
+          <span class="rmt-host">${escapeHtml(addr)}</span>
+        </span>
+        ${active
+          ? `<span class="rmt-badge">live</span>`
+          : `<svg class="rmt-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`}
+      </button>
+      <div class="rmt-card-actions">
+        <button type="button" class="rmt-mini" data-edit>Rename</button>
+        <button type="button" class="rmt-mini rmt-del" data-del>Delete</button>
+      </div>`;
+    card.querySelector(".rmt-pick").addEventListener("click", () => rmtSwitch(r));
+    card.querySelector("[data-edit]").addEventListener("click", () => rmtOpenForm(r));
+    const del = card.querySelector("[data-del]");
+    del.addEventListener("click", () => {
+      if (del.dataset.armed) { rmtDelete(r); return; }
+      del.dataset.armed = "1"; del.textContent = "Confirm?";
+      setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Delete"; } }, 2600);
+    });
+    wrap.appendChild(card);
+  });
+}
+
+function rmtOpen() {
+  if (navigator.vibrate) navigator.vibrate(8);
+  rmtNote("", false); rmtCloseForm(); rmtRender();
+  const p = document.getElementById("remotes-panel");
+  p.classList.remove("hidden"); p.setAttribute("aria-hidden", "false");
+  document.body.classList.add("rmt-open");
+}
+function rmtClose() {
+  const p = document.getElementById("remotes-panel");
+  p.classList.add("hidden"); p.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("rmt-open");
+}
+
+(function rmtInit() {
+  const brand = document.getElementById("brand-btn");
+  if (brand) brand.addEventListener("click", rmtOpen);
+  const wire = (id, fn) => { const n = document.getElementById(id); if (n) n.addEventListener("click", fn); };
+  wire("rmt-close", rmtClose);
+  wire("rmt-add", () => rmtOpenForm(null));
+  wire("rmt-cancel", rmtCloseForm);
+  const form = document.getElementById("rmt-form");
+  if (form) form.addEventListener("submit", (e) => { e.preventDefault(); rmtFormSubmit(); });
+
+  rmtIngestHash();
+  rmtUpdateBrand(rmtRegisterCurrent());
+})();
+
 // --- PWA service worker (registers only in a secure context; no-ops on http) -
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
