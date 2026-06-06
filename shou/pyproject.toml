@@ -9,4 +9,5 @@ dependencies = [
     "simple-websocket>=1.0",
     "requests>=2.31",
     "anipy-cli>=3.8.10",
+    "zeroconf>=0.131",
 ]

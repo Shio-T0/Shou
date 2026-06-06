@@ -7,5 +7,12 @@
     <string name="port_hint">Port (default 4100)</string>
     <string name="token_hint">Remote token</string>
     <string name="use_https">Use HTTPS</string>
+    <string name="allow_bad_certs">Allow self-signed certificate</string>
     <string name="save">Save &amp; connect</string>
+    <string name="scan_network">Scan network for Shou</string>
+    <string name="scanning">Scanning…</string>
+    <string name="scan_found">Found Shou at %1$s:%2$d</string>
+    <string name="scan_none">No Shou server found on this network.</string>
+    <string name="scan_failed">Scan failed — enter the address manually.</string>
+    <string name="scan_unavailable">Discovery isn\'t available on this device.</string>
 </resources>

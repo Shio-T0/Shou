@@ -4,8 +4,10 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
+import android.net.http.SslError
 import android.os.Bundle
 import android.view.WindowManager
+import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -83,6 +85,26 @@ class MainActivity : AppCompatActivity() {
             ) {
                 if (request.isForMainFrame) showError()
             }
+
+            override fun onReceivedSslError(
+                view: WebView,
+                handler: SslErrorHandler,
+                error: SslError,
+            ) {
+                // Shou over self-signed TLS: trust it only if the user opted in
+                // (Settings → "Allow self-signed certificate"). Otherwise refuse
+                // and explain, rather than silently failing.
+                if (prefs().getBoolean("allowBadCerts", false)) {
+                    handler.proceed()
+                } else {
+                    handler.cancel()
+                    showError(
+                        "This server's HTTPS certificate isn't trusted. If it's your " +
+                            "own Shou server, turn on “Allow self-signed certificate” " +
+                            "in Settings.",
+                    )
+                }
+            }
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -125,8 +147,11 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(this, SettingsActivity::class.java))
     }
 
-    private fun showError() {
+    private fun showError(detail: String? = null) {
         val host = configuredHost() ?: "(not set)"
+        val body = detail
+            ?: "No response from <b>$host</b>. Make sure the Shou server is running on " +
+            "your computer and that this phone is on the same network."
         val html = """
             <!doctype html><html><head><meta name="viewport"
               content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -143,8 +168,7 @@ class MainActivity : AppCompatActivity() {
               .s{color:#F4F1EA;border:1px solid #2a2733}
             </style></head><body>
               <h1>Can't reach Shou</h1>
-              <p>No response from <b>$host</b>. Make sure the Shou server is running on
-                 your computer and that this phone is on the same network.</p>
+              <p>$body</p>
               <a class="p" href="app://retry">Retry</a>
               <a class="s" href="app://settings">Settings</a>
             </body></html>
