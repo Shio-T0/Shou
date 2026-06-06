@@ -35,6 +35,7 @@ const el = {
   searchQuery: document.getElementById("search-query"),
   searchPh: document.getElementById("search-ph"),
   searchStatus: document.getElementById("search-status"),
+  searchFilters: document.getElementById("search-filters"),
   searchList: document.getElementById("search-list"),
   searchEmpty: document.getElementById("search-empty"),
   detailView: document.getElementById("detail-view"),
@@ -249,18 +250,48 @@ function metaLine(d) {
 
 let searchResultsSig = "";
 let searchCursor = -1;
+let searchGenresSig = "";
 function renderSearch(search) {
   const q = (search && search.query) || "";
   el.searchQuery.textContent = q;
   el.searchPh.classList.toggle("hidden", q.length > 0);
 
   const results = (search && search.results) || [];
-  el.searchStatus.textContent = search && search.busy
+  const busy = !!(search && search.busy);
+  const genres = (search && search.genres) || [];
+
+  // Active genre filters as chips; with no typed query this is a browse, so label it.
+  const genSig = (q ? "q" : "browse") + "|" + genres.join(",");
+  if (genSig !== searchGenresSig) {
+    searchGenresSig = genSig;
+    el.searchFilters.innerHTML = "";
+    if (!q) {
+      const lead = document.createElement("span");
+      lead.className = "search-filters-lead";
+      lead.textContent = genres.length ? "Top rated in" : "Top rated on AniList";
+      el.searchFilters.appendChild(lead);
+    } else if (genres.length) {
+      const lead = document.createElement("span");
+      lead.className = "search-filters-lead";
+      lead.textContent = "Filtered by";
+      el.searchFilters.appendChild(lead);
+    }
+    genres.forEach((g, i) => {
+      const chip = document.createElement("span");
+      chip.className = "search-chip";
+      chip.style.animationDelay = i * 45 + "ms";
+      chip.textContent = g;
+      el.searchFilters.appendChild(chip);
+    });
+    el.searchFilters.classList.toggle("hidden", q && !genres.length);
+  }
+
+  el.searchStatus.textContent = busy
     ? "searching…"
     : results.length
     ? results.length + " result" + (results.length === 1 ? "" : "s")
     : "";
-  el.searchEmpty.classList.toggle("hidden", q.length > 0 || (search && search.busy));
+  el.searchEmpty.classList.toggle("hidden", busy || results.length > 0);
 
   const sig = results.map((r) => r.id + ":" + (r.listStatus || "")).join(",");
   if (sig !== searchResultsSig) {

@@ -685,6 +685,42 @@ html, body {
   text-align: right;
 }
 
+/* Active genre filters / browse label, just under the search box. */
+.search-filters {
+  width: 100%;
+  max-width: 64vw;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6vw;
+  padding: 0 0.4vw 1.4vh;
+}
+.search-filters.hidden { display: none; }
+.search-filters-lead {
+  font-size: 0.92vw;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+  margin-right: 0.2vw;
+}
+.search-chip {
+  font-size: 0.95vw;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--paper);
+  padding: 0.55vh 0.9vw;
+  border-radius: 999px;
+  background: linear-gradient(150deg, rgba(255,74,50,0.22), rgba(255,74,50,0.08));
+  border: 1px solid rgba(255,74,50,0.5);
+  box-shadow: 0 1vh 2.4vh -1.4vh rgba(255,74,50,0.8);
+  animation: chipPop 0.4s var(--ease) both;
+}
+@keyframes chipPop {
+  from { opacity: 0; transform: translateY(0.6vh) scale(0.85); }
+  to   { opacity: 1; transform: none; }
+}
+
 .search-list {
   width: 100%;
   max-width: 64vw;
