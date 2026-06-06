@@ -17,7 +17,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='remote.css') }}" />
-  <script>window.SHOU_TOKEN = {{ token|tojson }};</script>
+  <script>
+    window.SHOU_TOKEN = {{ token|tojson }};
+    // This server's own identity, so the remote can self-heal a saved entry's
+    // address and re-find it on a new network (host = portable <name>.local).
+    window.SHOU_SERVER = {
+      ip:   {{ server_ip|tojson }},
+      host: {{ server_host|tojson }},
+      name: {{ server_name|tojson }},
+      port: {{ server_port|tojson }}
+    };
+  </script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
@@ -26,13 +36,14 @@
 
   <!-- Top bar : wordmark + live status -->
   <header class="topbar reveal" style="--d:0">
-    <div class="brand">
+    <button type="button" class="brand" id="brand-btn" aria-label="Switch remote">
       <span class="brand-glyph">朱</span>
       <span class="brand-text">
         <span class="brand-name">SHOU</span>
-        <span class="brand-sub">アニメ・リモート</span>
+        <span class="brand-sub"><span id="brand-remote">アニメ・リモート</span></span>
       </span>
-    </div>
+      <svg class="brand-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
     <div id="conn" class="conn"><span class="dot"></span><span id="conn-text">connecting</span></div>
   </header>
 
@@ -201,6 +212,59 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
       <span>Back to results</span>
     </button>
+  </section>
+
+  <!-- Remotes : a full-screen drawer to store / name / switch Shou servers.
+       Opened by tapping the brand. Each saved remote stores just its key; Shou
+       re-finds the PC on the current network by host or <name>.local. -->
+  <section id="remotes-panel" class="remotes hidden" aria-hidden="true">
+    <header class="rmt-top">
+      <button type="button" class="rmt-back" id="rmt-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="rmt-head">
+        <span class="rmt-jp">リモート</span>
+        <span class="rmt-title">Remotes</span>
+      </div>
+      <button type="button" class="rmt-add" id="rmt-add" aria-label="Add a remote">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </header>
+
+    <p class="rmt-tagline">
+      Control more than one Shou PC from this phone. Each remote keeps only its
+      key — Shou finds the PC again on whatever network you're on.
+    </p>
+
+    <div id="rmt-error" class="rmt-error hidden"></div>
+    <div id="rmt-list" class="rmt-list"></div>
+
+    <!-- Add / edit form -->
+    <form id="rmt-form" class="rmt-form hidden" autocomplete="off">
+      <div class="rmt-form-title" id="rmt-form-title">Add a remote</div>
+      <label class="rmt-field">
+        <span class="rmt-label">Name</span>
+        <input id="rmt-f-name" class="rmt-input" type="text" placeholder="Living room PC" maxlength="40" />
+      </label>
+      <div class="rmt-row">
+        <label class="rmt-field rmt-grow">
+          <span class="rmt-label">Host / IP</span>
+          <input id="rmt-f-host" class="rmt-input" type="text" inputmode="url" placeholder="shou.local" autocapitalize="off" spellcheck="false" />
+        </label>
+        <label class="rmt-field rmt-port">
+          <span class="rmt-label">Port</span>
+          <input id="rmt-f-port" class="rmt-input" type="text" inputmode="numeric" placeholder="4100" />
+        </label>
+      </div>
+      <label class="rmt-field">
+        <span class="rmt-label">Key <em>(REMOTE_TOKEN)</em></span>
+        <input id="rmt-f-key" class="rmt-input" type="text" placeholder="from ~/.config/shou/shou.conf" autocapitalize="off" spellcheck="false" />
+      </label>
+      <div class="rmt-form-actions">
+        <button type="button" class="rmt-btn rmt-btn-ghost" id="rmt-cancel">Cancel</button>
+        <button type="submit" class="rmt-btn rmt-btn-accent" id="rmt-save">Save &amp; connect</button>
+      </div>
+    </form>
   </section>
 
   <div id="toast" class="toast"></div>
