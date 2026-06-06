@@ -679,13 +679,16 @@ html, body {
 
 .search-list {
   width: 100%;
-  max-width: 62vw;
+  max-width: 64vw;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1vh;
-  padding: 0.6vh 0.4vw 2vh;
+  /* Generous side/top/bottom padding so the active row's scale(1.025) + drop shadow
+     have room: overflow-y:auto also clips overflow-x, so a tight box cuts the hovered
+     row on the sides (and the first/last row at the top/bottom). */
+  padding: 2vh 2vw 2.4vh;
   scrollbar-width: none;
 }
 .search-list::-webkit-scrollbar { display: none; }
