@@ -22,9 +22,9 @@ class ShouWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
-        // Widget-cover target size (px). Portrait-ish, matching the layout's 52×70dp slot.
-        private const val COVER_W = 150
-        private const val COVER_H = 200
+        // Widget-cover target size (px) — a rounded square thumbnail.
+        private const val COVER_W = 132
+        private const val COVER_H = 132
 
         private fun broadcast(ctx: Context, action: String, rc: Int): PendingIntent =
             PendingIntent.getBroadcast(
@@ -45,12 +45,10 @@ class ShouWidgetProvider : AppWidgetProvider() {
             val app = ctx.applicationContext
             val v = RemoteViews(app.packageName, R.layout.widget_shou)
             val p = ShouStore.playback(app)
-            val name = ShouStore.activeName(app)
             val active = p != null && p.active
 
             if (active) {
                 v.setTextViewText(R.id.w_title, p!!.title.ifBlank { "Now playing" })
-                v.setTextViewText(R.id.w_sub, p.subtitle.ifBlank { name })
                 v.setImageViewResource(
                     R.id.w_play,
                     if (p.playing) R.drawable.ic_media_pause else R.drawable.ic_media_play,
@@ -66,13 +64,12 @@ class ShouWidgetProvider : AppWidgetProvider() {
                 // refresh pass below swaps in the real art once it's decoded).
                 val art = ArtLoader.cached(p.cover)
                 if (art != null) {
-                    v.setImageViewBitmap(R.id.w_cover, ArtLoader.roundedCrop(art, COVER_W, COVER_H, 26f))
+                    v.setImageViewBitmap(R.id.w_cover, ArtLoader.roundedCrop(art, COVER_W, COVER_H, 18f))
                 } else {
                     v.setImageViewResource(R.id.w_cover, R.drawable.widget_cover_placeholder)
                 }
             } else {
                 v.setTextViewText(R.id.w_title, "Nothing playing")
-                v.setTextViewText(R.id.w_sub, name)
                 v.setImageViewResource(R.id.w_play, R.drawable.ic_media_play)
                 v.setTextViewText(R.id.w_status, "IDLE")
                 v.setTextColor(R.id.w_status, 0xFF9A94A6.toInt())
@@ -86,8 +83,6 @@ class ShouWidgetProvider : AppWidgetProvider() {
             v.setOnClickPendingIntent(R.id.w_prev, broadcast(app, ActionReceiver.ACTION_PREV, 11))
             v.setOnClickPendingIntent(R.id.w_play, broadcast(app, ActionReceiver.ACTION_PAUSE, 12))
             v.setOnClickPendingIntent(R.id.w_next, broadcast(app, ActionReceiver.ACTION_NEXT, 13))
-            v.setOnClickPendingIntent(R.id.w_rew, broadcast(app, ActionReceiver.ACTION_REW, 15))
-            v.setOnClickPendingIntent(R.id.w_ffwd, broadcast(app, ActionReceiver.ACTION_FFWD, 16))
 
             val open = PendingIntent.getActivity(
                 app, 14,
