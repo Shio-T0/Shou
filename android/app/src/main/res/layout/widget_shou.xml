@@ -4,8 +4,10 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:gravity="center_vertical"
     android:background="@drawable/widget_bg"
-    android:padding="15dp">
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="11dp">
 
     <!-- Header: cover · meta · wake -->
     <LinearLayout
@@ -16,8 +18,8 @@
 
         <ImageView
             android:id="@+id/w_cover"
-            android:layout_width="52dp"
-            android:layout_height="70dp"
+            android:layout_width="44dp"
+            android:layout_height="58dp"
             android:scaleType="fitXY"
             android:src="@drawable/widget_cover_placeholder"
             android:contentDescription="@string/app_name" />
@@ -26,7 +28,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="13dp"
+            android:layout_marginStart="11dp"
             android:orientation="vertical">
 
             <LinearLayout
@@ -51,8 +53,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@drawable/pill_bg"
-                    android:paddingHorizontal="9dp"
-                    android:paddingVertical="3dp"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="2dp"
                     android:text="IDLE"
                     android:textColor="@color/paperDim"
                     android:textSize="9sp"
@@ -64,10 +66,10 @@
                 android:id="@+id/w_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="3dp"
                 android:text="Nothing playing"
                 android:textColor="@color/paper"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:textStyle="bold"
                 android:maxLines="1"
                 android:ellipsize="end" />
@@ -76,19 +78,19 @@
                 android:id="@+id/w_sub"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="1dp"
                 android:text="Tap to open Shou"
                 android:textColor="@color/paperDim"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
         </LinearLayout>
 
         <ImageView
             android:id="@+id/w_wake"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:layout_marginStart="10dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/widget_btn"
             android:padding="9dp"
             android:src="@drawable/ic_wake"
@@ -99,7 +101,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="13dp"
+        android:layout_marginTop="9dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
@@ -116,7 +118,7 @@
             android:id="@+id/w_bar"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="0dp"
-            android:layout_height="6dp"
+            android:layout_height="5dp"
             android:layout_weight="1"
             android:layout_marginHorizontal="9dp"
             android:max="1000"
@@ -137,56 +139,56 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="13dp"
+        android:layout_marginTop="9dp"
         android:orientation="horizontal"
         android:gravity="center">
 
         <ImageView
             android:id="@+id/w_prev"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="12dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="11dp"
             android:background="@drawable/widget_btn"
-            android:padding="9dp"
+            android:padding="8dp"
             android:src="@drawable/ic_media_prev"
             android:contentDescription="@string/cd_prev" />
 
         <ImageView
             android:id="@+id/w_rew"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="12dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="11dp"
             android:background="@drawable/widget_btn"
-            android:padding="9dp"
+            android:padding="8dp"
             android:src="@drawable/ic_media_rew"
             android:contentDescription="@string/cd_rew" />
 
         <ImageView
             android:id="@+id/w_play"
-            android:layout_width="54dp"
-            android:layout_height="54dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/widget_btn_accent"
-            android:padding="14dp"
+            android:padding="13dp"
             android:src="@drawable/ic_media_play"
             android:contentDescription="@string/cd_play" />
 
         <ImageView
             android:id="@+id/w_ffwd"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="12dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="11dp"
             android:background="@drawable/widget_btn"
-            android:padding="9dp"
+            android:padding="8dp"
             android:src="@drawable/ic_media_ffwd"
             android:contentDescription="@string/cd_ffwd" />
 
         <ImageView
             android:id="@+id/w_next"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="12dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="11dp"
             android:background="@drawable/widget_btn"
-            android:padding="9dp"
+            android:padding="8dp"
             android:src="@drawable/ic_media_next"
             android:contentDescription="@string/cd_next" />
     </LinearLayout>
