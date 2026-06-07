@@ -53,8 +53,7 @@ class ShouWidgetProvider : AppWidgetProvider() {
                     R.id.w_play,
                     if (p.playing) R.drawable.ic_media_pause else R.drawable.ic_media_play,
                 )
-                v.setTextViewText(R.id.w_status, if (p.playing) "LIVE" else "PAUSED")
-                v.setTextColor(R.id.w_status, if (p.playing) 0xFF5AD6A0.toInt() else 0xFFFF6A4D.toInt())
+                v.setTextViewText(R.id.w_sub, p.subtitle.ifBlank { ShouStore.activeName(app) })
                 v.setTextViewText(R.id.w_pos, fmt(p.positionMs))
                 v.setTextViewText(R.id.w_dur, fmt(p.durationMs))
                 val pct = if (p.durationMs > 0)
@@ -71,8 +70,7 @@ class ShouWidgetProvider : AppWidgetProvider() {
             } else {
                 v.setTextViewText(R.id.w_title, "Nothing playing")
                 v.setImageViewResource(R.id.w_play, R.drawable.ic_media_play)
-                v.setTextViewText(R.id.w_status, "IDLE")
-                v.setTextColor(R.id.w_status, 0xFF9A94A6.toInt())
+                v.setTextViewText(R.id.w_sub, "Tap to open Shou")
                 v.setTextViewText(R.id.w_pos, "0:00")
                 v.setTextViewText(R.id.w_dur, "0:00")
                 v.setProgressBar(R.id.w_bar, 1000, 0, false)

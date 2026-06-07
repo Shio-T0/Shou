@@ -148,6 +148,21 @@ document.querySelectorAll("[data-vol]").forEach((b) => {
 // Called by the native shell when you press VOLUME_UP / VOLUME_DOWN on the phone.
 window.ShouVolume = volume;
 
+// --- Throw to phone ---------------------------------------------------------
+// Hand the episode playing on the PC to this phone and watch it here. The button
+// only shows while something is playing and we're not already watching it here.
+function throwToPhone() {
+  if (navigator.vibrate) navigator.vibrate(18);
+  post("/throw");
+}
+function updateThrowBtn(s) {
+  const b = document.getElementById("throw-btn");
+  if (!b) return;
+  const playing = !!(s.playing && s.playing.duration);
+  const casting = !!(s.cast && s.cast.active);
+  b.classList.toggle("hidden", !playing || casting);
+}
+
 // List switcher (Watching / Planned) -> POST /list?to=<mode>
 const LIST_LABEL = { watching: "Watching", planned: "Planned", search: "Search New" };
 async function switchList(mode) {
@@ -555,6 +570,8 @@ socket.on("state", (s) => {
   el.view.textContent = VIEW_LABEL[s.view] || s.view;
 
   syncNativePlayback(s);
+  applyCast(s.cast);
+  updateThrowBtn(s);
   renderResume(s.history);
 
   if (s.list) {
@@ -1024,6 +1041,117 @@ window.shouOnScan = function (jsonStr, done) {
   rmtIngestHash();
   rmtUpdateBrand(rmtRegisterCurrent());
   rmtSyncNative();  // make sure the shell has the full set on first load
+})();
+
+// --- Cast player : watch the "thrown" episode here on the phone ------------
+// The server re-resolves a phone-playable stream and proxies it (same-origin, with the
+// CDN Referer it needs). We play it in a full-screen overlay, seeked to where the PC
+// was. HLS goes through hls.js where supported, else the <video> plays it natively.
+let castSig = "";       // current source signature, so we only (re)load on change
+let castHls = null;
+let castOpen = false;
+const castEl = (id) => document.getElementById(id);
+
+function applyCast(cast) {
+  if (!castEl("cast")) return;
+  if (!cast || !cast.active) { closeCast(); return; }
+  openCast();
+  const spin = castEl("cast-spin");
+  const err = castEl("cast-error");
+  castEl("cast-title").textContent =
+    (cast.title || "Shou") + (cast.episode ? "  ·  EP " + cast.episode : "");
+
+  if (cast.error) { showCastError(cast.error); castSig = ""; return; }
+  err.classList.add("hidden");
+  if (cast.resolving || !cast.src) { spin.classList.remove("hidden"); return; }
+  spin.classList.add("hidden");
+
+  const sig = cast.kind + "|" + cast.src;
+  if (sig !== castSig) { castSig = sig; setupCastVideo(cast); }
+}
+
+function setupCastVideo(cast) {
+  teardownCastVideo();
+  const video = castEl("cast-video");
+  const seekPlay = () => {
+    try { if (cast.position > 0) video.currentTime = cast.position; } catch (e) {}
+    video.play().catch(() => {});
+  };
+  if (cast.sub) {
+    const tr = document.createElement("track");
+    tr.kind = "subtitles"; tr.label = "Subtitles"; tr.srclang = "en";
+    tr.default = true; tr.src = cast.sub;
+    video.appendChild(tr);
+  }
+  if (cast.kind === "hls" && window.Hls && window.Hls.isSupported()) {
+    const hls = new Hls({ enableWorker: true });
+    castHls = hls;
+    hls.on(Hls.Events.MANIFEST_PARSED, seekPlay);
+    hls.on(Hls.Events.ERROR, (e, data) => {
+      if (data && data.fatal) showCastError("This source wouldn't play on the phone.");
+    });
+    hls.loadSource(cast.src);
+    hls.attachMedia(video);
+  } else {
+    video.src = cast.src;  // native HLS (iOS) or a direct file
+    video.addEventListener("loadedmetadata", seekPlay, { once: true });
+    video.addEventListener("error",
+      () => showCastError("This source wouldn't play on the phone."), { once: true });
+    video.load();
+  }
+}
+
+function teardownCastVideo() {
+  const video = castEl("cast-video");
+  if (castHls) { try { castHls.destroy(); } catch (e) {} castHls = null; }
+  if (video) {
+    try { video.pause(); } catch (e) {}
+    video.removeAttribute("src");
+    video.querySelectorAll("track").forEach((t) => t.remove());
+    try { video.load(); } catch (e) {}
+  }
+}
+
+function showCastError(msg) {
+  const err = castEl("cast-error");
+  castEl("cast-spin").classList.add("hidden");
+  err.querySelector(".cast-error-msg").textContent = msg;
+  err.classList.remove("hidden");
+  teardownCastVideo();
+}
+
+function openCast() {
+  if (castOpen) return;
+  castOpen = true;
+  const o = castEl("cast");
+  o.classList.remove("hidden"); o.setAttribute("aria-hidden", "false");
+  document.body.classList.add("cast-on");
+  if (navigator.vibrate) navigator.vibrate(22);
+}
+
+function closeCast() {
+  castOpen = false;
+  castSig = "";
+  teardownCastVideo();
+  const o = castEl("cast");
+  if (o) { o.classList.add("hidden"); o.setAttribute("aria-hidden", "true"); }
+  if (castEl("cast-spin")) castEl("cast-spin").classList.remove("hidden");
+  if (castEl("cast-error")) castEl("cast-error").classList.add("hidden");
+  document.body.classList.remove("cast-on");
+}
+
+// Throw it back to the PC: clear the cast (the server un-pauses mpv) and close here.
+function throwBack() {
+  if (navigator.vibrate) navigator.vibrate(12);
+  post("/cast/clear");
+  closeCast();
+}
+
+(function castInit() {
+  const wire = (id, fn) => { const n = document.getElementById(id); if (n) n.addEventListener("click", fn); };
+  wire("throw-btn", throwToPhone);
+  wire("cast-close", throwBack);
+  wire("cast-error-close", throwBack);
 })();
 
 // --- PWA service worker (registers only in a secure context; no-ops on http) -
