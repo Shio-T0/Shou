@@ -2283,6 +2283,47 @@ def _step_episode(delta: int):
     return jsonify(ok=True, episode=episode)
 
 
+@app.route("/volume", methods=["POST"])
+@require_auth
+def volume():
+    """Nudge mpv's volume (the phone's hardware volume rocker, forwarded by the native
+    app, lands here). ?d=up|down steps by ?s=… (default 5); ?d=mute toggles mute."""
+    d = (request.args.get("d") or "up").strip().lower()
+    if d == "mute":
+        mpv_ipc_command(["cycle", "mute"])
+        return jsonify(ok=True, action="mute")
+    try:
+        step = int(request.args.get("s", 5))
+    except (TypeError, ValueError):
+        step = 5
+    step = max(1, min(step, 50))
+    mpv_ipc_command(["add", "volume", -step if d == "down" else step])
+    return jsonify(ok=True, action=d)
+
+
+@app.route("/airing")
+@require_auth
+def airing():
+    """Compact feed of your Watching list: for each show, how far you've watched
+    (progress) vs how many episodes have actually aired (available). The native app
+    polls this to notify you when a show you're watching gets a new episode. Returns
+    no titles you aren't tracking and never the token — it's already token-gated."""
+    try:
+        entries = fetch_list("watching")
+    except Exception as exc:  # noqa: BLE001 - report empty rather than 500 the worker
+        return jsonify(shows=[], error=str(exc))
+    shows = []
+    for e in entries:
+        media = e.get("media") or {}
+        shows.append({
+            "id": media.get("id"),
+            "title": _title(media.get("title")),
+            "progress": e.get("progress") or 0,
+            "available": last_released_episode(media) or 0,
+        })
+    return jsonify(shows=shows)
+
+
 @socketio.on("connect")
 def on_connect():
     if not authorized():

@@ -144,6 +144,17 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4v5h-5"/><path d="M20.5 9a9 9 0 1 0 1.2 5"/></svg>
         </button>
       </div>
+      <div class="vol-row">
+        <button class="btn btn-vol" data-vol="down" aria-label="Volume down">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><rect x="16" y="11" width="5" height="2" rx="1"/></svg>
+        </button>
+        <button class="btn btn-vol btn-vol-mute" data-vol="mute" aria-label="Mute">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path d="M17 9l4 4M21 9l-4 4"/></svg>
+        </button>
+        <button class="btn btn-vol" data-vol="up" aria-label="Volume up">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8a5 5 0 0 1 0 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.5 5.5a8.5 8.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -236,6 +247,12 @@
       key — Shou finds the PC again on whatever network you're on.
     </p>
 
+    <button type="button" class="rmt-scan hidden" id="rmt-scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8 15.5a6 6 0 0 1 8 0"/><circle cx="12" cy="18.5" r="1.2" fill="currentColor" stroke="none"/></svg>
+      <span id="rmt-scan-label">Find Shou PCs on this network</span>
+    </button>
+    <div id="rmt-found" class="rmt-found"></div>
+
     <div id="rmt-error" class="rmt-error hidden"></div>
     <div id="rmt-list" class="rmt-list"></div>
 
@@ -259,6 +276,10 @@
       <label class="rmt-field">
         <span class="rmt-label">Key <em>(REMOTE_TOKEN)</em></span>
         <input id="rmt-f-key" class="rmt-input" type="text" placeholder="from ~/.config/shou/shou.conf" autocapitalize="off" spellcheck="false" />
+      </label>
+      <label class="rmt-field rmt-field-mac hidden" id="rmt-field-mac">
+        <span class="rmt-label">MAC <em>(for Wake-on-LAN — optional)</em></span>
+        <input id="rmt-f-mac" class="rmt-input" type="text" inputmode="text" placeholder="AA:BB:CC:DD:EE:FF" autocapitalize="characters" spellcheck="false" maxlength="17" />
       </label>
       <div class="rmt-form-actions">
         <button type="button" class="rmt-btn rmt-btn-ghost" id="rmt-cancel">Cancel</button>

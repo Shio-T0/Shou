@@ -61,4 +61,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.9.0")
+    // Encrypted storage for the saved server keys / token.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    // MediaSessionCompat + MediaStyle notification for lock-screen controls.
+    implementation("androidx.media:media:1.7.0")
+    // Periodic background check for newly-aired episodes.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

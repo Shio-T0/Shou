@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- mDNS / NSD discovery of the Shou server on the LAN (Settings → Scan). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Episode / airing notifications (runtime-requested on Android 13+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lock-screen media controls run as a media-playback foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
         android:allowBackup="true"
@@ -34,6 +39,45 @@
             android:name=".SettingsActivity"
             android:exported="true"
             android:label="@string/settings" />
+
+        <!-- Lock-screen / headset media controls for what's playing on the PC. The
+             MEDIA_BUTTON filter lets MediaButtonReceiver route transport keys here. -->
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </service>
+
+        <!-- Quick Settings tile: one-swipe Shou control. -->
+        <service
+            android:name=".ShouTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_shou"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Home-screen widget + the broadcast target its (and the tile's) buttons hit. -->
+        <receiver
+            android:name=".ShouWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_shou_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ActionReceiver"
+            android:exported="false" />
 
     </application>
 </manifest>

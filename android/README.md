@@ -16,6 +16,33 @@ fights. The web remote stays the single source of truth; this app is just a fram
 - Cleartext HTTP to the LAN is allowed (Shou serves plain HTTP). If you ever put
   Shou behind self-signed TLS, flip **Allow self-signed certificate** in Settings.
 
+## Native superpowers
+
+Beyond the WebView frame, the app reaches the Android APIs a web page can't —
+all talking to the same token-gated server, all degrading gracefully when you
+open the remote in a plain browser instead:
+
+- **Wake-on-LAN.** Save a server's **MAC** on the in-app Remotes page and tap
+  **Wake PC** (also on the widget / Quick Settings tile) to power a sleeping
+  Shou box on from the couch before connecting. Magic packet, UDP broadcast.
+- **Find PCs on this network.** The Remotes page gets a native mDNS scan that
+  lists every `_shou._tcp` server it resolves — tap one to pre-fill the form
+  (you still paste the key).
+- **Hardware volume rocker → the PC.** The phone's volume buttons drive mpv's
+  volume instead of the ringer (toggle in **Settings**).
+- **Lock-screen media controls.** A `MediaSession` + MediaStyle notification
+  mirrors what's playing, with prev / play-pause / next that work from the lock
+  screen and headset, even with the app closed.
+- **Home-screen widget & Quick Settings tile.** Wake, play/pause, skip and open
+  — without launching the app.
+- **Per-server shortcuts.** Long-press the icon for "Living room", "Bedroom", …
+  each opening the remote already pointed at that PC.
+- **Notifications.** A heads-up when you finish a series, and a background check
+  (WorkManager, polling your own `/airing`) when a show you're Watching gets a
+  new episode — no cloud, no account, just your PC and your phone.
+- **Encrypted keys.** Saved server tokens live in `EncryptedSharedPreferences`
+  (Android Keystore), never in plaintext prefs.
+
 ## Build
 
 You need **Android Studio** (Giraffe or newer) or a local Android SDK + JDK 17.
@@ -82,14 +109,28 @@ keytool -genkey -v -keystore shou-release.jks -alias shou \
 android/
   app/src/main/
     java/io/github/shiot0/shou/
-      MainActivity.kt      # the WebView shell + keep-screen-on + immersive + SSL policy
-      SettingsActivity.kt  # host / port / token / https / scan / self-signed toggle
-    res/...                # theme, icon, settings layout, network config
+      MainActivity.kt        # WebView shell + keep-screen-on + immersive + volume keys
+      SettingsActivity.kt    # host / port / token / https / scan / self-signed toggle
+      ShouBridge.kt          # the JS↔native seam (window.ShouNative)
+      ShouStore.kt           # encrypted store: remotes, active server, playback snapshot
+      Wol.kt                 # Wake-on-LAN magic packet
+      ServerClient.kt        # token-gated HTTP to control endpoints + /airing
+      NsdScanner.kt          # reusable _shou._tcp mDNS discovery
+      PlaybackService.kt     # MediaSession + MediaStyle lock-screen controls
+      ShouWidgetProvider.kt  # home-screen widget
+      ShouTileService.kt     # Quick Settings tile
+      Shortcuts.kt           # per-server dynamic launcher shortcuts
+      ActionReceiver.kt      # widget/tile button actions (wake, transport)
+      Notifications.kt       # channels + episode/airing notifications
+      AiringWorker.kt        # periodic "new episode aired" check
+    res/...                  # theme, icons, settings + widget layouts, network config
   build.gradle.kts, settings.gradle.kts, ...
 ```
 
 ## Further ideas
 
+- **Cast-style handoff** — start browsing on the phone, "throw to TV" to begin
+  playback on the kiosk.
+- **Offline remote cache** — render the Remotes list and last-known library
+  instantly before the server responds.
 - **Self-hosted Obtainium feed** if you'd rather not publish GitHub Releases.
-- **Live mDNS list** in Settings (pick from multiple servers) instead of grabbing
-  the first one found.

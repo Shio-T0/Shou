@@ -1,12 +1,16 @@
 package io.github.shiot0.shou
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
@@ -16,6 +20,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -24,18 +30,33 @@ import androidx.core.view.WindowInsetsControllerCompat
  * Native shell around the Shou web remote: a single full-screen WebView that
  *  - never lets the screen sleep (FLAG_KEEP_SCREEN_ON — the whole reason this exists),
  *  - runs immersive edge-to-edge,
- *  - and points at the server URL you configure in Settings.
+ *  - points at the server URL you configure in Settings,
+ *  - bridges the web remote to native superpowers (Wake-on-LAN, lock-screen media
+ *    controls, the widget, the Quick Settings tile, per-server shortcuts) via
+ *    [ShouBridge], and forwards the hardware volume rocker to the PC's player.
  *
- * The web remote stays the single source of truth; this app is just a frame.
+ * The web remote stays the single source of truth; this app is the frame plus the
+ * native muscle a web page can't reach.
  */
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), BridgeHost {
 
     private lateinit var web: WebView
     private var loadedUrl: String? = null
 
+    override val ctx: Context get() = applicationContext
+    override fun evalJs(js: String) {
+        runOnUiThread { runCatching { web.evaluateJavascript(js, null) } }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ShouStore.init(this)
+        Notifications.ensureChannels(this)
+        AiringWorker.schedule(this)
+
+        // A shortcut / widget can ask to open a specific saved server.
+        applyRequestedRemote(intent)
 
         // Keep the screen awake the entire time the remote is open.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -73,6 +94,7 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = false
             cacheMode = WebSettings.LOAD_DEFAULT
         }
+        web.addJavascriptInterface(ShouBridge(this), ShouBridge.NAME)
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
@@ -129,22 +151,48 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
+        maybeRequestNotifications()
         load()
+    }
+
+    // --- Hardware volume rocker -> the PC's player ------------------------- //
+    // A remote should drive the TV's volume, not the phone's ringer. When enabled
+    // (Settings, on by default) we swallow the volume keys and forward them to mpv
+    // via the same token-gated /volume endpoint the on-screen buttons use.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        val isVol = code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
+        if (isVol && prefs().getBoolean("volumeKeys", true)) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                val dir = if (code == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down"
+                evalJs("window.ShouVolume && window.ShouVolume('$dir')")
+            }
+            return true  // consume — don't change the phone's own volume
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     private fun prefs() = getSharedPreferences("shou", MODE_PRIVATE)
 
     private fun configuredHost(): String? =
-        prefs().getString("host", "")?.trim()?.ifEmpty { null }
+        prefs().getString("active_host", null)?.trim()?.ifEmpty { null }
+            ?: prefs().getString("host", "")?.trim()?.ifEmpty { null }
 
-    /** Build the remote URL from saved settings, or null if no host is set yet. */
+    /** A shortcut/widget may carry a target server token; make it the active one. */
+    private fun applyRequestedRemote(intent: Intent?) {
+        val token = intent?.getStringExtra(EXTRA_REMOTE_TOKEN)?.trim().orEmpty()
+        if (token.isEmpty()) return
+        val r = ShouStore.remoteByToken(this, token) ?: return
+        ShouStore.setActive(this, r.key, r.bestHost(), r.port, r.name)
+    }
+
+    /** Build the remote URL from the active server, or null if nothing is set yet. */
     private fun buildUrl(): String? {
-        val p = prefs()
-        val host = p.getString("host", "")!!.trim()
+        val host = ShouStore.activeHost(this)
         if (host.isEmpty()) return null
-        val scheme = if (p.getBoolean("https", false)) "https" else "http"
-        val port = p.getString("port", "4100")!!.trim().ifEmpty { "4100" }
-        val token = p.getString("token", "")!!.trim()
+        val scheme = if (ShouStore.https(this)) "https" else "http"
+        val port = ShouStore.activePort(this)
+        val token = ShouStore.activeToken(this)
         val query = if (token.isEmpty()) "" else "?k=" + Uri.encode(token)
         return "$scheme://$host:$port/remote$query"
     }
@@ -161,6 +209,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun openSettings() {
         startActivity(Intent(this, SettingsActivity::class.java))
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyRequestedRemote(intent)
+        val url = buildUrl()
+        if (url != null && url != loadedUrl) load()
+    }
+
+    private fun maybeRequestNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching {
+                ActivityCompat.requestPermissions(
+                    this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1,
+                )
+            }
+        }
     }
 
     private fun showError(detail: String? = null) {
@@ -209,5 +278,9 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         web.destroy()
         super.onDestroy()
+    }
+
+    companion object {
+        const val EXTRA_REMOTE_TOKEN = "io.github.shiot0.shou.REMOTE_TOKEN"
     }
 }

@@ -20,4 +20,10 @@
     <string name="scan_none">No Shou server found on this network.</string>
     <string name="scan_failed">Scan failed — enter the address manually.</string>
     <string name="scan_unavailable">Discovery isn\'t available on this device.</string>
+    <string name="volume_keys">Volume buttons control playback</string>
+    <string name="wake_pc">Wake PC</string>
+    <string name="cd_prev">Previous episode</string>
+    <string name="cd_play">Play or pause</string>
+    <string name="cd_next">Next episode</string>
+    <string name="widget_description">Wake the PC and control what\'s playing, without opening the app.</string>
 </resources>

@@ -6,6 +6,12 @@ const TOKEN =
   new URLSearchParams(location.search).get("k") ||
   "";
 
+// When the remote runs inside the native Android shell it exposes a bridge with powers
+// a web page can't have: Wake-on-LAN, lock-screen media controls, mDNS discovery, and
+// system notifications. Everything here degrades gracefully to a plain browser (NATIVE = null).
+const NATIVE =
+  (typeof window !== "undefined" && window.ShouNative) ? window.ShouNative : null;
+
 const el = {
   conn: document.getElementById("conn"),
   connText: document.getElementById("conn-text"),
@@ -129,6 +135,18 @@ async function send(act, secs) {
 document.querySelectorAll("[data-act]").forEach((btn) => {
   btn.addEventListener("click", () => send(btn.dataset.act, btn.dataset.secs));
 });
+
+// Volume — the on-screen buttons and the native app's hardware volume rocker both
+// land here and nudge the PC's mpv (?d=up|down|mute).
+function volume(dir) {
+  if (navigator.vibrate) navigator.vibrate(dir === "mute" ? 14 : 6);
+  post("/volume?d=" + encodeURIComponent(dir));
+}
+document.querySelectorAll("[data-vol]").forEach((b) => {
+  b.addEventListener("click", () => volume(b.dataset.vol));
+});
+// Called by the native shell when you press VOLUME_UP / VOLUME_DOWN on the phone.
+window.ShouVolume = volume;
 
 // List switcher (Watching / Planned) -> POST /list?to=<mode>
 const LIST_LABEL = { watching: "Watching", planned: "Planned", search: "Search New" };
@@ -536,6 +554,7 @@ socket.on("disconnect", () => {
 socket.on("state", (s) => {
   el.view.textContent = VIEW_LABEL[s.view] || s.view;
 
+  syncNativePlayback(s);
   renderResume(s.history);
 
   if (s.list) {
@@ -608,6 +627,38 @@ socket.on("state", (s) => {
   }
 });
 
+// Mirror live playback down to the native shell so it can drive the lock-screen media
+// controls / widget / Quick Settings tile, and fire a notification when a series finishes.
+let lastFinishedKey = "";
+function syncNativePlayback(s) {
+  if (!NATIVE) return;
+  const p = s.playing;
+  const active = !!(p && p.duration);
+  if (NATIVE.playback) {
+    try {
+      NATIVE.playback(JSON.stringify({
+        active,
+        playing: true,
+        title: active ? (p.title || "Shou") : "",
+        subtitle: active ? ("Episode " + p.episode) : "",
+        cover: active ? (p.cover || "") : "",
+        position: active ? (p.position || 0) : 0,
+        duration: active ? (p.duration || 0) : 0,
+      }));
+    } catch (e) {}
+  }
+  // The finale rating screen is the clean "you finished it" moment — notify once.
+  if (s.view === "rating" && s.rating && NATIVE.notify) {
+    const key = String(s.rating.title || "");
+    if (key && key !== lastFinishedKey) {
+      lastFinishedKey = key;
+      try { NATIVE.notify("finished", s.rating.title, "You finished it — rate it on Shou?"); } catch (e) {}
+    }
+  } else if (s.view !== "rating") {
+    lastFinishedKey = "";
+  }
+}
+
 function setIndex(text) {
   if (el.index) el.index.textContent = text;
 }
@@ -667,7 +718,18 @@ function rmtLoad() {
   try { const a = JSON.parse(localStorage.getItem(RMT_KEY)); return Array.isArray(a) ? a : []; }
   catch (e) { return []; }
 }
-function rmtSave(list) { try { localStorage.setItem(RMT_KEY, JSON.stringify(list)); } catch (e) {} }
+function rmtSave(list) {
+  try { localStorage.setItem(RMT_KEY, JSON.stringify(list)); } catch (e) {}
+  rmtSyncNative();
+}
+
+// Push the whole saved-servers set down to the native shell so Wake-on-LAN, per-server
+// shortcuts, the widget and the tile all know about every PC and its MAC.
+function rmtSyncNative() {
+  if (NATIVE && NATIVE.syncRemotes) {
+    try { NATIVE.syncRemotes(localStorage.getItem(RMT_KEY) || "[]"); } catch (e) {}
+  }
+}
 
 // Union an incoming set (carried in the URL fragment) into our own, keyed by token.
 function rmtMerge(incoming) {
@@ -682,9 +744,11 @@ function rmtMerge(incoming) {
       if (!ex.hostname && inc.hostname) ex.hostname = inc.hostname;
       if (!ex.host && inc.host) ex.host = inc.host;
       if (!ex.port && inc.port) ex.port = inc.port;
+      if (!ex.mac && inc.mac) ex.mac = inc.mac;
     } else {
       const r = { id: inc.id || rmtUid(), name: inc.name || "", key: inc.key,
-                  host: inc.host || "", hostname: inc.hostname || "", port: inc.port || "4100" };
+                  host: inc.host || "", hostname: inc.hostname || "", port: inc.port || "4100",
+                  mac: inc.mac || "" };
       list.push(r); byKey.set(r.key, r);
     }
   }
@@ -709,7 +773,7 @@ function rmtRegisterCurrent() {
   let cur = list.find((r) => r.key === TOKEN);
   if (!cur) {
     cur = { id: rmtUid(), name: s.name || reached || "Shou", key: TOKEN,
-            host: reached, hostname: s.host || "", port };
+            host: reached, hostname: s.host || "", port, mac: "" };
     list.push(cur);
   } else {
     if (reached) cur.host = reached;
@@ -718,6 +782,12 @@ function rmtRegisterCurrent() {
     if (!cur.name) cur.name = s.name || reached;
   }
   rmtSave(list);
+  // Tell the native shell which PC this WebView is driving, so background features
+  // (media controls, widget, Wake-on-LAN) target the same one.
+  if (NATIVE && NATIVE.setActive) {
+    try { NATIVE.setActive(cur.key, reached || cur.host || "", (cur.port || "4100") + "", cur.name || ""); }
+    catch (e) {}
+  }
   return cur;
 }
 
@@ -787,6 +857,10 @@ function rmtOpenForm(remote) {
   document.getElementById("rmt-f-host").value = (remote && (remote.host || remote.hostname)) || "";
   document.getElementById("rmt-f-port").value = (remote && remote.port) || "4100";
   document.getElementById("rmt-f-key").value = (remote && remote.key) || "";
+  document.getElementById("rmt-f-mac").value = (remote && remote.mac) || "";
+  // The MAC / Wake-on-LAN field only does anything inside the native app.
+  const macField = document.getElementById("rmt-field-mac");
+  if (macField) macField.classList.toggle("hidden", !NATIVE);
   document.getElementById("rmt-form").classList.remove("hidden");
   document.getElementById("rmt-list").classList.add("dim");
   rmtNote("", false);
@@ -802,16 +876,17 @@ function rmtFormSubmit() {
   const host = document.getElementById("rmt-f-host").value.trim();
   const port = document.getElementById("rmt-f-port").value.trim() || "4100";
   const key  = document.getElementById("rmt-f-key").value.trim();
+  const mac  = document.getElementById("rmt-f-mac").value.trim();
   if (!host || !key) { rmtNote("Host and key are both required.", true); return; }
   const list = rmtLoad();
   let saved;
   if (rmtEditing) {
     const i = list.findIndex((r) => r.id === rmtEditing.id);
-    if (i >= 0) { list[i] = { ...list[i], name: name || list[i].name, host, port, key }; saved = list[i]; }
+    if (i >= 0) { list[i] = { ...list[i], name: name || list[i].name, host, port, key, mac }; saved = list[i]; }
   } else {
     const ex = list.find((r) => r.key === key);           // de-dup by token
-    if (ex) { ex.name = name || ex.name; ex.host = host; ex.port = port; saved = ex; }
-    else { saved = { id: rmtUid(), name: name || host, key, host, hostname: "", port }; list.push(saved); }
+    if (ex) { ex.name = name || ex.name; ex.host = host; ex.port = port; ex.mac = mac || ex.mac; saved = ex; }
+    else { saved = { id: rmtUid(), name: name || host, key, host, hostname: "", port, mac }; list.push(saved); }
   }
   rmtSave(list);
   rmtCloseForm();
@@ -845,11 +920,23 @@ function rmtRender() {
           : `<svg class="rmt-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`}
       </button>
       <div class="rmt-card-actions">
+        ${NATIVE && r.mac ? `<button type="button" class="rmt-mini rmt-wake" data-wake>Wake PC</button>` : ``}
         <button type="button" class="rmt-mini" data-edit>Rename</button>
         <button type="button" class="rmt-mini rmt-del" data-del>Delete</button>
       </div>`;
     card.querySelector(".rmt-pick").addEventListener("click", () => rmtSwitch(r));
     card.querySelector("[data-edit]").addEventListener("click", () => rmtOpenForm(r));
+    const wake = card.querySelector("[data-wake]");
+    if (wake) {
+      wake.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (navigator.vibrate) navigator.vibrate(12);
+        let ok = false;
+        try { ok = NATIVE.wake(r.key); } catch (e) {}
+        wake.textContent = ok ? "Waking…" : "No MAC";
+        setTimeout(() => { if (wake.isConnected) wake.textContent = "Wake PC"; }, 2200);
+      });
+    }
     const del = card.querySelector("[data-del]");
     del.addEventListener("click", () => {
       if (del.dataset.armed) { rmtDelete(r); return; }
@@ -873,6 +960,43 @@ function rmtClose() {
   document.body.classList.remove("rmt-open");
 }
 
+// mDNS discovery (native only): the shell scans for _shou._tcp and calls this back with
+// the servers it resolved. Tap one to pre-fill the add form (you still paste the key).
+function rmtRenderFound(found, done) {
+  const wrap = document.getElementById("rmt-found");
+  if (!wrap) return;
+  const label = document.getElementById("rmt-scan-label");
+  if (label) {
+    label.textContent = done
+      ? (found.length ? "Scan again" : "Nothing found — scan again")
+      : "Scanning…";
+  }
+  wrap.innerHTML = "";
+  found.forEach((f) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "rmt-found-card";
+    card.innerHTML =
+      `<svg class="rmt-found-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>` +
+      `<span class="rmt-found-meta"><span class="rmt-found-name">${escapeHtml(f.name || "Shou")}</span>` +
+      `<span class="rmt-found-addr">${escapeHtml((f.host || "") + ":" + (f.port || 4100))}</span></span>` +
+      `<span class="rmt-found-add">Use</span>`;
+    card.addEventListener("click", () => {
+      rmtOpenForm(null);
+      document.getElementById("rmt-f-name").value = f.name || "";
+      document.getElementById("rmt-f-host").value = f.host || "";
+      document.getElementById("rmt-f-port").value = (f.port || 4100) + "";
+      document.getElementById("rmt-f-key").focus();
+    });
+    wrap.appendChild(card);
+  });
+}
+window.shouOnScan = function (jsonStr, done) {
+  let arr = [];
+  try { arr = JSON.parse(jsonStr) || []; } catch (e) {}
+  rmtRenderFound(arr, done);
+};
+
 (function rmtInit() {
   const brand = document.getElementById("brand-btn");
   if (brand) brand.addEventListener("click", rmtOpen);
@@ -883,8 +1007,23 @@ function rmtClose() {
   const form = document.getElementById("rmt-form");
   if (form) form.addEventListener("submit", (e) => { e.preventDefault(); rmtFormSubmit(); });
 
+  // Native-only "find PCs on this network" button.
+  const scanBtn = document.getElementById("rmt-scan");
+  if (scanBtn && NATIVE && NATIVE.scan) {
+    scanBtn.classList.remove("hidden");
+    scanBtn.addEventListener("click", () => {
+      if (navigator.vibrate) navigator.vibrate(8);
+      const label = document.getElementById("rmt-scan-label");
+      if (label) label.textContent = "Scanning…";
+      const found = document.getElementById("rmt-found");
+      if (found) found.innerHTML = "";
+      try { NATIVE.scan(); } catch (e) {}
+    });
+  }
+
   rmtIngestHash();
   rmtUpdateBrand(rmtRegisterCurrent());
+  rmtSyncNative();  // make sure the shell has the full set on first load
 })();
 
 // --- PWA service worker (registers only in a secure context; no-ops on http) -
