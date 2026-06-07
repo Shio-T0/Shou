@@ -850,6 +850,18 @@ def mark_watched(media_id: int, episode: int, total: int | None, display: str) -
         print(f"[anilist] mark_watched failed: {exc}", flush=True)
 
 
+def _clear_active_playing(gen: int) -> None:
+    """mpv for this play has exited — clear the now-stale 'playing' so the kiosk, the web
+    remote, and the phone's lock-screen media controls / widget all stop showing it as
+    live. Guarded by gen so a Next/Prev/Resume that already started a new play (bumping
+    the generation) is never wiped by the old watcher winding down."""
+    with STATE_LOCK:
+        if PLAYBACK["gen"] != gen or STATE.get("playing") is None:
+            return
+        STATE["playing"] = None
+    broadcast()
+
+
 def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
                    display: str, search: str = "", cover: str = "",
                    color: str = "", banner: str = "") -> None:
@@ -886,6 +898,7 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
         sock.sendall(b'{"command":["observe_property",1,"percent-pos"]}\n')
         sock.sendall(b'{"command":["observe_property",2,"time-pos"]}\n')
         sock.sendall(b'{"command":["observe_property",3,"duration"]}\n')
+        sock.sendall(b'{"command":["observe_property",4,"pause"]}\n')
     except OSError as exc:
         print(f"[progress] mpv IPC connect failed: {exc}", flush=True)
         return
@@ -964,6 +977,20 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
                                 broadcast()
                     elif name == "duration" and isinstance(data, (int, float)):
                         duration = data
+                    elif name == "pause" and isinstance(data, bool):
+                        # Reflect real play/pause to the clients (so the phone's media
+                        # controls show the right icon), only for the current episode.
+                        with STATE_LOCK:
+                            p = STATE.get("playing")
+                            changed = bool(
+                                p and p.get("media_id") == media_id
+                                and p.get("episode") == episode
+                                and p.get("paused") != data
+                            )
+                            if changed:
+                                p["paused"] = data
+                        if changed:
+                            broadcast()
                 elif ev == "end-file" and msg.get("reason") == "eof" and not completed:
                     completed = True
                     _finish()
@@ -981,6 +1008,7 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
             info = _pop_pending_rating()
             if info:
                 show_rating(info)
+        _clear_active_playing(gen)
         return
 
     # Stopped before the threshold — remember where, so it can be resumed later.
@@ -1003,6 +1031,7 @@ def watch_playback(gen: int, media_id: int, episode: int, total: int | None,
     else:
         print(f"[progress] {display!r} ep {episode} not marked/saved — ended at "
               f"{last_pos:.0f}% / {int(last_time)}s", flush=True)
+    _clear_active_playing(gen)
 
 
 # --------------------------------------------------------------------------- #

@@ -5,76 +5,139 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_bg"
-    android:padding="16dp">
+    android:padding="15dp">
 
+    <!-- Header: cover · meta · wake -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="朱 SHOU"
-            android:textColor="@color/accent"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:letterSpacing="0.12" />
+        <ImageView
+            android:id="@+id/w_cover"
+            android:layout_width="52dp"
+            android:layout_height="70dp"
+            android:scaleType="fitXY"
+            android:src="@drawable/widget_cover_placeholder"
+            android:contentDescription="@string/app_name" />
 
-        <TextView
-            android:id="@+id/w_name"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="end"
-            android:text="Shou"
-            android:textColor="@color/paperDim"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:layout_marginStart="13dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="朱 SHOU"
+                    android:textColor="@color/accent"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:letterSpacing="0.16" />
+
+                <TextView
+                    android:id="@+id/w_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/pill_bg"
+                    android:paddingHorizontal="9dp"
+                    android:paddingVertical="3dp"
+                    android:text="IDLE"
+                    android:textColor="@color/paperDim"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.14" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/w_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Nothing playing"
+                android:textColor="@color/paper"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/w_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Tap to open Shou"
+                android:textColor="@color/paperDim"
+                android:textSize="12sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
 
         <ImageView
             android:id="@+id/w_wake"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:layout_marginStart="10dp"
             android:background="@drawable/widget_btn"
-            android:padding="8dp"
+            android:padding="9dp"
             android:src="@drawable/ic_wake"
             android:contentDescription="@string/wake_pc" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/w_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:text="Nothing playing"
-        android:textColor="@color/paper"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:maxLines="1"
-        android:ellipsize="end" />
-
-    <TextView
-        android:id="@+id/w_sub"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="Tap to open Shou"
-        android:textColor="@color/paperDim"
-        android:textSize="12sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
-
+    <!-- Progress -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
+        android:layout_marginTop="13dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/w_pos"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0:00"
+            android:textColor="@color/paperDim"
+            android:textSize="10sp"
+            android:fontFamily="monospace" />
+
+        <ProgressBar
+            android:id="@+id/w_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="6dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="9dp"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_progress" />
+
+        <TextView
+            android:id="@+id/w_dur"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0:00"
+            android:textColor="@color/paperDim"
+            android:textSize="10sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- Transport -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="13dp"
         android:orientation="horizontal"
         android:gravity="center">
 
@@ -82,26 +145,46 @@
             android:id="@+id/w_prev"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:layout_marginEnd="16dp"
+            android:layout_marginEnd="12dp"
             android:background="@drawable/widget_btn"
             android:padding="9dp"
             android:src="@drawable/ic_media_prev"
             android:contentDescription="@string/cd_prev" />
 
         <ImageView
+            android:id="@+id/w_rew"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="12dp"
+            android:background="@drawable/widget_btn"
+            android:padding="9dp"
+            android:src="@drawable/ic_media_rew"
+            android:contentDescription="@string/cd_rew" />
+
+        <ImageView
             android:id="@+id/w_play"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_width="54dp"
+            android:layout_height="54dp"
             android:background="@drawable/widget_btn_accent"
-            android:padding="13dp"
+            android:padding="14dp"
             android:src="@drawable/ic_media_play"
             android:contentDescription="@string/cd_play" />
+
+        <ImageView
+            android:id="@+id/w_ffwd"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/widget_btn"
+            android:padding="9dp"
+            android:src="@drawable/ic_media_ffwd"
+            android:contentDescription="@string/cd_ffwd" />
 
         <ImageView
             android:id="@+id/w_next"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:layout_marginStart="16dp"
+            android:layout_marginStart="12dp"
             android:background="@drawable/widget_btn"
             android:padding="9dp"
             android:src="@drawable/ic_media_next"
