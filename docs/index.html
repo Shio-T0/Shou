@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Shou · Watch your anime entirely from your phone</title>
+<meta name="description" content="Shou puts your AniList list on the big screen and hands the whole experience to a beautiful phone remote. Browse, play, resume, rate — and throw the episode to your phone. The couch is the only required peripheral." />
+<meta name="theme-color" content="#0a0a0c" />
+<link rel="icon" href="assets/img/icon.svg" />
+<link rel="apple-touch-icon" href="assets/img/icon.svg" />
+
+<!-- Open Graph / Twitter -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Shou · Watch your anime entirely from your phone" />
+<meta property="og:description" content="Your AniList on the big screen, driven entirely from a beautiful phone remote. The couch is the only required peripheral." />
+<meta property="og:image" content="https://shio-t0.github.io/Shou/assets/img/og-cover.png" />
+<meta property="og:url" content="https://shio-t0.github.io/Shou/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Shou · Watch your anime entirely from your phone" />
+<meta name="twitter:description" content="Your AniList on the big screen, driven entirely from a beautiful phone remote." />
+<meta name="twitter:image" content="https://shio-t0.github.io/Shou/assets/img/og-cover.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/css/site.css" />
+</head>
+<body class="boot">
+
+<!-- Cinematic ambience -->
+<div class="grain" aria-hidden="true"></div>
+<div class="aura" aria-hidden="true"></div>
+<div class="cursor-aura" aria-hidden="true"></div>
+
+<!-- Editorial vertical kanji rail -->
+<div class="kanji-rail" aria-hidden="true">アニメ・リモート</div>
+
+<!-- ───────────────────────── Nav ───────────────────────── -->
+<header class="nav" id="nav">
+  <a class="nav-brand" href="#top" aria-label="Shou — home">
+    <span class="glyph">朱</span>
+    <span class="nav-word">SHOU</span>
+  </a>
+  <nav class="nav-links" aria-label="Sections">
+    <a href="#features">Features</a>
+    <a href="#throw">Throw</a>
+    <a href="#native">Android</a>
+    <a href="#how">How</a>
+    <a href="#install">Install</a>
+  </nav>
+  <div class="nav-cta">
+    <a class="pill ghost" href="https://github.com/Shio-T0/Shou" target="_blank" rel="noopener">GitHub</a>
+    <a class="pill solid" href="#download">Get it</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ───────────────────────── Hero : the living remote ───────────────────────── -->
+<section class="hero" id="hero">
+  <div class="hero-copy">
+    <p class="eyebrow"><span class="dot-live"></span> アニメ・リモート — anime remote</p>
+    <h1 class="hero-title">SHOU</h1>
+    <p class="hero-sub">
+      Watch your anime <em>entirely</em> from your phone. Your AniList lands on the big
+      screen; you browse, play, resume, and rate from a remote in your hand.
+      The couch is the only required peripheral.
+    </p>
+    <div class="hero-actions">
+      <a class="pill solid lg" href="#download">Download <span class="apk-pill" id="apk-pill">APK</span></a>
+      <a class="pill ghost lg" href="#install">How to set it up</a>
+      <a class="pill bare lg" href="https://github.com/Shio-T0/Shou" target="_blank" rel="noopener">★ Star on GitHub</a>
+    </div>
+    <p class="hero-hint">Psst — the remote below is real. Press something.</p>
+  </div>
+
+  <!-- The playable diorama -->
+  <div class="diorama" id="diorama">
+    <!-- big screen -->
+    <div class="bigscreen" id="bigscreen">
+      <div class="bs-bezel">
+        <div class="coverflow" id="coverflow"><!-- covers injected by JS --></div>
+        <div class="bs-nowplaying" id="bs-now">
+          <span class="np-dot"></span>
+          <span class="np-label" id="np-label">idle — pick something on the remote</span>
+        </div>
+        <div class="bs-scan" aria-hidden="true"></div>
+      </div>
+      <div class="bs-stand"></div>
+      <div class="bs-foot"></div>
+    </div>
+
+    <!-- the phone remote -->
+    <div class="phone" id="phone" aria-label="Shou remote (interactive demo)">
+      <div class="phone-screen">
+        <div class="ph-top">
+          <span class="ph-brand"><span class="glyph sm">朱</span> SHOU</span>
+          <span class="ph-live"><span class="np-dot"></span> live</span>
+        </div>
+        <div class="ph-seg" role="tablist">
+          <button class="seg-btn active" data-list="watching" role="tab">Watching</button>
+          <button class="seg-btn" data-list="planned" role="tab">Plan to watch</button>
+          <span class="seg-thumb" id="seg-thumb"></span>
+        </div>
+        <div class="ph-cover" id="ph-cover">
+          <div class="ph-cover-art" id="ph-art"></div>
+          <div class="ph-cover-meta">
+            <span class="ph-title" id="ph-title">—</span>
+            <span class="ph-ep" id="ph-ep">episode 1</span>
+          </div>
+        </div>
+        <div class="ph-bar"><span id="ph-progress"></span></div>
+        <div class="ph-transport">
+          <button class="t-btn" id="t-prev" aria-label="Previous">‹</button>
+          <button class="t-btn play" id="t-play" aria-label="Play / pause">▶</button>
+          <button class="t-btn" id="t-next" aria-label="Next">›</button>
+        </div>
+        <button class="ph-throw" id="t-throw">
+          <span>Throw to phone</span>
+          <span class="throw-arrow">»</span>
+        </button>
+      </div>
+      <!-- the thrown episode lands here -->
+      <div class="phone-cast" id="phone-cast" aria-hidden="true">
+        <div class="cast-art" id="cast-art"></div>
+        <div class="cast-chrome">
+          <span class="cast-title" id="cast-title">—</span>
+          <button class="cast-back" id="cast-back">Throw back ‹</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- the flying tile for the demo throw -->
+    <div class="fly-tile" id="fly-tile" aria-hidden="true"></div>
+  </div>
+</section>
+
+<!-- ───────────────────────── Manifesto ───────────────────────── -->
+<section class="manifesto" id="manifesto">
+  <p class="reveal-lines">
+    <span>You found the remote.</span>
+    <span>Now lose the keyboard, the mouse, the “where did the trackpad go.”</span>
+    <span>Shou runs on the watching machine and answers to your phone —</span>
+    <span>one tap to play the next episode, a swipe to find the next obsession.</span>
+  </p>
+  <aside class="margin-note">No, you still can’t make it watch the episodes <em>for</em> you. We tried.</aside>
+</section>
+
+<!-- ───────────────────────── Features ───────────────────────── -->
+<section class="features" id="features">
+  <header class="sec-head">
+    <span class="sec-kicker">受信中 · what you can do</span>
+    <h2>A whole couch workflow, in your thumb.</h2>
+  </header>
+  <div class="feature-grid" id="feature-grid"><!-- cards injected by JS --></div>
+</section>
+
+<!-- ───────────────────────── Throw (pinned showpiece) ───────────────────────── -->
+<section class="throw" id="throw">
+  <div class="throw-pin" id="throw-pin">
+    <div class="throw-copy">
+      <span class="sec-kicker">投げる · throw to phone</span>
+      <h2 class="throw-h">Couch too far?<br>Throw the episode<br>onto your phone.</h2>
+      <p>Tap a key on the PC — or the button on the remote — and the very thing you were
+        watching lifts off the big screen and lands in your hand, resuming to the frame.
+        Throw it back and the PC picks up exactly where your phone left off.</p>
+      <ul class="throw-steps">
+        <li data-step="0"><b>1.</b> Watching on the big screen.</li>
+        <li data-step="1"><b>2.</b> It lifts off…</li>
+        <li data-step="2"><b>3.</b> …and lands on the phone, in landscape.</li>
+        <li data-step="3"><b>4.</b> Throw back — PC resumes to the second.</li>
+      </ul>
+    </div>
+    <div class="throw-stage" id="throw-stage">
+      <div class="ts-screen" id="ts-screen">
+        <div class="ts-frame"></div>
+        <div class="ts-label">the big screen</div>
+      </div>
+      <div class="ts-arc" id="ts-arc"></div>
+      <div class="ts-phone" id="ts-phone">
+        <div class="ts-phone-frame"></div>
+        <div class="ts-tile" id="ts-tile"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── Native superpowers ───────────────────────── -->
+<section class="native" id="native">
+  <header class="sec-head">
+    <span class="sec-kicker">アンドロイド · native superpowers</span>
+    <h2>The web remote is lovely.<br>The Android app has reflexes.</h2>
+    <p class="sec-lead">Same remote, wrapped in a real app — so it can reach past the browser
+      into the parts of your phone the web can’t touch.</p>
+  </header>
+
+  <div class="native-grid">
+    <!-- the living widget -->
+    <article class="native-hero card">
+      <div class="widget" id="widget">
+        <div class="w-top">
+          <div class="w-cover"></div>
+          <div class="w-meta">
+            <span class="w-title">Frieren: Beyond Journey’s End</span>
+            <span class="w-sub">Episode 12 · Currently watching</span>
+          </div>
+          <button class="w-wake" title="Wake the PC">⏻</button>
+        </div>
+        <div class="w-bar"><span></span></div>
+        <div class="w-controls">
+          <button>‹</button>
+          <button class="w-play" id="w-play">❚❚</button>
+          <button>›</button>
+        </div>
+      </div>
+      <div class="native-hero-text">
+        <h3>A home-screen widget that actually does something</h3>
+        <p>Now-playing at a glance. Wake the PC, play/pause, skip — without opening anything.
+          A Quick Settings tile, too, for the truly horizontal among us.</p>
+      </div>
+    </article>
+
+    <article class="card native-feat" data-icon="wol">
+      <h3>Wake-on-LAN</h3>
+      <p>PC asleep? Tap <b>Wake</b> from the couch. A magic packet goes out; the machine
+        rises. You never get up.</p>
+    </article>
+    <article class="card native-feat" data-icon="mdns">
+      <h3>Finds your PCs by itself</h3>
+      <p>An mDNS scan lists every Shou server on the network. No IP addresses, no typing,
+        no “what was it again.”</p>
+    </article>
+    <article class="card native-feat" data-icon="media">
+      <h3>Lock-screen media controls</h3>
+      <p>Real <code>MediaSession</code> controls on your lock screen and headset. The
+        volume rocker drives mpv on the PC.</p>
+    </article>
+    <article class="card native-feat" data-icon="shortcut">
+      <h3>Per-server shortcuts</h3>
+      <p>Long-press the icon for <i>Living room</i> or <i>Bedroom</i> — each opens the
+        remote already pointed at that machine.</p>
+    </article>
+    <article class="card native-feat" data-icon="lock">
+      <h3>Keys, encrypted</h3>
+      <p>Tokens live in the Android Keystore via <code>EncryptedSharedPreferences</code>.
+        Never plaintext, never your problem.</p>
+    </article>
+    <article class="card native-feat" data-icon="bell">
+      <h3>Notifications that matter</h3>
+      <p>A heads-up when you finish a series, and a nudge when a show you’re on drops a
+        new episode.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────── How it works ───────────────────────── -->
+<section class="how" id="how">
+  <header class="sec-head">
+    <span class="sec-kicker">仕組み · how it works</span>
+    <h2>One server. Three screens. Live.</h2>
+    <p class="sec-lead">You don’t really need to know this. But it’s pretty, so here it is.</p>
+  </header>
+  <div class="diagram" id="diagram"><!-- SVG injected by JS --></div>
+</section>
+
+<!-- ───────────────────────── Screenshots ───────────────────────── -->
+<section class="shots" id="shots">
+  <header class="sec-head">
+    <span class="sec-kicker">画面 · mirrored, live</span>
+    <h2>What you press on the phone,<br>the screen already knows.</h2>
+  </header>
+
+  <div class="shot-row" data-pair="watching">
+    <figure class="shot pc"><img loading="lazy" decoding="async" src="assets/img/watching_pc.webp" alt="Currently-watching coverflow on the big screen" /></figure>
+    <figure class="shot mob"><img loading="lazy" decoding="async" src="assets/img/watching_mobile.webp" alt="The phone remote mirroring the currently-watching list" /></figure>
+    <figcaption>Currently watching — a 3D coverflow, mirrored to your hand.</figcaption>
+  </div>
+  <div class="shot-row reverse" data-pair="search">
+    <figure class="shot pc"><img loading="lazy" decoding="async" src="assets/img/search_pc.webp" alt="Search results and detail page on the big screen" /></figure>
+    <figure class="shot mob"><img loading="lazy" decoding="async" src="assets/img/search_mobile.webp" alt="Searching all of AniList from the phone with an on-screen keyboard" /></figure>
+    <figcaption>Search all of AniList — genre and tag filters, from the couch.</figcaption>
+  </div>
+  <div class="shot-row" data-pair="planned">
+    <figure class="shot pc"><img loading="lazy" decoding="async" src="assets/img/planned_pc.webp" alt="Plan-to-watch coverflow on the big screen" /></figure>
+    <figure class="shot mob"><img loading="lazy" decoding="async" src="assets/img/planned_mobile.webp" alt="The phone remote mirroring the plan-to-watch list" /></figure>
+    <figcaption>Plan to watch — your backlog, finally browsable.</figcaption>
+  </div>
+  <div class="shot-solo">
+    <figure class="shot mob"><img loading="lazy" decoding="async" src="assets/img/remotes_mobile.webp" alt="The multi-server Remotes switcher on the phone" /></figure>
+    <figcaption>Many machines? The Remotes switcher self-heals each address by <code>&lt;name&gt;.local</code>.</figcaption>
+  </div>
+</section>
+
+<!-- ───────────────────────── Install ───────────────────────── -->
+<section class="install" id="install">
+  <header class="sec-head">
+    <span class="sec-kicker">設置 · install</span>
+    <h2>One script. It asks before it touches anything.</h2>
+  </header>
+
+  <div class="terminal" id="terminal">
+    <div class="term-bar">
+      <span class="tb-dot r"></span><span class="tb-dot y"></span><span class="tb-dot g"></span>
+      <span class="tb-title">~/Shou — bash</span>
+      <button class="term-copy" id="term-copy" data-copy="git clone https://github.com/Shio-T0/Shou && cd Shou && ./install.sh">copy</button>
+    </div>
+    <pre class="term-body" id="term-body"><code><span class="c-comment"># this installer asks before every system change. it has trust issues (the good kind).</span>
+<span class="c-prompt">$</span> <span class="c-cmd">git clone https://github.com/Shio-T0/Shou</span>
+<span class="c-prompt">$</span> <span class="c-cmd">cd Shou && ./install.sh</span>
+<span class="c-out">✓ pre-flight   distro + compositor detected, refuses to run as root</span>
+<span class="c-out">✓ deps         mpv · curl · a browser · uv</span>
+<span class="c-out">✓ python       uv sync</span>
+<span class="c-out">✓ config       ~/.config/shou/shou.conf  ·  your AniList username</span>
+<span class="c-out">✓ optional     ani-cli · libnotify · mDNS · autostart · AniList OAuth</span>
+<span class="c-ok">▸ Shou is live. Open the remote on your phone:</span>
+<span class="c-url">  http://&lt;hostname&gt;.local:4100/remote?k=&lt;your-private-token&gt;</span></code></pre>
+  </div>
+
+  <ol class="install-steps">
+    <li><b>Clone &amp; run</b> <code>./install.sh</code> — idempotent, distro-aware, asks first.</li>
+    <li><b>Point it at AniList</b> — your public username is enough to start.</li>
+    <li><b>Open the remote</b> on your phone, or install the Android app and let it auto-discover.</li>
+    <li><b>(Optional) OAuth</b> for auto-marking episodes and scoring finales.</li>
+  </ol>
+</section>
+
+<!-- ───────────────────────── Download ───────────────────────── -->
+<section class="download" id="download">
+  <div class="dl-card card">
+    <span class="glyph xl">朱</span>
+    <h2>Take the remote.</h2>
+    <p>The native Android app — <code id="dl-apk-name">shou-remote-1.3.0.apk</code>,
+      signed, <a href="https://github.com/ImranR98/Obtainium" target="_blank" rel="noopener">Obtainium</a>-friendly.
+      The web remote needs nothing but the URL.</p>
+    <div class="dl-actions">
+      <a class="pill solid lg" id="dl-apk" href="https://github.com/Shio-T0/Shou/releases/latest" target="_blank" rel="noopener">
+        Download the app <span class="ver-pill" id="ver-pill">v1.3.0</span>
+      </a>
+      <a class="pill ghost lg" href="https://github.com/Shio-T0/Shou" target="_blank" rel="noopener">Read the source</a>
+    </div>
+    <p class="dl-fine">Linux server · Android optional · the web remote works in any browser.</p>
+  </div>
+</section>
+
+</main>
+
+<!-- ───────────────────────── Footer ───────────────────────── -->
+<footer class="foot">
+  <div class="foot-mark"><span class="glyph">朱</span> SHOU</div>
+  <p class="foot-tag">Made for the couch. 朱 — vermilion, because your attention deserves one bold color.</p>
+  <div class="foot-links">
+    <a href="https://github.com/Shio-T0/Shou" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/Shio-T0/Shou/releases" target="_blank" rel="noopener">Releases</a>
+    <a href="https://github.com/Shio-T0/Shou#readme" target="_blank" rel="noopener">Docs</a>
+    <a href="#top">Back to top ↑</a>
+  </div>
+  <p class="foot-fine">Not affiliated with AniList. Anime not included — that part’s on you.</p>
+</footer>
+
+<!-- Motion libs (maximum-wow). Page is fully functional without them. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lenis/1.1.13/lenis.min.js" defer></script>
+<script src="assets/js/site.js" defer></script>
+</body>
+</html>
