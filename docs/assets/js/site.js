@@ -220,11 +220,11 @@
         <stop offset="0" stop-color="#17161c"/><stop offset="1" stop-color="#100f13"/>
       </linearGradient>
     </defs>
-    <!-- wires -->
-    <path class="dg-wire" d="M250 110 H430"/><path class="dg-flow" d="M250 110 H430"/>
-    <path class="dg-wire" d="M250 250 H430"/><path class="dg-flow" d="M250 250 H430"/>
-    <path class="dg-wire" d="M690 180 H760 a20 20 0 0 0 20 -20 V120"/><path class="dg-flow" d="M690 180 H760 a20 20 0 0 0 20 -20 V120"/>
-    <path class="dg-wire" d="M560 230 V300 H300 V270"/><path class="dg-flow" d="M560 230 V300 H300 V270"/>
+    <!-- wires : each routes node-edge → node-edge (elbows share x=360) -->
+    <path class="dg-wire" d="M250 110 H360 V180 H430"/><path class="dg-flow" d="M250 110 H360 V180 H430"/>
+    <path class="dg-wire" d="M250 250 H360 V180 H430"/><path class="dg-flow" d="M250 250 H360 V180 H430"/>
+    <path class="dg-wire" d="M690 180 H790 V120"/><path class="dg-flow" d="M690 180 H790 V120"/>
+    <path class="dg-wire" d="M560 210 V260 H300 V300"/><path class="dg-flow" d="M560 210 V260 H300 V300"/>
     <!-- nodes -->
     <g><rect class="dg-node acc" x="40" y="80" width="210" height="60" rx="14"/>
       <text class="dg-label" x="64" y="106">Phone — web remote</text>
@@ -298,15 +298,31 @@
     if (!hasGSAP() || !window.ScrollTrigger) return;
     const { gsap } = window; gsap.registerPlugin(window.ScrollTrigger);
 
-    // pinned throw-to-phone scrubbed timeline
+    // pinned throw-to-phone scrubbed timeline.
+    // Place the tile over the screen (its left/top become the x:0/y:0 origin),
+    // then animate the measured delta to the phone centre. Re-measured on refresh.
     const tile = $("#ts-tile");
     if (tile && innerWidth > 900) {
-      const stage = $("#throw-stage");
-      const span = stage.getBoundingClientRect();
+      const place = () => {
+        const sR  = $("#throw-stage").getBoundingClientRect();
+        const scr = $("#ts-screen").getBoundingClientRect();
+        const ph  = $("#ts-phone").getBoundingClientRect();
+        const tw  = Math.max(72, scr.width * 0.34), th = tw * 1.5;
+        tile.style.width = tw + "px";
+        const sx = scr.left - sR.left + scr.width  / 2 - tw / 2;
+        const sy = scr.top  - sR.top  + scr.height / 2 - th / 2;
+        const ex = ph.left  - sR.left + ph.width   / 2 - tw / 2;
+        const ey = ph.top   - sR.top  + ph.height  / 2 - th / 2;
+        tile.style.left = sx + "px"; tile.style.top = sy + "px";
+        return { dx: ex - sx, dy: ey - sy, arc: -scr.height * 0.16 };
+      };
+      let d = place();
+      gsap.set(tile, { x: 0, y: 0, scale: 1, rotation: 0, transformOrigin: "50% 50%" });
       const tl = gsap.timeline({
         scrollTrigger: {
           trigger: "#throw", start: "top top", end: "+=160%",
-          scrub: 0.6, pin: "#throw-pin",
+          scrub: 0.6, pin: "#throw-pin", invalidateOnRefresh: true,
+          onRefresh: () => { d = place(); },
           onUpdate: (self) => {
             const p = self.progress;
             const stepN = p < .12 ? 0 : p < .55 ? 1 : p < .9 ? 2 : 3;
@@ -315,12 +331,9 @@
           },
         },
       });
-      gsap.set(tile, { transformOrigin: "50% 50%" });
-      tl.fromTo(tile,
-        { x: 0, y: 0, scale: 1, rotation: 0 },
-        { x: span.width * 0.18, y: -span.height * 0.22, scale: .92, rotation: -10, ease: "power1.in" })
-        .to(tile, { x: span.width * 0.52, y: span.height * 0.34, scale: .62, rotation: 6, ease: "power2.inOut" })
-        .to(tile, { x: span.width * 0.49, y: span.height * 0.30, scale: .9, rotation: 0, ease: "power3.out" });
+      tl.to(tile, { x: () => d.dx * 0.5, y: () => d.arc, scale: .96, rotation: -10, ease: "power1.in" })
+        .to(tile, { x: () => d.dx, y: () => d.dy, scale: .60, rotation: 5, ease: "power2.inOut" })
+        .to(tile, { scale: .9, rotation: 0, ease: "power3.out" });
       gsap.fromTo("#ts-phone", { boxShadow: "0 40px 70px -28px #000" },
         { boxShadow: "0 40px 90px -20px rgba(255,74,50,.5)", scrollTrigger: { trigger: "#throw", start: "top top", end: "+=160%", scrub: 1 } });
     }
