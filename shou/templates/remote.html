@@ -295,10 +295,12 @@
     </form>
   </section>
 
-  <!-- Cast player : the episode "thrown" from the PC, played here on the phone. -->
+  <!-- Cast player : the episode "thrown" from the PC, played here on the phone.
+       Custom controls (so Throw back is always reachable and fullscreen is ours). -->
   <section id="cast" class="cast hidden" aria-hidden="true">
-    <div class="cast-stage">
-      <video id="cast-video" class="cast-video" playsinline webkit-playsinline controls></video>
+    <div class="cast-stage" id="cast-stage">
+      <video id="cast-video" class="cast-video" playsinline webkit-playsinline></video>
+
       <div id="cast-spin" class="cast-spin">
         <span class="cast-spin-ring" aria-hidden="true"></span>
         <span class="cast-spin-jp">受信中</span>
@@ -308,17 +310,44 @@
         <span class="cast-error-msg"></span>
         <button type="button" class="cast-error-close" id="cast-error-close">Close</button>
       </div>
-    </div>
-    <header class="cast-bar">
-      <div class="cast-meta">
-        <span class="cast-kicker">受信中 · ON THIS PHONE</span>
-        <span id="cast-title" class="cast-title">Shou</span>
+
+      <!-- Double-tap seek hints (left = back 15s, right = forward 15s). -->
+      <div class="cast-seek-hint cast-hint-left" id="cast-hint-left">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 6 5 12l6 6z"/><path d="M18 6l-6 6 6 6z"/></svg>
+        <span>15s</span>
       </div>
-      <button type="button" class="cast-close" id="cast-close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7 5 12l5 5"/><path d="M5 12h11a4 4 0 0 0 0-8h-1"/></svg>
-        <span>Throw back</span>
-      </button>
-    </header>
+      <div class="cast-seek-hint cast-hint-right" id="cast-hint-right">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 6l6 6-6 6z"/><path d="M6 6l6 6-6 6z"/></svg>
+        <span>15s</span>
+      </div>
+
+      <!-- Our chrome: a top bar and a transport bar, shown on tap. -->
+      <div class="cast-ui" id="cast-ui">
+        <div class="cast-top">
+          <div class="cast-meta">
+            <span class="cast-kicker">受信中 · ON THIS PHONE</span>
+            <span id="cast-title" class="cast-title">Shou</span>
+          </div>
+          <button type="button" class="cast-close" id="cast-close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7 5 12l5 5"/><path d="M5 12h11a4 4 0 0 0 0-8h-1"/></svg>
+            <span>Throw back</span>
+          </button>
+        </div>
+        <div class="cast-bottom">
+          <button type="button" class="cast-ctl" id="cast-pp" aria-label="Play / pause">
+            <svg class="cast-ic-play" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z"/></svg>
+            <svg class="cast-ic-pause hidden" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          </button>
+          <span id="cast-cur" class="cast-time">0:00</span>
+          <input id="cast-seek" class="cast-seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+          <span id="cast-dur" class="cast-time">0:00</span>
+          <button type="button" class="cast-ctl" id="cast-fs" aria-label="Fullscreen">
+            <svg class="cast-ic-fs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+            <svg class="cast-ic-fsexit hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <div id="toast" class="toast"></div>

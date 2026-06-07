@@ -1050,7 +1050,134 @@ window.shouOnScan = function (jsonStr, done) {
 let castSig = "";       // current source signature, so we only (re)load on change
 let castHls = null;
 let castOpen = false;
+let castUiTimer = null;
+let castSeeking = false;
+let castFs = false;
 const castEl = (id) => document.getElementById(id);
+const castQ = (sel) => document.querySelector(sel);
+
+// --- Custom controls: chrome that fades, play/pause, a seek bar, and fullscreen ---
+function castShowUi() {
+  const o = castEl("cast");
+  if (!o) return;
+  o.classList.add("controls");
+  clearTimeout(castUiTimer);
+  const v = castEl("cast-video");
+  if (v && !v.paused) castUiTimer = setTimeout(() => o.classList.remove("controls"), 3500);
+}
+function castHideUi() {
+  const o = castEl("cast");
+  if (o) o.classList.remove("controls");
+  clearTimeout(castUiTimer);
+}
+function castToggleUi() {
+  const o = castEl("cast");
+  if (o && o.classList.contains("controls")) castHideUi(); else castShowUi();
+}
+
+// Double-tap a side of the video to seek ±15s (single tap still toggles the chrome).
+let castTapTimer = null;
+let castLastTapT = 0;
+function castSeekBy(delta) {
+  const v = castEl("cast-video");
+  if (!v || !isFinite(v.duration) || !v.duration) return;
+  v.currentTime = Math.max(0, Math.min(v.duration, (v.currentTime || 0) + delta));
+  if (navigator.vibrate) navigator.vibrate(12);
+  const hint = castEl(delta < 0 ? "cast-hint-left" : "cast-hint-right");
+  if (hint) { hint.classList.remove("show"); void hint.offsetWidth; hint.classList.add("show"); }
+  castShowUi();
+}
+function castOnStageTap(e) {
+  const stage = castEl("cast-stage");
+  if (!stage || !(e.target === stage || (e.target && e.target.id === "cast-video"))) return;
+  const now = Date.now();
+  if (now - castLastTapT < 300) {            // second tap -> seek
+    if (castTapTimer) { clearTimeout(castTapTimer); castTapTimer = null; }
+    castLastTapT = 0;
+    const rect = stage.getBoundingClientRect();
+    castSeekBy((e.clientX - rect.left) < rect.width / 2 ? -15 : 15);
+  } else {                                    // first tap -> wait, then toggle chrome
+    castLastTapT = now;
+    castTapTimer = setTimeout(() => { castTapTimer = null; castToggleUi(); }, 300);
+  }
+}
+
+// Size the overlay to the real window. On rotation the WebView's layout viewport can go
+// stale, leaving a `position:fixed; inset:0` element sized for the old orientation (so the
+// video gets clipped in landscape). Pinning explicit px from window.inner* avoids that.
+function castFitViewport() {
+  const o = castEl("cast");
+  if (!o || o.classList.contains("hidden")) return;
+  // window.inner* is reliable here; visualViewport briefly reports height 0 on rotation.
+  o.style.top = "0px";
+  o.style.left = "0px";
+  o.style.width = window.innerWidth + "px";
+  o.style.height = window.innerHeight + "px";
+}
+
+function castTogglePlay() {
+  const v = castEl("cast-video");
+  if (!v) return;
+  if (v.paused) v.play().catch(() => {}); else v.pause();
+}
+function castSyncPlayIcon() {
+  const v = castEl("cast-video");
+  if (!v) return;
+  const playing = !v.paused;
+  castQ(".cast-ic-play").classList.toggle("hidden", playing);
+  castQ(".cast-ic-pause").classList.toggle("hidden", !playing);
+  if (playing) castShowUi();                 // playing: reveal then auto-fade
+  else { castEl("cast").classList.add("controls"); clearTimeout(castUiTimer); }  // paused: keep shown
+}
+
+function castSeekFill(frac) {
+  const pct = Math.max(0, Math.min(1, frac)) * 100;
+  return `linear-gradient(90deg, var(--acc) ${pct}%, rgba(255,255,255,0.25) ${pct}%)`;
+}
+function castOnTime() {
+  const v = castEl("cast-video");
+  if (!v || castSeeking) return;
+  const dur = v.duration || 0;
+  castEl("cast-cur").textContent = fmtTime(v.currentTime || 0);
+  if (dur && isFinite(dur)) {
+    castEl("cast-dur").textContent = fmtTime(dur);
+    const seek = castEl("cast-seek");
+    seek.value = Math.round(((v.currentTime || 0) / dur) * 1000);
+    seek.style.background = castSeekFill(seek.value / 1000);
+  }
+}
+
+function castLockLandscape() {
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {}); } catch (e) {}
+}
+// Fullscreen the <video> itself: the WebView hosts that fullscreen view natively (via
+// onShowCustomView), which sizes + rotates it correctly — unlike fullscreening a <div>
+// or rotating the whole activity, both of which cropped the video here. The native video
+// controls show in that view; Throw back lives in the normal overlay (exit to reach it).
+// "Fullscreen" = lock the app to landscape (so our own player, controls and all, fills
+// the screen). We deliberately avoid the HTML Fullscreen API: fullscreening web content
+// here renders it at the stale portrait size (cropped), whereas just rotating + sizing the
+// overlay to the real visible viewport fills correctly. In a plain browser we fall back to
+// the Fullscreen API.
+function castSetFs(on) {
+  castFs = on;
+  castEl("cast").classList.toggle("fs", on);
+  if (NATIVE && NATIVE.fullscreen) {
+    try { NATIVE.fullscreen(on); } catch (e) {}
+  } else {
+    const o = castEl("cast");
+    if (on) { const r = o.requestFullscreen || o.webkitRequestFullscreen; try { r && r.call(o).then && r.call(o).then(castLockLandscape).catch(() => {}); } catch (e) {} }
+    else { try { (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document); } catch (e) {} }
+  }
+  setTimeout(castFitViewport, 80);
+  castSyncFsIcon();
+  castShowUi();
+}
+function castToggleFs() { castSetFs(!castFs); }
+function castSyncFsIcon() {
+  castQ(".cast-ic-fs").classList.toggle("hidden", castFs);
+  castQ(".cast-ic-fsexit").classList.toggle("hidden", !castFs);
+}
 
 function applyCast(cast) {
   if (!castEl("cast")) return;
@@ -1127,23 +1254,32 @@ function openCast() {
   o.classList.remove("hidden"); o.setAttribute("aria-hidden", "false");
   document.body.classList.add("cast-on");
   if (navigator.vibrate) navigator.vibrate(22);
+  castFitViewport();
+  castShowUi();  // show the chrome briefly when it flies in, then let it fade
 }
 
 function closeCast() {
   castOpen = false;
   castSig = "";
+  if (castFs) castSetFs(false);
   teardownCastVideo();
   const o = castEl("cast");
-  if (o) { o.classList.add("hidden"); o.setAttribute("aria-hidden", "true"); }
+  if (o) {
+    o.classList.add("hidden"); o.classList.remove("controls", "fs");
+    o.setAttribute("aria-hidden", "true");
+    o.style.width = ""; o.style.height = ""; o.style.top = ""; o.style.left = "";
+  }
   if (castEl("cast-spin")) castEl("cast-spin").classList.remove("hidden");
   if (castEl("cast-error")) castEl("cast-error").classList.add("hidden");
   document.body.classList.remove("cast-on");
 }
 
-// Throw it back to the PC: clear the cast (the server un-pauses mpv) and close here.
+// Throw it back to the PC: tell the server where we stopped so mpv resumes there.
 function throwBack() {
   if (navigator.vibrate) navigator.vibrate(12);
-  post("/cast/clear");
+  const v = castEl("cast-video");
+  const pos = v && isFinite(v.currentTime) ? Math.floor(v.currentTime) : 0;
+  post("/cast/clear?pos=" + pos);
   closeCast();
 }
 
@@ -1152,6 +1288,62 @@ function throwBack() {
   wire("throw-btn", throwToPhone);
   wire("cast-close", throwBack);
   wire("cast-error-close", throwBack);
+  wire("cast-pp", castTogglePlay);
+  wire("cast-fs", castToggleFs);
+
+  // Single tap toggles our chrome; double tap on a side seeks ±15s.
+  const stage = document.getElementById("cast-stage");
+  if (stage) stage.addEventListener("click", castOnStageTap);
+
+  // Custom seek bar -> video.currentTime.
+  const seek = document.getElementById("cast-seek");
+  if (seek) {
+    seek.addEventListener("input", () => {
+      castSeeking = true;
+      castShowUi();
+      const v = castEl("cast-video");
+      const dur = v && v.duration;
+      if (dur && isFinite(dur)) {
+        castEl("cast-cur").textContent = fmtTime((seek.value / 1000) * dur);
+        seek.style.background = castSeekFill(seek.value / 1000);
+      }
+    });
+    seek.addEventListener("change", () => {
+      const v = castEl("cast-video");
+      const dur = v && v.duration;
+      if (v && dur && isFinite(dur)) { try { v.currentTime = (seek.value / 1000) * dur; } catch (e) {} }
+      castSeeking = false;
+    });
+  }
+
+  // Drive the custom UI from the <video>'s own events.
+  const v = document.getElementById("cast-video");
+  if (v) {
+    v.addEventListener("timeupdate", castOnTime);
+    v.addEventListener("durationchange", castOnTime);
+    v.addEventListener("loadedmetadata", castOnTime);
+    v.addEventListener("play", castSyncPlayIcon);
+    v.addEventListener("pause", castSyncPlayIcon);
+  }
+  // Reflect leaving fullscreen (the video's own exit, or Android back).
+  // Reflect leaving fullscreen (our exit button, or Android back).
+  const onFsChange = () => {
+    const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (!fs && castFs) {
+      castFs = false;
+      castEl("cast").classList.remove("fs");
+      castSyncFsIcon();
+      try { screen.orientation && screen.orientation.unlock && screen.orientation.unlock(); } catch (e) {}
+    }
+  };
+  document.addEventListener("fullscreenchange", onFsChange);
+  document.addEventListener("webkitfullscreenchange", onFsChange);
+
+  // Keep the overlay sized to the real visible viewport across rotations.
+  const refit = () => castFitViewport();
+  window.addEventListener("resize", refit);
+  window.addEventListener("orientationchange", () => setTimeout(refit, 120));
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", refit);
 })();
 
 // --- PWA service worker (registers only in a secure context; no-ops on http) -

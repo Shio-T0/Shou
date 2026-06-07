@@ -4,20 +4,26 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -42,6 +48,12 @@ class MainActivity : AppCompatActivity(), BridgeHost {
 
     private lateinit var web: WebView
     private var loadedUrl: String? = null
+
+    // HTML5 <video> fullscreen needs the app to host the player's view itself; without
+    // this the WebView renders fullscreen video mispositioned/cropped.
+    private var fullscreenView: View? = null
+    private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    private var savedOrientation: Int = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
     override val ctx: Context get() = applicationContext
     override fun evalJs(js: String) {
@@ -78,11 +90,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
 
         // Edge-to-edge + immersive: hide the system bars, swipe to reveal them.
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
+        applyImmersive()
 
         web = WebView(this)
         web.setBackgroundColor(Color.parseColor("#0B0A0E"))
@@ -95,6 +103,39 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             cacheMode = WebSettings.LOAD_DEFAULT
         }
         web.addJavascriptInterface(ShouBridge(this), ShouBridge.NAME)
+
+        // Host fullscreen <video> (the cast player) ourselves, rotating to landscape, so
+        // it fills the screen properly instead of being cropped.
+        web.webChromeClient = object : WebChromeClient() {
+            override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                if (fullscreenView != null) { callback.onCustomViewHidden(); return }
+                fullscreenView = view
+                fullscreenCallback = callback
+                savedOrientation = requestedOrientation
+                (window.decorView as FrameLayout).addView(
+                    view,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+                view.setBackgroundColor(Color.BLACK)
+                web.visibility = View.GONE
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                WindowInsetsControllerCompat(window, window.decorView)
+                    .hide(WindowInsetsCompat.Type.systemBars())
+            }
+
+            override fun onHideCustomView() {
+                val v = fullscreenView ?: return
+                (window.decorView as FrameLayout).removeView(v)
+                fullscreenView = null
+                fullscreenCallback?.onCustomViewHidden()
+                fullscreenCallback = null
+                web.visibility = View.VISIBLE
+                requestedOrientation = savedOrientation
+            }
+        }
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
@@ -147,6 +188,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (fullscreenView != null) { web.webChromeClient?.onHideCustomView(); return }
                 if (web.canGoBack()) web.goBack() else moveTaskToBack(true)
             }
         })
@@ -170,6 +212,29 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             return true  // consume — don't change the phone's own volume
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun applyImmersive() {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyImmersive()  // keep the bars hidden across rotations (else the nav bar clips video)
+    }
+
+    /** Cast fullscreen: rotate to landscape (or release it), re-asserting immersive so the
+     *  video fills the screen instead of being clipped by the system bars. */
+    override fun setLandscape(on: Boolean) {
+        runOnUiThread {
+            requestedOrientation =
+                if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            applyImmersive()
+        }
     }
 
     private fun prefs() = getSharedPreferences("shou", MODE_PRIVATE)
