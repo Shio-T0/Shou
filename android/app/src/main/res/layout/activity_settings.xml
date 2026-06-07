@@ -156,6 +156,17 @@
                 app:thumbTint="@color/accent"
                 app:trackTint="@color/stroke" />
 
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/volume_keys"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/volume_keys"
+                android:textColor="@color/paper"
+                android:textSize="15sp"
+                app:thumbTint="@color/accent"
+                app:trackTint="@color/stroke" />
+
         </LinearLayout>
 
         <Button

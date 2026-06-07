@@ -1022,3 +1022,54 @@ body.rmt-open { overflow: hidden; }
   background: linear-gradient(150deg, var(--acc), #d63b27);
   box-shadow: 0 8px 22px -10px var(--acc);
 }
+
+/* ---- Volume row (on-screen; also driven by the native volume rocker) ---- */
+.vol-row { margin-top: 8px; gap: 8px; }
+.btn-vol { flex: 1; padding: 12px 0; color: var(--paper-dim); }
+.btn-vol svg { width: 22px; height: 22px; }
+.btn-vol:active { color: var(--paper); }
+.btn-vol-mute { flex: 0 0 26%; color: var(--acc-2); }
+
+/* ---- Remotes: native mDNS scan + discovered servers ---- */
+.rmt-scan {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  width: 100%; padding: 13px; cursor: pointer;
+  border: 1px dashed var(--line-2); border-radius: var(--r);
+  background: var(--ink-2); color: var(--acc-2);
+  font: inherit; font-weight: 800; font-size: 13px; letter-spacing: 0.03em;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.rmt-scan svg { width: 20px; height: 20px; }
+.rmt-scan:active { border-color: var(--acc); background: var(--acc-soft); }
+.rmt-scan.hidden { display: none; }
+
+.rmt-found { display: flex; flex-direction: column; gap: 9px; }
+.rmt-found:empty { display: none; }
+.rmt-found-card {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 11px 13px; cursor: pointer; text-align: left;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: linear-gradient(160deg, var(--ink-3), var(--ink-2)); color: inherit; font: inherit;
+}
+.rmt-found-card:active { border-color: var(--acc); }
+.rmt-found-ico { flex: none; width: 22px; height: 22px; color: var(--acc-2); }
+.rmt-found-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rmt-found-name {
+  font-weight: 800; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rmt-found-addr {
+  font-size: 11.5px; color: var(--paper-dim); letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.rmt-found-add {
+  flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--acc); padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--ink);
+}
+
+/* Wake-on-LAN action on a saved remote (native only). */
+.rmt-wake { color: var(--acc-2); }
+.rmt-wake:active { background: var(--acc-soft); }
+
+.rmt-field-mac.hidden { display: none; }
