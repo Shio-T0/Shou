@@ -61,7 +61,7 @@ body {
   background: radial-gradient(50% 50% at 50% 50%, var(--acc-soft) 0%, transparent 70%);
   filter: blur(10px);
 }
-body > *:not(.grain):not(.aura):not(.remotes) { position: relative; z-index: 1; }
+body > *:not(.grain):not(.aura):not(.remotes):not(.cast) { position: relative; z-index: 1; }
 
 /* ---- Entrance ---- */
 @keyframes rise {
@@ -1092,8 +1092,7 @@ body.rmt-open { overflow: hidden; }
 /* ---- Cast player overlay ---- */
 body.cast-on { overflow: hidden; }
 .cast {
-  position: fixed; inset: 0; z-index: 80;
-  display: flex; flex-direction: column;
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 80;
   background: #050505;
   animation: castIn 0.34s var(--ease) both;
 }
@@ -1103,11 +1102,52 @@ body.cast-on { overflow: hidden; }
   to   { opacity: 1; transform: none; }
 }
 
-.cast-bar {
-  order: -1;   /* keep the bar on top, the video stage below */
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px;
-  background: linear-gradient(180deg, rgba(10, 10, 12, 0.96), rgba(10, 10, 12, 0));
+.cast-stage {
+  position: absolute; inset: 0; background: #000;
+}
+
+/* Double-tap seek hints */
+.cast-seek-hint {
+  position: absolute; top: 0; bottom: 0; width: 40%; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  color: #fff; font-weight: 800; font-size: 13px; letter-spacing: 0.04em;
+  pointer-events: none; opacity: 0;
+}
+.cast-hint-left { left: 0; background: radial-gradient(55% 75% at 0% 50%, rgba(255, 74, 50, 0.3), transparent 72%); }
+.cast-hint-right { right: 0; background: radial-gradient(55% 75% at 100% 50%, rgba(255, 74, 50, 0.3), transparent 72%); }
+.cast-seek-hint svg { width: 32px; height: 32px; }
+.cast-seek-hint.show { animation: castSeekFlash 0.5s var(--ease); }
+@keyframes castSeekFlash {
+  0% { opacity: 0; transform: scale(0.9); }
+  28% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.02); }
+}
+/* Pin the video to the stage box (definite width AND height) so it can't grow past the
+   container's height via its intrinsic aspect ratio — object-fit then letterboxes inside. */
+.cast-video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; background: #000;
+  animation: castVideoIn 0.5s var(--ease) both;
+}
+
+/* Custom chrome: a top bar and a transport bar, fading in on tap so the video stays
+   unobstructed. Empty video area keeps pointer-events off so a tap toggles the chrome. */
+.cast-ui { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.cast-top, .cast-bottom {
+  position: absolute; left: 0; right: 0;
+  display: flex; align-items: center; gap: 11px;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.cast.controls .cast-top, .cast.controls .cast-bottom { opacity: 1; pointer-events: auto; }
+.cast-top {
+  top: 0; justify-content: space-between;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 24px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0));
+}
+.cast-bottom {
+  bottom: 0;
+  padding: 22px 16px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
 }
 .cast-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .cast-kicker {
@@ -1122,19 +1162,38 @@ body.cast-on { overflow: hidden; }
   flex: none; display: inline-flex; align-items: center; gap: 7px;
   padding: 9px 14px; border-radius: 999px; cursor: pointer;
   font: inherit; font-weight: 800; font-size: 12px; letter-spacing: 0.03em;
-  color: var(--paper); background: rgba(255, 255, 255, 0.08);
+  color: var(--paper); background: rgba(255, 255, 255, 0.1);
   border: 1px solid var(--line-2);
 }
 .cast-close svg { width: 17px; height: 17px; }
 .cast-close:active { transform: scale(0.96); background: var(--acc-soft); border-color: rgba(255, 74, 50, 0.4); }
 
-.cast-stage {
-  position: relative; flex: 1; min-height: 0;
-  display: grid; place-items: center; background: #000;
+.cast-ctl {
+  flex: none; width: 42px; height: 42px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(255, 255, 255, 0.12); color: var(--paper);
 }
-.cast-video {
-  width: 100%; height: 100%; object-fit: contain; background: #000;
-  animation: castVideoIn 0.5s var(--ease) both;
+.cast-ctl svg { width: 22px; height: 22px; }
+.cast-ctl.hidden, .cast-ui svg.hidden { display: none; }
+.cast-ctl:active { transform: scale(0.93); }
+#cast-pp { background: linear-gradient(150deg, var(--acc), #d63b27); color: #fff; }
+.cast-time {
+  font-size: 11px; color: var(--paper); opacity: 0.9;
+  font-variant-numeric: tabular-nums; min-width: 36px; text-align: center;
+}
+.cast-seek {
+  flex: 1; height: 4px; border-radius: 3px; outline: none; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  background: rgba(255, 255, 255, 0.25);
+}
+.cast-seek::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--acc); border: 2px solid #fff;
+}
+.cast-seek::-moz-range-thumb {
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--acc); border: 2px solid #fff;
 }
 @keyframes castVideoIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
 

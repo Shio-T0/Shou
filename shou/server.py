@@ -1845,6 +1845,12 @@ def resolve_and_cast(gen: int, search: str, episode: int, title: str, position: 
             kind = "hls" if url.split("?")[0].lower().endswith(".m3u8") else "file"
             CAST.update(resolving=False, error="", url=url, referer=referrer or "",
                         subtitle=subtitle or "", kind=kind)
+    if not resolved:
+        # Nothing castable — let the PC keep playing rather than sitting frozen.
+        mpv_ipc_command(["show-text", "No phone-playable source - resuming", 3000])
+        mpv_ipc_command(["set_property", "pause", False])
+    else:
+        mpv_ipc_command(["show-text", "Now watching on your phone  >>", 4000])
     broadcast()
 
 
@@ -1863,17 +1869,22 @@ def start_throw() -> bool:
         position = p.get("position") or 0
         cover = p.get("cover", "")
     mpv_ipc_command(["set_property", "pause", True])  # hand off — freeze the PC player
+    mpv_ipc_command(["show-text", "Sending to your phone...", 5000])
     socketio.start_background_task(resolve_and_cast, gen, search, episode, title, position, cover)
     return True
 
 
-def stop_cast(resume_pc: bool = True) -> None:
-    """Throw back: clear the cast and (optionally) un-pause the PC player."""
+def stop_cast(resume_pc: bool = True, position: float | None = None) -> None:
+    """Throw back: clear the cast and (optionally) resume the PC player — seeking it to
+    where the phone left off so playback continues seamlessly on the big screen."""
     with STATE_LOCK:
         CAST.update(active=False, resolving=False, url="", error="")
         CAST["gen"] += 1
     if resume_pc:
+        if position is not None and position > 0:
+            mpv_ipc_command(["set_property", "time-pos", float(position)])
         mpv_ipc_command(["set_property", "pause", False])
+        mpv_ipc_command(["show-text", ">> Resumed on this screen", 2500])
     broadcast()
 
 
@@ -2522,8 +2533,12 @@ def throw():
 @app.route("/cast/clear", methods=["POST"])
 @require_auth
 def cast_clear():
-    """Throw back: stop casting to the phone and resume on the PC."""
-    stop_cast(resume_pc=True)
+    """Throw back: stop casting to the phone and resume on the PC at ?pos= seconds."""
+    try:
+        pos = float(request.args.get("pos", 0) or 0)
+    except (TypeError, ValueError):
+        pos = 0.0
+    stop_cast(resume_pc=True, position=pos)
     return jsonify(ok=True)
 
 

@@ -10,6 +10,8 @@ interface BridgeHost {
     val ctx: Context
     /** Run a snippet of JS in the WebView (marshalled to the UI thread). */
     fun evalJs(js: String)
+    /** Rotate to landscape (true) or release the lock (false) for cast fullscreen. */
+    fun setLandscape(on: Boolean)
 }
 
 /**
@@ -91,6 +93,12 @@ class ShouBridge(private val host: BridgeHost) {
     @JavascriptInterface
     fun notify(kind: String, title: String, body: String) {
         Notifications.event(ctx, kind, title, body)
+    }
+
+    /** Cast fullscreen: rotate the app to landscape (true) or release it (false). */
+    @JavascriptInterface
+    fun fullscreen(on: Boolean) {
+        host.setLandscape(on)
     }
 
     private fun push(js: String) = host.evalJs(js)
