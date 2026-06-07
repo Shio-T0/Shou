@@ -1,43 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One-cell-tall now-playing strip: cover · title + progress · transport. -->
+<!-- Structured now-playing card: cover + name/subtitle + wake on top, progress in the
+     middle, prev / play-pause / next on the bottom. Tight padding to stay well-proportioned. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/w_body"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:gravity="center_vertical"
     android:background="@drawable/widget_bg"
     android:paddingHorizontal="12dp"
-    android:paddingVertical="8dp">
+    android:paddingVertical="9dp">
 
-    <ImageView
-        android:id="@+id/w_cover"
-        android:layout_width="46dp"
-        android:layout_height="46dp"
-        android:scaleType="fitXY"
-        android:src="@drawable/widget_cover_placeholder"
-        android:contentDescription="@string/app_name" />
-
-    <!-- Meta: title + status, then a thin progress bar with times. -->
+    <!-- Top: cover · name/subtitle · wake -->
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_marginStart="11dp"
-        android:layout_marginEnd="10dp"
-        android:orientation="vertical">
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/w_cover"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:scaleType="fitXY"
+            android:src="@drawable/widget_cover_placeholder"
+            android:contentDescription="@string/app_name" />
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:orientation="vertical">
 
             <TextView
                 android:id="@+id/w_title"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:text="Nothing playing"
                 android:textColor="@color/paper"
                 android:textSize="14sp"
@@ -46,94 +45,101 @@
                 android:ellipsize="end" />
 
             <TextView
-                android:id="@+id/w_status"
-                android:layout_width="wrap_content"
+                android:id="@+id/w_sub"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/pill_bg"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="2dp"
-                android:text="IDLE"
+                android:layout_marginTop="2dp"
+                android:text="Tap to open Shou"
                 android:textColor="@color/paperDim"
-                android:textSize="9sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.12" />
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
         </LinearLayout>
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <TextView
-                android:id="@+id/w_pos"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0:00"
-                android:textColor="@color/paperDim"
-                android:textSize="9sp"
-                android:fontFamily="monospace" />
-
-            <ProgressBar
-                android:id="@+id/w_bar"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="0dp"
-                android:layout_height="4dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="7dp"
-                android:max="1000"
-                android:progress="0"
-                android:progressDrawable="@drawable/widget_progress" />
-
-            <TextView
-                android:id="@+id/w_dur"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0:00"
-                android:textColor="@color/paperDim"
-                android:textSize="9sp"
-                android:fontFamily="monospace" />
-        </LinearLayout>
+        <ImageView
+            android:id="@+id/w_wake"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_btn"
+            android:padding="8dp"
+            android:src="@drawable/ic_wake"
+            android:contentDescription="@string/wake_pc" />
     </LinearLayout>
 
-    <!-- Transport -->
-    <ImageView
-        android:id="@+id/w_prev"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:background="@drawable/widget_btn"
-        android:padding="7dp"
-        android:src="@drawable/ic_media_prev"
-        android:contentDescription="@string/cd_prev" />
+    <!-- Middle: progress -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="9dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-    <ImageView
-        android:id="@+id/w_play"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginHorizontal="7dp"
-        android:background="@drawable/widget_btn_accent"
-        android:padding="11dp"
-        android:src="@drawable/ic_media_play"
-        android:contentDescription="@string/cd_play" />
+        <TextView
+            android:id="@+id/w_pos"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0:00"
+            android:textColor="@color/paperDim"
+            android:textSize="10sp"
+            android:fontFamily="monospace" />
 
-    <ImageView
-        android:id="@+id/w_next"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:background="@drawable/widget_btn"
-        android:padding="7dp"
-        android:src="@drawable/ic_media_next"
-        android:contentDescription="@string/cd_next" />
+        <ProgressBar
+            android:id="@+id/w_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="5dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="9dp"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_progress" />
 
-    <ImageView
-        android:id="@+id/w_wake"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_marginStart="7dp"
-        android:background="@drawable/widget_btn"
-        android:padding="7dp"
-        android:src="@drawable/ic_wake"
-        android:contentDescription="@string/wake_pc" />
+        <TextView
+            android:id="@+id/w_dur"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0:00"
+            android:textColor="@color/paperDim"
+            android:textSize="10sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- Bottom: prev · play-pause · next -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="9dp"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <ImageView
+            android:id="@+id/w_prev"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="14dp"
+            android:background="@drawable/widget_btn"
+            android:padding="8dp"
+            android:src="@drawable/ic_media_prev"
+            android:contentDescription="@string/cd_prev" />
+
+        <ImageView
+            android:id="@+id/w_play"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:background="@drawable/widget_btn_accent"
+            android:padding="13dp"
+            android:src="@drawable/ic_media_play"
+            android:contentDescription="@string/cd_play" />
+
+        <ImageView
+            android:id="@+id/w_next"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="14dp"
+            android:background="@drawable/widget_btn"
+            android:padding="8dp"
+            android:src="@drawable/ic_media_next"
+            android:contentDescription="@string/cd_next" />
+    </LinearLayout>
 </LinearLayout>

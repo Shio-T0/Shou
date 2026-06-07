@@ -29,6 +29,7 @@
     };
   </script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -44,7 +45,13 @@
       </span>
       <svg class="brand-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
     </button>
-    <div id="conn" class="conn"><span class="dot"></span><span id="conn-text">connecting</span></div>
+    <div class="top-actions">
+      <button type="button" class="throw-btn hidden" id="throw-btn" aria-label="Watch on this phone">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M12 6.5v6M9.2 9.7 12 6.5l2.8 3.2"/></svg>
+        <span>Watch here</span>
+      </button>
+      <div id="conn" class="conn"><span class="dot"></span><span id="conn-text">connecting</span></div>
+    </div>
   </header>
 
   <!-- Now-showing hero : live mirror of the kiosk -->
@@ -286,6 +293,32 @@
         <button type="submit" class="rmt-btn rmt-btn-accent" id="rmt-save">Save &amp; connect</button>
       </div>
     </form>
+  </section>
+
+  <!-- Cast player : the episode "thrown" from the PC, played here on the phone. -->
+  <section id="cast" class="cast hidden" aria-hidden="true">
+    <div class="cast-stage">
+      <video id="cast-video" class="cast-video" playsinline webkit-playsinline controls></video>
+      <div id="cast-spin" class="cast-spin">
+        <span class="cast-spin-ring" aria-hidden="true"></span>
+        <span class="cast-spin-jp">受信中</span>
+        <span class="cast-spin-label">Catching it on your phone…</span>
+      </div>
+      <div id="cast-error" class="cast-error hidden">
+        <span class="cast-error-msg"></span>
+        <button type="button" class="cast-error-close" id="cast-error-close">Close</button>
+      </div>
+    </div>
+    <header class="cast-bar">
+      <div class="cast-meta">
+        <span class="cast-kicker">受信中 · ON THIS PHONE</span>
+        <span id="cast-title" class="cast-title">Shou</span>
+      </div>
+      <button type="button" class="cast-close" id="cast-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7 5 12l5 5"/><path d="M5 12h11a4 4 0 0 0 0-8h-1"/></svg>
+        <span>Throw back</span>
+      </button>
+    </header>
   </section>
 
   <div id="toast" class="toast"></div>
