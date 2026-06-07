@@ -1023,12 +1023,13 @@ body.rmt-open { overflow: hidden; }
   box-shadow: 0 8px 22px -10px var(--acc);
 }
 
-/* ---- Volume row (on-screen; also driven by the native volume rocker) ---- */
-.vol-row { margin-top: 8px; gap: 8px; }
-.btn-vol { flex: 1; padding: 12px 0; color: var(--paper-dim); }
-.btn-vol svg { width: 22px; height: 22px; }
+/* ---- Volume row (on-screen; also driven by the native volume rocker) ----
+   A single slim, horizontal row so it adds minimal height to the deck. */
+.vol-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.btn-vol { flex: 1; padding: 9px 0; color: var(--paper-dim); }
+.btn-vol svg { width: 20px; height: 20px; }
 .btn-vol:active { color: var(--paper); }
-.btn-vol-mute { flex: 0 0 26%; color: var(--acc-2); }
+.btn-vol-mute { flex: 0 0 24%; color: var(--acc-2); }
 
 /* ---- Remotes: native mDNS scan + discovered servers ---- */
 .rmt-scan {
