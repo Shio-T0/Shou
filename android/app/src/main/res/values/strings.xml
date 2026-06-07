@@ -25,5 +25,7 @@
     <string name="cd_prev">Previous episode</string>
     <string name="cd_play">Play or pause</string>
     <string name="cd_next">Next episode</string>
+    <string name="cd_rew">Rewind 30 seconds</string>
+    <string name="cd_ffwd">Forward 30 seconds</string>
     <string name="widget_description">Wake the PC and control what\'s playing, without opening the app.</string>
 </resources>

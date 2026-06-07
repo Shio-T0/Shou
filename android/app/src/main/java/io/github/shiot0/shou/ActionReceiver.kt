@@ -26,6 +26,8 @@ class ActionReceiver : BroadcastReceiver() {
                     ACTION_PAUSE -> ServerClient.command(app, "pause")
                     ACTION_NEXT -> ServerClient.command(app, "next")
                     ACTION_PREV -> ServerClient.command(app, "prev")
+                    ACTION_REW -> ServerClient.command(app, "rew")
+                    ACTION_FFWD -> ServerClient.command(app, "fwd")
                     ACTION_OPEN -> ServerClient.command(app, "open")
                 }
             } finally {
@@ -40,6 +42,8 @@ class ActionReceiver : BroadcastReceiver() {
         const val ACTION_PAUSE = "io.github.shiot0.shou.action.PAUSE"
         const val ACTION_NEXT = "io.github.shiot0.shou.action.NEXT"
         const val ACTION_PREV = "io.github.shiot0.shou.action.PREV"
+        const val ACTION_REW = "io.github.shiot0.shou.action.REW"
+        const val ACTION_FFWD = "io.github.shiot0.shou.action.FFWD"
         const val ACTION_OPEN = "io.github.shiot0.shou.action.OPEN"
     }
 }

@@ -638,7 +638,7 @@ function syncNativePlayback(s) {
     try {
       NATIVE.playback(JSON.stringify({
         active,
-        playing: true,
+        playing: active ? !p.paused : false,  // real mpv play/pause, from the server
         title: active ? (p.title || "Shou") : "",
         subtitle: active ? ("Episode " + p.episode) : "",
         cover: active ? (p.cover || "") : "",
