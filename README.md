@@ -5,6 +5,9 @@
 [![Linux version](https://img.shields.io/badge/also%20on-Linux-1f1f24.svg?logo=linux&logoColor=white)](../../tree/main)
 [![Also on MacOS](https://img.shields.io/badge/Also%20on-macOS-1f1f24.svg?logo=apple&logoColor=white)](../../tree/macos)
 
+ - On **MacOS**? There's a **[`macos branch`](../../tree/macos)** with its own installer.
+ - On **Linux**? There's a **[`linux branch`](../../tree/main)** with its own installer.
+
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse and play episodes from a beautiful phone remote — you never
 touch the computer.
