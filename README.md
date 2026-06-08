@@ -6,7 +6,7 @@
 [![Also on Windows](https://img.shields.io/badge/also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](../../tree/windows)
 
  - On **Windows**? There's a **[`windows branch`](../../tree/windows)** with its own installer.
- - On **MacOS**? There's a **[`linux branch`](../../tree/main)** with its own installer.
+ - On **Linux**? There's a **[`linux branch`](../../tree/main)** with its own installer.
 
 > **📍 You're on the `macos` branch.** This branch installs dependencies with
 > **Homebrew**, sets up login autostart with a **launchd LaunchAgent**, relies on
