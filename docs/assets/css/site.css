@@ -108,6 +108,13 @@ em{font-style:normal; color:var(--paper)}
           mask-image:linear-gradient(0deg, #000, transparent 94%);
   animation:gridflow 3.4s linear infinite;
 }
+/* frosted scrim — softens the sun/grid so overlaid text stays legible */
+.hz-veil{
+  inset:0; top:auto; height:100%;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  background:linear-gradient(0deg,
+    rgba(10,10,12,.18) 0%, rgba(10,10,12,.52) 46%, rgba(10,10,12,.12) 100%);
+}
 
 /* -5 shoji / film-frame lattice — faint architectural hairline grid */
 .bg-lattice{
