@@ -529,8 +529,7 @@ to remove those by hand if you want to.
 **[PolyForm Noncommercial 1.0.0](LICENSE.md)** — use, modify, and share it freely for any
 **noncommercial** purpose; you may **not** sell it or use it commercially, and if you
 redistribute it (or a fork) you must **keep the credit** to this repo (the `Required Notice:`
-line in the [LICENSE](LICENSE.md)). It's source-available rather than OSI "open source" — AUR
-and Flathub are fine; the official distro repos are not. Want a commercial license? Ask.
+line in the [LICENSE](LICENSE.md)). Want a commercial license? Ask.
 
 ## Disclaimer
 
