@@ -2,8 +2,8 @@
 
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-ff4a32.svg)](LICENSE.md)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-1f1f24.svg?logo=linux&logoColor=white)](#requirements)
-[![Also on MacOS](https://img.shields.io/badge/Branch-macOS-1f1f24.svg?logo=apple&logoColor=white)](../../tree/macos)
-[![Also on Windows](https://img.shields.io/badge/also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](../../tree/windows)
+[![Also on MacOS](https://img.shields.io/badge/Also%20on-macOS-1f1f24.svg?logo=apple&logoColor=white)](../../tree/macos)
+[![Also on Windows](https://img.shields.io/badge/Also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](../../tree/windows)
 
  - On **Windows**? There's a **[`windows branch`](../../tree/windows)** with its own installer.
  - On **MacOS**? There's a **[`macos branch`](../../tree/macos)** with its own installer.
