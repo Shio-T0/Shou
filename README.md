@@ -1,8 +1,11 @@
-# 🎌 Shou
+# 🎌 Shou [ LINUX ]
 
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-ff4a32.svg)](LICENSE.md)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-1f1f24.svg?logo=linux&logoColor=white)](#requirements)
 [![Also on Windows](https://img.shields.io/badge/also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](#windows)
+
+On **Windows**? There's a [`windows` branch](#windows) with its own installer.
+On **MacOS**? There's a [`MacOS` branch](#macos) with its own installer.
 
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse, play, resume, rate, and even *grow* your list from a beautiful
@@ -21,7 +24,6 @@ awake and finds the PC by itself.
 Runs on **most Linux distros** (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, …) and
 any desktop/compositor — it needs only `mpv`, a browser, `curl`, and `uv`. Playback control
 reaches mpv over its own IPC socket, so there's **no `playerctl`/`mpv-mpris` requirement**.
-On **Windows**? There's a [`windows` branch](#windows) with its own installer.
 
 ---
 
