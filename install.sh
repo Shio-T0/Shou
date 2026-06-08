@@ -71,7 +71,17 @@ ART
 # --------------------------------------------------------------------------- #
 #  Paths
 # --------------------------------------------------------------------------- #
-REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+# Portable absolute dir of this script — BSD/macOS `readlink` has no -f, so we
+# follow symlinks by hand (works identically on Linux and macOS).
+self_dir() {
+  local src="${BASH_SOURCE[0]:-$0}" dir
+  while [ -h "$src" ]; do
+    dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+    src="$(readlink "$src")"; case "$src" in /*) ;; *) src="$dir/$src";; esac
+  done
+  cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd
+}
+REPO_DIR="$(self_dir)"
 APP_DIR="$REPO_DIR/shou"
 CONFIG_DIR="$HOME/.config/shou"
 CONFIG_FILE="$CONFIG_DIR/shou.conf"

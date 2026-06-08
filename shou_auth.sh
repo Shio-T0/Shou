@@ -10,6 +10,16 @@ set -euo pipefail
 if [[ -t 1 ]]; then B=$'\e[1m'; D=$'\e[2m'; R=$'\e[0m'; C=$'\e[36m'; Y=$'\e[33m'; G=$'\e[32m'
 else B=''; D=''; R=''; C=''; Y=''; G=''; fi
 
+# Portable absolute dir of this script (BSD/macOS readlink has no -f).
+self_dir() {
+  local src="${BASH_SOURCE[0]:-$0}" dir
+  while [ -h "$src" ]; do
+    dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+    src="$(readlink "$src")"; case "$src" in /*) ;; *) src="$dir/$src";; esac
+  done
+  cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd
+}
+
 CONF="$HOME/.config/shou/shou.conf"
 REDIRECT="https://anilist.co/api/v2/oauth/pin"
 mkdir -p "$HOME/.config/shou"
@@ -56,5 +66,5 @@ chmod 600 "$CONF" 2>/dev/null || true
 
 printf '\n%s✓ Saved ANILIST_TOKEN to %s%s\n' "$G" "$CONF" "$R"
 printf '  Restart the daemon to enable auto-progress:\n'
-printf '  %spkill -f shou_daemon.sh; pkill -f shou/server.py; setsid nohup %s/shou_daemon.sh >/dev/null 2>&1 &%s\n' \
-  "$D" "$(cd "$(dirname "$(readlink -f "$0")")" && pwd)" "$R"
+printf '  %spkill -f shou_daemon.sh; pkill -f shou/server.py; nohup %s/shou_daemon.sh >/dev/null 2>&1 &%s\n' \
+  "$D" "$(self_dir)" "$R"

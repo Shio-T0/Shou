@@ -26,6 +26,7 @@ import shutil
 import socket
 import struct
 import subprocess
+import sys
 import threading
 import time
 import wave
@@ -210,6 +211,29 @@ MPV_INPUT_CONF = CONFIG_DIR / "mpv-input.conf"
 MPV_THROW_KEY = "t"
 # What ani-cli should run as its player: fullscreen mpv tagged with our marker + throw key.
 ANI_CLI_PLAYER = f"mpv --fs --input-ipc-server={MPV_IPC} --input-conf={MPV_INPUT_CONF}"
+
+
+def notify(title: str, body: str, *, urgency: str = "normal", timeout: int = 3000) -> None:
+    """Best-effort desktop notification. Linux uses notify-send; macOS uses
+    osascript. Never raises if the tool is missing — on a headless/minimal Linux
+    box (no libnotify) or on macOS, a notification is a nicety, not a hard path,
+    so its absence must not crash the playback / rating / error handlers."""
+    try:
+        if sys.platform == "darwin" and shutil.which("osascript"):
+            # AppleScript has no urgency/timeout; quote-safe the two strings.
+            t = title.replace('\\', '').replace('"', "'")
+            b = body.replace('\\', '').replace('"', "'")
+            subprocess.run(
+                ["osascript", "-e", f'display notification "{b}" with title "{t}"'],
+                check=False,
+            )
+        elif shutil.which("notify-send"):
+            subprocess.run(
+                ["notify-send", title, body, "-u", urgency, "-t", str(timeout)],
+                check=False,
+            )
+    except OSError:
+        pass
 # How long ani-cli gets to actually start mpv before we call it a failed source.
 LAUNCH_TIMEOUT = 30.0
 # Backup scrapers (anipy_api providers) tried when ani-cli finds no source, in order.
@@ -866,11 +890,8 @@ def mark_watched(media_id: int, episode: int, total: int | None, display: str) -
             {"mediaId": int(media_id), "progress": int(episode), "status": status},
         )
         print(f"[anilist] marked {display!r} progress={episode} status={status}", flush=True)
-        subprocess.run(
-            ["notify-send", "✓ AniList", f"{display} — Episode {episode} watched",
-             "-u", "low", "-t", "2500"],
-            check=False,
-        )
+        notify("✓ AniList", f"{display} — Episode {episode} watched",
+               urgency="low", timeout=2500)
     except Exception as exc:  # noqa: BLE001
         print(f"[anilist] mark_watched failed: {exc}", flush=True)
 
@@ -1136,16 +1157,43 @@ _CHROMIUM_BINS = ("chromium", "chromium-browser", "google-chrome-stable",
                   "google-chrome", "brave", "brave-browser", "vivaldi-stable", "vivaldi")
 
 
+# macOS keeps browsers in .app bundles, not on PATH — probe the usual binaries.
+_MAC_FIREFOX = ("/Applications/Firefox.app/Contents/MacOS/firefox",)
+_MAC_CHROMIUM = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Vivaldi.app/Contents/MacOS/Vivaldi",
+)
+
+
+def _firefox_argv(b, profile, url):
+    return ([b, "--kiosk", "--profile", profile, url], {"MOZ_NO_REMOTE": "1"})
+
+
+def _chromium_argv(b, profile, url):
+    return ([b, "--kiosk", "--no-first-run", f"--user-data-dir={profile}", url], {})
+
+
 def _browser_command(url: str):
     """Return (argv, extra_env) for a fullscreen kiosk on the first browser found,
-    or (None, None) if none is installed."""
+    or (None, None) if none is installed. Chromium-family browsers take --kiosk on
+    macOS too, launched via the binary inside their .app bundle."""
     profile = str(FF_PROFILE)
+    if sys.platform == "darwin":
+        for b in _MAC_FIREFOX:
+            if os.path.exists(b):
+                return _firefox_argv(b, profile, url)
+        for b in _MAC_CHROMIUM:
+            if os.path.exists(b):
+                return _chromium_argv(b, profile, url)
     for b in _FIREFOX_BINS:
         if shutil.which(b):
-            return ([b, "--kiosk", "--profile", profile, url], {"MOZ_NO_REMOTE": "1"})
+            return _firefox_argv(b, profile, url)
     for b in _CHROMIUM_BINS:
         if shutil.which(b):
-            return ([b, "--kiosk", "--no-first-run", f"--user-data-dir={profile}", url], {})
+            return _chromium_argv(b, profile, url)
     return (None, None)
 
 
@@ -1371,11 +1419,8 @@ def play(search_title: str, episode: int, display_title: str | None = None,
         STATE["playing"] = {"title": display, "search": search_title, "episode": episode,
                             "media_id": media_id, "total": total,
                             "cover": cover, "color": color, "banner": banner}
-    subprocess.run(
-        ["notify-send", "🎌 Now Watching", f"{display} — Episode {episode}",
-         "-u", "normal", "-t", "3000"],
-        check=False,
-    )
+    notify("🎌 Now Watching", f"{display} — Episode {episode}",
+           urgency="normal", timeout=3000)
     socketio.start_background_task(monitor_playback, gen, search_title, episode, display, start)
     # Playback watcher: marks watched on AniList (if a token is set) and records a
     # resume point if stopped mid-way. Covers the ani-cli mpv and the fallback mpv.
@@ -1462,11 +1507,9 @@ def fallback_play(gen: int, search_title: str, episode: int, display: str,
                 STATE["view"] = "playing"
                 STATE["message"] = f"Playing {display} — Ep {episode}  ·  backup: {prov_name}"
             broadcast()
-            subprocess.run(
-                ["notify-send", "🎌 Backup Source",
-                 f"{display} — Ep {episode} (via {prov_name})", "-u", "normal", "-t", "3000"],
-                check=False,
-            )
+            notify("🎌 Backup Source",
+                   f"{display} — Ep {episode} (via {prov_name})",
+                   urgency="normal", timeout=3000)
             return True
     return False
 
@@ -1538,10 +1581,7 @@ def monitor_playback(gen: int, search_title: str, episode: int, display: str,
         STATE["message"] = msg
         STATE["playing"] = None
     broadcast()
-    subprocess.run(
-        ["notify-send", "🎌 Shou", f"⚠ {msg}", "-u", "critical", "-t", "6000"],
-        check=False,
-    )
+    notify("🎌 Shou", f"⚠ {msg}", urgency="critical", timeout=6000)
 
 
 # --------------------------------------------------------------------------- #
@@ -1678,6 +1718,7 @@ def play_finish_sound() -> None:
         return
     players = [
         ["mpv", "--no-config", "--no-video", "--force-window=no", "--really-quiet", path],
+        ["afplay", path],                       # macOS native
         ["paplay", path],
         ["pw-play", path],
         ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", path],
@@ -1778,10 +1819,7 @@ def submit_rating() -> None:
         )
         ok = True
         print(f"[rating] saved {title!r} score={score}", flush=True)
-        subprocess.run(
-            ["notify-send", "★ AniList", f"{title} — rated {score}", "-u", "low", "-t", "2500"],
-            check=False,
-        )
+        notify("★ AniList", f"{title} — rated {score}", urgency="low", timeout=2500)
     except Exception as exc:  # noqa: BLE001
         print(f"[rating] save failed: {exc}", flush=True)
 

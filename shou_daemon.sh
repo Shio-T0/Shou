@@ -3,7 +3,13 @@
 # from your graphical session (a compositor `exec`/`exec-once`, or an XDG
 # ~/.config/autostart entry) so it inherits the display env it needs to spawn
 # the browser kiosk + mpv.
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+# Portable script dir — BSD/macOS readlink has no -f, so follow symlinks by hand.
+SOURCE="${BASH_SOURCE[0]:-$0}"
+while [ -h "$SOURCE" ]; do
+  SDIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"; case "$SOURCE" in /*) ;; *) SOURCE="$SDIR/$SOURCE";; esac
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 APPDIR="$SCRIPT_DIR/shou"
 LOG="$HOME/.config/shou/shou.log"
 mkdir -p "$HOME/.config/shou"
