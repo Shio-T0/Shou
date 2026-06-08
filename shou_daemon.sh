@@ -1,8 +1,8 @@
 #!/bin/bash
 # Shou daemon: keeps the server running (restart-on-crash). Launched at login
-# from your graphical session (a compositor `exec`/`exec-once`, or an XDG
-# ~/.config/autostart entry) so it inherits the display env it needs to spawn
-# the browser kiosk + mpv.
+# from your graphical session — on macOS via the launchd LaunchAgent that
+# install.sh writes (~/Library/LaunchAgents/com.shou.daemon.plist) — so it
+# inherits the GUI session env it needs to spawn the browser kiosk + mpv.
 # Portable script dir — BSD/macOS readlink has no -f, so follow symlinks by hand.
 SOURCE="${BASH_SOURCE[0]:-$0}"
 while [ -h "$SOURCE" ]; do

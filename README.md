@@ -1,8 +1,17 @@
 # 🎌 Shou
 
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-ff4a32.svg)](LICENSE.md)
-[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-1f1f24.svg?logo=linux&logoColor=white)](#requirements)
-[![Also on Windows](https://img.shields.io/badge/also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](#windows)
+[![Branch: macOS](https://img.shields.io/badge/Branch-macOS-1f1f24.svg?logo=apple&logoColor=white)](#install--the-detailed-walkthrough)
+[![Also on Linux](https://img.shields.io/badge/also%20on-Linux-1f1f24.svg?logo=linux&logoColor=white)](../../tree/main)
+[![Also on Windows](https://img.shields.io/badge/also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](../../tree/windows)
+
+> **📍 You're on the `macos` branch.** This branch's `install.sh` installs
+> dependencies with **Homebrew**, sets up login autostart with a **launchd
+> LaunchAgent**, relies on macOS's built-in **Bonjour** for `*.local`
+> discovery (nothing to configure), and uses **`osascript`** for desktop
+> notifications. The app itself — server, phone remote, kiosk, throw-to-phone —
+> is identical to Linux. For Linux use [`main`](../../tree/main); for Windows the
+> [`windows` branch](../../tree/windows).
 
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse, play, resume, rate, and even *grow* your list from a beautiful
@@ -478,13 +487,16 @@ uv run --project shou python shou/server.py
 
 The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on startup.
 
-## Windows
+## Other platforms
 
-Shou runs on Windows too — check out the **[`windows` branch](../../tree/windows)**, which
-has its own PowerShell installer (`install.ps1`) and a Windows-specific README. It uses a
-named-pipe IPC for `mpv`, sources episodes through `ani-cli` (under Git Bash) with `anipy`
-as a fallback, and starts hidden on login (no PowerShell window flashing past). Same phone
-remote, same features — different plumbing.
+- **Linux** — the [`main` branch](../../tree/main) is the original: distro package managers
+  (pacman/apt/dnf/…), an avahi/`nss-mdns` setup for `*.local`, and Hyprland/Sway or XDG
+  autostart. Same app, same phone remote.
+- **Windows** — the [`windows` branch](../../tree/windows) has its own PowerShell installer
+  (`install.ps1`). It uses a named-pipe IPC for `mpv`, sources episodes through `ani-cli`
+  (under Git Bash) with `anipy` as a fallback, and starts hidden on login.
+
+Same features everywhere — only the plumbing differs.
 
 ## Uninstall
 
@@ -492,10 +504,10 @@ remote, same features — different plumbing.
 ./uninstall.sh
 ```
 
-Stops the server, removes the autostart entry (the Hyprland line — with a backup — and/or
-the XDG `shou.desktop`), and *optionally* deletes your config and the virtualenv. It
-deliberately **leaves system packages and the `nsswitch.conf` entry alone** — it prints how
-to remove those by hand if you want to.
+Unloads and removes the launchd LaunchAgent (`~/Library/LaunchAgents/com.shou.daemon.plist`),
+stops the server, and *optionally* deletes your config and the virtualenv. It deliberately
+**leaves your Homebrew packages alone** (mpv, uv, ani-cli, your browser — likely used
+elsewhere) and prints how to remove those by hand if you want to.
 
 ## License
 

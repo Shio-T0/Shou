@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-#  Shou uninstaller — undoes what install.sh set up.
+#  Shou uninstaller (macOS) — undoes what install.sh set up.
 #
-#  Conservative by design: it stops the server, removes the Hyprland autostart
-#  line, and (only if you ask) deletes your config. It does NOT remove system
-#  packages (uv/firefox/mpv/ani-cli/avahi…) — those may be used by other things —
-#  and it does NOT touch the repo itself. Re-runnable.
+#  Conservative by design: it stops the server, unloads + removes the launchd
+#  LaunchAgent, and (only if you ask) deletes your config. It does NOT remove
+#  Homebrew packages (uv/mpv/ani-cli/your browser) — those may be used by other
+#  things — and it does NOT touch the repo itself. Re-runnable.
 #
 set -euo pipefail
 
@@ -25,7 +25,6 @@ step()  { STEP=$((STEP + 1)); printf '\n%s%s▸ [%d] %s%s\n' "$BOLD" "$CYAN" "$S
 info()  { printf '   %s•%s %s\n' "$BLUE" "$RESET" "$1"; }
 ok()    { printf '   %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
 warn()  { printf '   %s!%s %s\n' "$YELLOW" "$RESET" "$1"; }
-die()   { printf '\n%s✗ %s%s\n' "$RED" "$1" "$RESET" >&2; exit 1; }
 
 ask_yes() {  # default YES
   local reply
@@ -43,21 +42,41 @@ ask_no() {   # default NO
 # --------------------------------------------------------------------------- #
 #  Paths
 # --------------------------------------------------------------------------- #
-REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+# Portable absolute dir of this script (BSD/macOS readlink has no -f).
+self_dir() {
+  local src="${BASH_SOURCE[0]:-$0}" dir
+  while [ -h "$src" ]; do
+    dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+    src="$(readlink "$src")"; case "$src" in /*) ;; *) src="$dir/$src";; esac
+  done
+  cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd
+}
+REPO_DIR="$(self_dir)"
 APP_DIR="$REPO_DIR/shou"
 CONFIG_DIR="$HOME/.config/shou"
-DAEMON="$REPO_DIR/shou_daemon.sh"
+LAUNCH_AGENT="$HOME/Library/LaunchAgents/com.shou.daemon.plist"
 PORT=4100
 [[ -f "$CONFIG_DIR/shou.conf" ]] && PORT="$(grep -E '^PORT=' "$CONFIG_DIR/shou.conf" | head -1 | cut -d= -f2- | tr -d '\042\047' || echo 4100)"
 PORT="${PORT:-4100}"
 
-printf '%s%s\n   🎌  Shou — uninstaller%s\n' "$BOLD" "$MAGENTA" "$RESET"
+printf '%s%s\n   🎌  Shou — uninstaller (macOS)%s\n' "$BOLD" "$MAGENTA" "$RESET"
+
+# --------------------------------------------------------------------------- #
+step "Removing the launchd LaunchAgent"
+# --------------------------------------------------------------------------- #
+if [[ -f "$LAUNCH_AGENT" ]]; then
+  launchctl unload "$LAUNCH_AGENT" 2>/dev/null || true
+  rm -f "$LAUNCH_AGENT"
+  ok "Removed + unloaded ${DIM}$LAUNCH_AGENT${RESET}"
+else
+  ok "No LaunchAgent present."
+fi
 
 # --------------------------------------------------------------------------- #
 step "Stopping the running server"
 # --------------------------------------------------------------------------- #
-PIDS="$(ss -ltnp 2>/dev/null | grep ":$PORT" | grep -oP 'pid=\K[0-9]+' | sort -u || true)"
-# Also catch the daemon wrapper + uv runner by command line.
+# macOS: find listeners on the port with lsof, plus the daemon/server by cmdline.
+PIDS="$(lsof -ti "tcp:$PORT" 2>/dev/null || true)"
 PIDS="$PIDS $(pgrep -f 'shou_daemon.sh' || true) $(pgrep -f 'shou/server.py' || true)"
 PIDS="$(echo "$PIDS" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u | tr '\n' ' ' || true)"
 if [[ -n "${PIDS// /}" ]]; then
@@ -71,30 +90,6 @@ if [[ -n "${PIDS// /}" ]]; then
 else
   ok "Nothing running on :$PORT."
 fi
-
-# --------------------------------------------------------------------------- #
-step "Removing autostart"
-# --------------------------------------------------------------------------- #
-REMOVED=0
-# Hyprland exec-once lines.
-for f in "$HOME/.config/hypr/hyprland/execs.conf" "$HOME/.config/hypr/hyprland.conf"; do
-  [[ -f "$f" ]] || continue
-  if grep -qF "$DAEMON" "$f"; then
-    cp "$f" "$f.shou.bak.$(date +%s)"
-    # Drop our comment line and the exec-once line referencing the daemon.
-    grep -vF "$DAEMON" "$f" | grep -vF '# Shou server (auto-added by install.sh)' >"$f.tmp" && mv "$f.tmp" "$f"
-    ok "Removed autostart from ${DIM}$f${RESET} (backup saved)."
-    REMOVED=1
-  fi
-done
-# XDG autostart entry (GNOME/KDE/XFCE/…).
-XDG_AUTOSTART="$HOME/.config/autostart/shou.desktop"
-if [[ -f "$XDG_AUTOSTART" ]]; then
-  rm -f "$XDG_AUTOSTART"
-  ok "Removed ${DIM}$XDG_AUTOSTART${RESET}"
-  REMOVED=1
-fi
-[[ "$REMOVED" -eq 0 ]] && ok "No autostart entry found."
 
 # --------------------------------------------------------------------------- #
 step "Configuration & state"
@@ -132,8 +127,7 @@ fi
 printf '\n%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s  Shou uninstalled.%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$BOLD" "$GREEN" "$RESET"
-info "Left untouched (remove manually with your package manager if you want):"
-info "  • system packages — ${DIM}mpv, your browser, curl, uv, ani-cli, avahi${RESET} (likely used elsewhere)"
-info "  • nss-mdns line in /etc/nsswitch.conf (a .bak was made by install.sh)"
+info "Left untouched (remove manually if you want):"
+info "  • Homebrew packages — ${DIM}mpv, uv, ani-cli, your browser${RESET} (likely used elsewhere)"
 info "  • this repo folder"
 printf '\n'
