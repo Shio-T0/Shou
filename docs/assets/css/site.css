@@ -45,7 +45,8 @@ em{font-style:normal; color:var(--paper)}
 /* Pinned to the *large* viewport height so the mobile address bar showing /
    hiding on scroll doesn't resize the scene and make the backdrop jump. */
 .bg{position:fixed; top:0; left:0; width:100%; height:100vh; height:100lvh;
-  z-index:0; pointer-events:none; overflow:hidden}
+  z-index:0; pointer-events:none; overflow:hidden;
+  transform:translateZ(0); will-change:transform}  /* own layer: steady on mobile URL-bar resize */
 .bg>*{position:absolute; pointer-events:none}
 
 /* -8 base wash sits on body; -7 aurora mesh (the living glow) */
@@ -588,6 +589,9 @@ body.booted::after{animation:flicker .55s steps(1) forwards}
   .shot-row>*,.shot-row.reverse>*{grid-column:1 !important; grid-row:auto !important}
   .shot.mob{width:auto; max-width:240px; margin:0 auto}
   .kanji-rail{display:none}
+  /* opaque solid bar instead of sampling the fixed backdrop — the blur strip
+     re-samples during the URL-bar animation and makes the bg look displaced */
+  .nav,.nav.scrolled{-webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(10,10,12,.9)}
 }
 @media (max-width:560px){
   .feature-grid,.native-grid{grid-template-columns:1fr}

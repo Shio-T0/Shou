@@ -462,13 +462,6 @@
         { boxShadow: "0 40px 90px -20px rgba(255,74,50,.5)", scrollTrigger: { trigger: "#throw", start: "top top", end: "+=160%", scrub: 1 } });
     }
 
-    // gentle parallax on screenshots
-    $$(".shot-row .pc img").forEach((img) => {
-      gsap.fromTo(img, { y: 26 }, {
-        y: -26, ease: "none",
-        scrollTrigger: { trigger: img, start: "top bottom", end: "bottom top", scrub: true },
-      });
-    });
     window.ScrollTrigger.refresh();
   }
 
