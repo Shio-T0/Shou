@@ -512,7 +512,9 @@ section{position:relative; z-index:4}
 .shot-row.reverse .pc{grid-column:2; grid-row:1}
 .shot-row.reverse .mob{grid-column:1; grid-row:1}
 .shot-row .pc img{width:100%}            /* fill the column box edge to edge */
-.shot-solo{grid-template-columns:auto; justify-content:center}
+/* the lone phone shares a column with its wide caption, so centre the items
+   (not just the track) or the fixed-width figure pins to the left edge */
+.shot-solo{grid-template-columns:minmax(0,1fr); justify-items:center}
 .shot{margin:0; border-radius:14px; overflow:hidden; border:1px solid var(--line-2); box-shadow:var(--shadow); opacity:0; transform:translateY(26px); transition:opacity .7s, transform .7s}
 .shot.in{opacity:1; transform:none}
 .shot.mob{width:clamp(160px,18vw,210px); border-radius:26px; padding:6px; background:linear-gradient(160deg,#26242d,#0d0c11)}
