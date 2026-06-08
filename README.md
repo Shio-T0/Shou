@@ -1,17 +1,16 @@
 # 🎌 Shou
 
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-ff4a32.svg)](LICENSE.md)
-[![Branch: macOS](https://img.shields.io/badge/Branch-macOS-1f1f24.svg?logo=apple&logoColor=white)](#install--the-detailed-walkthrough)
+[![Branch: macOS](https://img.shields.io/badge/Branch-macOS-1f1f24.svg?logo=apple&logoColor=white)](#requirements)
 [![Also on Linux](https://img.shields.io/badge/also%20on-Linux-1f1f24.svg?logo=linux&logoColor=white)](../../tree/main)
 [![Also on Windows](https://img.shields.io/badge/also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](../../tree/windows)
 
-> **📍 You're on the `macos` branch.** This branch's `install.sh` installs
-> dependencies with **Homebrew**, sets up login autostart with a **launchd
-> LaunchAgent**, relies on macOS's built-in **Bonjour** for `*.local`
-> discovery (nothing to configure), and uses **`osascript`** for desktop
-> notifications. The app itself — server, phone remote, kiosk, throw-to-phone —
-> is identical to Linux. For Linux use [`main`](../../tree/main); for Windows the
-> [`windows` branch](../../tree/windows).
+> **📍 You're on the `macos` branch.** This branch installs dependencies with
+> **Homebrew**, sets up login autostart with a **launchd LaunchAgent**, relies on
+> macOS's built-in **Bonjour** for `*.local` discovery (nothing to configure), and
+> uses **`osascript`** for desktop notifications. The app itself — server, phone
+> remote, kiosk, throw-to-phone — is identical to Linux. For Linux use
+> [`main`](../../tree/main); for Windows the [`windows` branch](../../tree/windows).
 
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse, play, resume, rate, and even *grow* your list from a beautiful
@@ -22,13 +21,15 @@ list, shows a cinematic 3D-coverflow **kiosk** (a fullscreen browser window) on 
 serves a touch-first **phone web-remote (PWA)** that mirrors the kiosk live over WebSocket.
 Pick an anime and it auto-plays your next unwatched episode through the `anipy` scrapers →
 `mpv` (fullscreen), or through `ani-cli` if you have it. Everything you do on the phone
-shows up on the TV instantly, and vice-versa. The remote is a **PWA**, but there's also an
-optional **native Android app** that keeps your screen awake and finds the PC by itself.
+shows up on the TV instantly, and vice-versa — and you can even **throw the playing episode
+onto your phone** mid-watch and toss it back to the PC right where you left off. The remote
+is a **PWA**, but there's also an optional **native Android app** that keeps your screen
+awake and finds the PC by itself.
 
-Runs on **most Linux distros** (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, …) and
-any desktop/compositor — it needs only `mpv`, a browser, `curl`, and `uv`. Playback control
-reaches mpv over its own IPC socket, so there's **no `playerctl`/`mpv-mpris` requirement**.
-On **Windows**? There's a [`windows` branch](#windows) with its own installer.
+Runs on **macOS** (Apple Silicon and Intel) via **Homebrew** — it needs only `mpv`, a
+browser, and `uv` (`curl` ships with macOS). Playback control reaches mpv over its own IPC
+socket, so there's **no extra media-key plumbing**. Prefer **Linux**? Use the
+[`main` branch](../../tree/main); on **Windows**, the [`windows` branch](../../tree/windows).
 
 ---
 
@@ -40,6 +41,11 @@ On **Windows**? There's a [`windows` branch](#windows) with its own installer.
   fullscreen. Progress, episode counts, and a progress bar mirror to your phone.
 - ⏯️ **Full playback control** — pause, ±30s seek, and previous/next **episode**, all from
   the remote, all sent straight to `mpv`.
+- 📲 **Throw to phone** — leaving the room? Tap **Watch on this phone** (or press **`t`** in
+  `mpv`) and the episode you're watching **hands off to your phone** — it pauses the PC,
+  re-resolves a mobile stream, and plays it in a built-in full-screen player (double-tap to
+  seek ±15s). **Throw it back** and the PC resumes *exactly* where your phone left off. The
+  couch is optional now too.
 - ⏪ **Continue Watching** — left an episode half-finished? Shou remembers where (and which
   episode) and offers to **resume a few seconds before** you stopped. Because nobody pauses
   at a sensible moment.
@@ -127,13 +133,14 @@ fixed IP), Shou auto-detects the PC's current address — via its <code>&lt;name
   - [The remote at a glance](#the-remote-at-a-glance)
   - [Watch something](#watch-something)
   - [Continue Watching](#continue-watching)
+  - [Throw to phone](#throw-to-phone)
   - [Search New & set status](#search-new--set-status)
   - [Rate a finished series](#rate-a-finished-series)
 - [Auto-mark episodes watched on AniList](#auto-mark-episodes-watched-on-anilist)
 - [Control reference (HTTP endpoints)](#control-reference-http-endpoints)
 - [Troubleshooting](#troubleshooting)
 - [Run / restart manually](#run--restart-manually)
-- [Windows](#windows)
+- [Other platforms](#other-platforms)
 - [Uninstall](#uninstall)
 - [License](#license)
 - [Disclaimer](#disclaimer)
@@ -169,18 +176,18 @@ deciding what to watch.
 
 ## Requirements
 
-- **Linux** with one of these package managers: `pacman` (Arch), `apt` (Debian/Ubuntu),
-  `dnf` (Fedora), `zypper` (openSUSE), `xbps` (Void), or `apk` (Alpine). No supported
-  package manager? It still installs — you just install the few system deps yourself.
+- **macOS** (Apple Silicon or Intel) with **[Homebrew](https://brew.sh)**. Don't have it?
+  The installer offers to set it up for you.
 - A **public** AniList account (so the server can read your lists without logging in).
-- Your **phone and PC on the same network** (for the web remote).
-- **Hard dependencies** (installed automatically where possible): `mpv`, a **browser**
-  (Firefox / Chromium / Brave / …), `curl`, and `uv`. Python deps come from `uv.lock`.
-- **Optional**: `ani-cli` for an extra source (without it the bundled `anipy` scrapers
-  work fine); `libnotify` for desktop notifications; `avahi` + `nss-mdns` to reach the PC
-  as `<hostname>.local` (otherwise just use its LAN IP).
-- **Hyprland** or **Sway** add a kiosk auto-raise/fullscreen nicety; on any other
-  compositor/DE the browser's `--kiosk` still goes fullscreen on its own.
+- Your **phone and Mac on the same network** (for the web remote).
+- **Hard dependencies** (installed via Homebrew where missing): `mpv`, a **Chromium-family
+  or Firefox browser**, and `uv` (`curl` is already on macOS). Python deps come from
+  `uv.lock`.
+- **Optional**: `ani-cli` for an extra source (without it the bundled `anipy` scrapers work
+  fine). Desktop notifications use macOS's built-in **`osascript`** — nothing to install.
+- **Bonjour** is built into macOS, so the phone can reach the Mac as `<name>.local` with no
+  setup (or just use the LAN IP). **Safari can't do a clean `--kiosk`**, so install Firefox,
+  Chrome, Brave, Chromium, Edge, or Vivaldi for the big-screen kiosk.
 
 ---
 
@@ -193,50 +200,49 @@ Clone the repo onto the PC that will do the watching, `cd` into it, and run:
 ```
 
 That's the whole command. The installer is **idempotent** (re-run it as many times as your
-anxiety requires), **detects your distro's package manager**, and **asks before every
-system change** — nothing happens without a `y`. Here's exactly what it does, step by step,
-so you don't lose yourself halfway:
+anxiety requires), uses **Homebrew**, and **asks before every system change** — nothing
+happens without a `y`. Here's exactly what it does, step by step, so you don't lose yourself
+halfway:
 
-1. **Pre-flight checks** — refuses to run as root, then detects your package manager and
-   compositor. If it can't find a known package manager it keeps going and just asks you to
-   install the handful of system packages yourself.
-2. **System dependencies** — installs `mpv`, `curl`, and a browser if missing, mapping the
-   right package name for your distro. Already have them? It skips them. (No browser found?
-   It offers to install Firefox.)
-3. **`uv`** — the Python tool that runs everything. If your distro doesn't package it, the
-   installer offers to fetch the official one-line installer for you.
-4. **`ani-cli`** *(optional)* — an extra episode source. Skip it freely; `anipy` is the
-   built-in fallback and works on its own.
-5. **`libnotify`** *(optional)* — desktop notifications.
-6. **Python environment** — runs `uv sync` to build the project's virtualenv from the
-   locked dependencies. No system Python pollution.
-7. **Control scripts** — marks the helper scripts executable.
-8. **Configuration** — creates `~/.config/shou/shou.conf` and **prompts for your AniList
-   username**. ⚠️ Your list must be **public** (AniList → Settings → Profile), or the
-   server has nothing to read. Missing settings are backfilled with sensible defaults.
-9. **mDNS** *(optional)* — offers to install/enable `avahi` + wire up `nss-mdns` so your
-   phone can reach the PC as `<hostname>.local`. Decline and you'll just use the LAN IP —
-   equally fine.
-10. **Autostart on login** *(optional)* — adds a Hyprland `exec-once` (if Hyprland is
-    detected) or an XDG `~/.config/autostart/shou.desktop` entry (honored by
-    GNOME/KDE/XFCE/…), so the daemon is always there when you log in.
-11. **AniList write access** *(optional)* — offers to run the OAuth setup so Shou can
+1. **Pre-flight checks** — confirms it's running on macOS as your normal user (not `sudo`),
+   then finds **Homebrew**. No Homebrew? It offers to run the official brew.sh installer and
+   wires `brew` into the session (handles both Apple-Silicon `/opt/homebrew` and Intel
+   `/usr/local`).
+2. **Dependencies** — `brew install`s `mpv` and `uv` if missing (`curl` is already on macOS),
+   skipping whatever you already have.
+3. **`ani-cli`** *(optional)* — an extra episode source (Homebrew formula). Skip it freely;
+   `anipy` is the built-in fallback and works on its own.
+4. **Browser** — detects any Firefox/Chrome/Brave/Chromium/Edge/Vivaldi in `/Applications`;
+   if none, offers `brew install --cask firefox`. (Notifications use `osascript` — nothing
+   to install.)
+5. **Python environment** — runs `uv sync` to build the project's virtualenv from the locked
+   dependencies. No system Python pollution.
+6. **Control scripts** — marks the helper scripts executable.
+7. **Configuration** — creates `~/.config/shou/shou.conf` and **prompts for your AniList
+   username**. ⚠️ Your list must be **public** (AniList → Settings → Profile), or the server
+   has nothing to read. Missing settings are backfilled with sensible defaults.
+8. **mDNS** — nothing to do: macOS **Bonjour** already lets the phone reach the Mac as
+   `<name>.local`. The installer just tells you the name.
+9. **Autostart on login** *(optional)* — writes a **launchd LaunchAgent** at
+   `~/Library/LaunchAgents/com.shou.daemon.plist` and loads it, so the daemon is always there
+   when you log in.
+10. **AniList write access** *(optional)* — offers to run the OAuth setup so Shou can
     auto-mark episodes watched. You can always do this later (see
     [below](#auto-mark-episodes-watched-on-anilist)).
-12. **Start now?** — offers to launch the daemon immediately.
+11. **Start now?** — offers to launch the daemon immediately.
 
 When it finishes, it prints your **phone remote URL**:
 
 ```
-http://<hostname>.local:4100/remote?k=<your-private-token>
+http://<name>.local:4100/remote?k=<your-private-token>
 ```
 
 Keep that handy for the next section. (It's also saved at the top of
 `~/.config/shou/shou.log` if you scroll away and lose it.)
 
-> **On Sway** (or another wlroots compositor without an XDG-autostart daemon), add
-> `exec ~/path/to/shou_daemon.sh` to your config instead — the installer prints the exact
-> line. Everything else is identical across distros.
+> **First run may prompt for permissions.** macOS will ask to let the browser/`mpv` accept
+> incoming network connections (allow it on your LAN) the first time the kiosk and player
+> launch — that's the firewall, not Shou.
 
 > **Updating later?** Just re-run `./install.sh`. It adds any new config keys from the
 > update (with defaults) without clobbering your settings, so you never hand-edit a config
@@ -339,6 +345,7 @@ Changing `PORT`, `REMOTE_TOKEN`, or `ANILIST_TOKEN` needs a daemon restart.
 | **⏮ / ⏭** | Jump to the previous / next **episode** (relaunches the player). |
 | **⏯** | Play / pause the current episode. |
 | **« 30s / 30s »** | Seek 30 seconds back / forward. |
+| **Watch on this phone ▸** | Appears while an episode plays — [throws it to your phone](#throw-to-phone). |
 
 A **Continue Watching** rail also appears on the remote (and as a panel on the kiosk)
 whenever you have half-finished episodes.
@@ -365,6 +372,27 @@ which anime, which episode, and how far in. It then shows a **Continue Watching*
 both the remote and the kiosk. Tap an entry on the phone to **resume on the PC**, picking up
 a few seconds *before* you left off so you remember what was happening. Each entry has a
 small **×** to forget it. No "are you still watching?" guilt-trips here.
+
+### Throw to phone
+
+Watching on the big screen but need to move — bed, kitchen, the bus stop? While an episode
+is playing, a **Watch on this phone ▸** button appears on the remote (and the same handoff is
+bound to **`t`** inside `mpv`). Tap it and Shou:
+
+1. **Pauses the PC** and shows a *“Sending to your phone…”* overlay on the TV.
+2. **Re-resolves a phone-playable stream** for the same episode (mpv's own URL is tied to its
+   session, so a fresh one is scraped) and **proxies it through the server** — adding the
+   Referer the CDN wants and rewriting HLS playlists, so your phone can actually play it
+   without CORS or hotlink errors.
+3. Plays it on the phone in a **built-in full-screen player** with its own controls:
+   play/pause, a scrubber, and **double-tap the left/right edge to seek ±15s**.
+
+Tap **Throw back** and the cast clears, the PC un-pauses, and `mpv` **seeks to where the
+phone left off** — so the episode continues on the big screen without missing a beat. Only
+one throw is live at a time, and starting another (or throwing back) cancels a stale one.
+
+> Throw to phone needs a stream the phone can play, so it uses the same backup scrapers as
+> regular playback. If none can be re-resolved, the PC simply resumes instead of freezing.
 
 ### Search New & set status
 
@@ -443,6 +471,8 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 | `/pause` · `/fwd` `/rew` · `/next` `/prev` | Play-pause · seek ±30s · prev/next episode |
 | `/resume?media_id=…&episode=…` | Resume a Continue-Watching entry |
 | `/forget?media_id=…&episode=…` | Remove a Continue-Watching entry |
+| `/throw` | Throw the playing episode to the phone (also mpv's `t` key) |
+| `/cast/clear?pos=…` | Throw back: stop casting, resume the PC at `pos` seconds |
 | `/search/key?c=…` · `/search/back` · `/search/clear` | Edit the shared search query |
 | `/search/genre?g=…` · `/search/genres/clear` | Toggle a genre/tag filter · clear all filters |
 | `/search/more` | Load the next page of results (infinite scroll) |
@@ -452,16 +482,19 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 
 ## Troubleshooting
 
-- **Phone can't reach the PC** — confirm same network; use the **LAN IP** instead of
-  `<hostname>.local`; for `.local`, ensure `avahi-daemon` is running
-  (`systemctl status avahi-daemon`).
+- **Phone can't reach the Mac** — confirm same network; use the **LAN IP** instead of
+  `<name>.local` (`<name>` is your **System Settings → General → Sharing → Local hostname**).
+  Bonjour is always on, but some routers block mDNS between Wi-Fi bands — the LAN IP always
+  works.
 - **Remote loads but says offline / not live** — the daemon isn't running; start it
   (see [below](#run--restart-manually)) or check `~/.config/shou/shou.log`.
 - **“ANILIST_USER is not set”** — set it in `shou.conf` and make sure the list is **public**.
 - **Search results / status changes do nothing** — searching works read-only, but **setting
   a status needs AniList write access** (`./shou_auth.sh`, then restart the daemon).
-- **No kiosk window appears** — install a browser (`firefox`, `chromium`, `brave`, …);
-  Shou auto-detects the first one it finds.
+- **No kiosk window appears** — Shou probes the usual browser `.app` bundles; install
+  **Firefox / Chrome / Brave / Chromium / Edge / Vivaldi** (Safari can't do a clean
+  `--kiosk`). If the kiosk doesn't appear on login, the LaunchAgent may not have loaded —
+  see [below](#run--restart-manually).
 - **Pause / ±30s seek do nothing** — those go to `mpv` over its IPC socket; they only work
   while an episode launched by Shou is playing.
 - **Kiosk shows the old design after an update** — the running browser caches the page.
@@ -477,15 +510,25 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 # start (restart-on-crash wrapper — what autostart runs)
 ./shou_daemon.sh
 
-# restart the daemon (kill the daemon first so it doesn't respawn the old server)
+# restart the daemon by hand (kill it first so it doesn't respawn the old server)
 pkill -f shou_daemon.sh; pkill -f shou/server.py
-setsid nohup ~/Projects/ScriptsKDE/shou_daemon.sh >/dev/null 2>&1 &
+nohup ./shou_daemon.sh >/dev/null 2>&1 &
 
 # run the server directly (no restart wrapper), e.g. to see logs live
 uv run --project shou python shou/server.py
 ```
 
-The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on startup.
+If you installed the LaunchAgent, let **launchd** manage it instead:
+
+```bash
+# stop / start / restart the login agent
+launchctl unload ~/Library/LaunchAgents/com.shou.daemon.plist
+launchctl load -w ~/Library/LaunchAgents/com.shou.daemon.plist
+launchctl kickstart -k gui/$(id -u)/com.shou.daemon   # restart in one shot
+```
+
+The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on startup;
+launchd's own stdout/stderr go to `~/.config/shou/launchd.log`.
 
 ## Other platforms
 
@@ -514,8 +557,9 @@ elsewhere) and prints how to remove those by hand if you want to.
 **[PolyForm Noncommercial 1.0.0](LICENSE.md)** — use, modify, and share it freely for any
 **noncommercial** purpose; you may **not** sell it or use it commercially, and if you
 redistribute it (or a fork) you must **keep the credit** to this repo (the `Required Notice:`
-line in the [LICENSE](LICENSE.md)). It's source-available rather than OSI "open source" — AUR
-and Flathub are fine; the official distro repos are not. Want a commercial license? Ask.
+line in the [LICENSE](LICENSE.md)). It's source-available rather than OSI "open source" — a
+community **Homebrew tap** (or AUR/Flathub on Linux) is fine; the official distro repos are
+not. Want a commercial license? Ask.
 
 ## Disclaimer
 
