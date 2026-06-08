@@ -338,6 +338,60 @@
     })
     .catch(() => {/* static fallbacks already in the markup */});
 
+  /* ── Mobile throw: non-pinned, plays while the section is on screen ──── */
+  // The desktop showpiece pins + scrubs (gated to >900px). Scroll-pinning is
+  // exactly what fights the mobile URL bar, so phones get a self-playing arc
+  // that measures the real screen→phone geometry instead.
+  function initMobileThrow() {
+    if (innerWidth > 900) return;
+    const tile = $("#ts-tile"), stage = $("#throw-stage"),
+          scr = $("#ts-screen"), ph = $("#ts-phone");
+    if (!tile || !stage || !scr || !ph) return;
+    const steps = $$("#throw .throw-steps li");
+    const setStep = (n) => steps.forEach((li) =>
+      li.classList.toggle("on", Number(li.dataset.step) === n));
+
+    let anim = null, timer = 0;
+    const measure = () => {
+      const sR = stage.getBoundingClientRect();
+      const sc = scr.getBoundingClientRect();
+      const pr = ph.getBoundingClientRect();
+      const tw = Math.max(46, sc.width * 0.30), th = tw * 1.5;
+      tile.style.width = tw + "px";
+      const sx = sc.left - sR.left + sc.width  / 2 - tw / 2;
+      const sy = sc.top  - sR.top  + sc.height / 2 - th / 2;
+      const ex = pr.left - sR.left + pr.width  / 2 - tw / 2;
+      const ey = pr.top  - sR.top  + pr.height / 2 - th / 2;
+      tile.style.left = sx + "px"; tile.style.top = sy + "px"; tile.style.transform = "none";
+      return { dx: ex - sx, dy: ey - sy, arc: -sc.height * 0.55 };
+    };
+    const stop = () => {
+      if (anim) { anim.cancel(); anim = null; }
+      clearInterval(timer); timer = 0; tile.style.transform = "none";
+    };
+    const play = () => {
+      const d = measure();
+      if (reduced) { setStep(2); return; }   // honour reduced-motion: just rest, no arc
+      if (anim) anim.cancel();
+      anim = tile.animate([
+        { transform: "translate(0,0) scale(1) rotate(0deg)", offset: 0, easing: "cubic-bezier(.45,0,.7,.35)" },
+        { transform: `translate(${d.dx * .5}px,${d.arc}px) scale(.92) rotate(-12deg)`, offset: .32 },
+        { transform: `translate(${d.dx}px,${d.dy}px) scale(.5) rotate(7deg)`, offset: .6, easing: "cubic-bezier(.3,.8,.3,1)" },
+        { transform: `translate(${d.dx}px,${d.dy}px) scale(.5) rotate(7deg)`, offset: .84 },
+        { transform: "translate(0,0) scale(1) rotate(0deg)", offset: 1, easing: "cubic-bezier(.3,.8,.3,1)" },
+      ], { duration: 5400, iterations: Infinity });
+      let k = 0; setStep(0);
+      clearInterval(timer);
+      timer = setInterval(() => { k = (k + 1) % 4; setStep(k); }, 1350);
+    };
+
+    measure();                                // correct resting placement up front
+    new IntersectionObserver((entries) => {
+      entries.forEach((e) => (e.isIntersecting ? play() : stop()));
+    }, { threshold: 0.3 }).observe($("#throw"));
+    addEventListener("resize", () => (anim ? play() : measure()), { passive: true });
+  }
+
   /* ── GSAP: pinned throw sequence + smooth scroll ────────────────────── */
   function initMotion() {
     if (reduced) return;                 // honour reduced-motion: static layout
@@ -418,6 +472,7 @@
     window.ScrollTrigger.refresh();
   }
 
-  if (document.readyState === "complete") initMotion();
-  else addEventListener("load", initMotion);
+  const boot = () => { initMotion(); initMobileThrow(); };
+  if (document.readyState === "complete") boot();
+  else addEventListener("load", boot);
 })();

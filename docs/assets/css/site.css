@@ -42,7 +42,10 @@ em{font-style:normal; color:var(--paper)}
    higher z-index). Every layer is non-interactive; the whole thing freezes under
    prefers-reduced-motion. Reuses only :root tokens — no new palette.
    ──────────────────────────────────────────────────────────────────────── */
-.bg{position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden}
+/* Pinned to the *large* viewport height so the mobile address bar showing /
+   hiding on scroll doesn't resize the scene and make the backdrop jump. */
+.bg{position:fixed; top:0; left:0; width:100%; height:100vh; height:100lvh;
+  z-index:0; pointer-events:none; overflow:hidden}
 .bg>*{position:absolute; pointer-events:none}
 
 /* -8 base wash sits on body; -7 aurora mesh (the living glow) */
@@ -67,7 +70,7 @@ em{font-style:normal; color:var(--paper)}
 /* -6 horizon glow — the "screen below the fold" bleed at page bottom */
 /* -6 synthwave horizon — a perspective floor grid flowing toward a banded sun */
 .bg-horizon{
-  left:0; right:0; bottom:0; height:54vh; overflow:hidden; opacity:.95;
+  left:0; right:0; bottom:0; height:54vh; height:54lvh; overflow:hidden; opacity:.95;
   perspective:440px; perspective-origin:50% 40%;
   -webkit-mask-image:linear-gradient(0deg, #000 78%, transparent);
           mask-image:linear-gradient(0deg, #000 78%, transparent);
@@ -572,11 +575,15 @@ body.booted::after{animation:flicker .55s steps(1) forwards}
   .feature-grid{grid-template-columns:repeat(2,1fr)}
   .native-grid{grid-template-columns:repeat(2,1fr)}
   .native-hero{grid-column:span 2; grid-template-columns:1fr; justify-items:center; text-align:center; gap:24px}
-  .throw-pin{grid-template-columns:1fr; gap:40px}
-  .throw-stage{height:46vh}
+  .throw-pin{grid-template-columns:1fr; gap:40px; min-height:auto}
+  .throw-stage{height:min(52vh,420px)}
+  /* rest the throw tile centred on the screen (JS re-places it precisely) */
+  .ts-tile{left:50%; top:18%; width:26%; transform:translateX(-50%)}
+  /* stack each PC/mobile pair in a single column — the base grid-column:1/2
+     placement would otherwise spawn an implicit 2nd column and squeeze them */
   .shot-row,.shot-row.reverse{grid-template-columns:1fr; gap:16px}
-  .shot-row.reverse .pc{order:0}
-  .shot.mob{max-width:300px; margin:0 auto}
+  .shot-row>*,.shot-row.reverse>*{grid-column:1 !important; grid-row:auto !important}
+  .shot.mob{max-width:280px; margin:0 auto}
   .kanji-rail{display:none}
 }
 @media (max-width:560px){
