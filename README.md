@@ -4,8 +4,8 @@
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-1f1f24.svg?logo=linux&logoColor=white)](#requirements)
 [![Also on Windows](https://img.shields.io/badge/also%20on-Windows-1f1f24.svg?logo=windows&logoColor=white)](#windows)
 
-On **Windows**? There's a [`windows` branch](#windows) with its own installer.
-On **MacOS**? There's a [`MacOS` branch](#macos) with its own installer.
+On **Windows**? There's a **[`windows` branch](../../tree/windows)** with its own installer.
+On **MacOS**? There's a **[`macos` branch](../../tree/macos)** with its own installer.
 
 **Watch your anime entirely from your phone.** Shou puts your AniList list on the big
 screen and lets you browse, play, resume, rate, and even *grow* your list from a beautiful
@@ -511,14 +511,6 @@ uv run --project shou python shou/server.py
 ```
 
 The server prints the full `/remote?k=…` URL to `~/.config/shou/shou.log` on startup.
-
-## Windows
-
-Shou runs on Windows too — check out the **[`windows` branch](../../tree/windows)**, which
-has its own PowerShell installer (`install.ps1`) and a Windows-specific README. It uses a
-named-pipe IPC for `mpv`, sources episodes through `ani-cli` (under Git Bash) with `anipy`
-as a fallback, and starts hidden on login (no PowerShell window flashing past). Same phone
-remote, same features — different plumbing.
 
 ## Uninstall
 
