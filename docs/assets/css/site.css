@@ -500,18 +500,21 @@ section{position:relative; z-index:4}
 
 /* ── Screenshots ──────────────────────────────────────────────────────── */
 .shots{padding:clamp(40px,6vw,80px) 0}
-.shot-row,.shot-solo{max-width:var(--maxw); margin:0 auto 40px; padding:0 24px; display:grid; grid-template-columns:1.6fr .8fr; gap:24px 28px; align-items:end}
+/* PC shot takes the room it needs; the phone is capped to roughly the
+   big-screen's height so the pair reads as a matched set, not a giant phone. */
+.shot-row,.shot-solo{max-width:var(--maxw); margin:0 auto 40px; padding:0 24px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:24px 28px; align-items:end}
 /* explicit placement so the full-width caption never reflows the PC shot below */
 .shot-row .pc{grid-column:1; grid-row:1}
 .shot-row .mob{grid-column:2; grid-row:1}
 .shot-row figcaption{grid-column:1/-1; grid-row:2}
-.shot-row.reverse{grid-template-columns:.8fr 1.6fr}
+.shot-row.reverse{grid-template-columns:auto minmax(0,1fr)}
 .shot-row.reverse .pc{grid-column:2; grid-row:1}
 .shot-row.reverse .mob{grid-column:1; grid-row:1}
-.shot-solo{grid-template-columns:.5fr; justify-content:center}
+.shot-row .pc img{width:100%}            /* fill the column box edge to edge */
+.shot-solo{grid-template-columns:auto; justify-content:center}
 .shot{margin:0; border-radius:14px; overflow:hidden; border:1px solid var(--line-2); box-shadow:var(--shadow); opacity:0; transform:translateY(26px); transition:opacity .7s, transform .7s}
 .shot.in{opacity:1; transform:none}
-.shot.mob{border-radius:26px; padding:6px; background:linear-gradient(160deg,#26242d,#0d0c11)}
+.shot.mob{width:clamp(160px,18vw,210px); border-radius:26px; padding:6px; background:linear-gradient(160deg,#26242d,#0d0c11)}
 .shot.mob img{border-radius:21px}
 .shot-row figcaption,.shot-solo figcaption{grid-column:1/-1; color:var(--paper-dim); font-size:13.5px; text-align:center; margin-top:4px}
 .shot-row.reverse figcaption{grid-column:1/-1}
@@ -544,7 +547,7 @@ section{position:relative; z-index:4}
 .dl-fine{font-size:12.5px; opacity:.7; margin-top:22px !important}
 
 /* ── Footer ───────────────────────────────────────────────────────────── */
-.foot{max-width:var(--maxw); margin:0 auto; padding:40px 24px 60px; border-top:1px solid var(--line); text-align:center}
+.foot{position:relative; z-index:4; max-width:var(--maxw); margin:0 auto; padding:40px 24px 60px; border-top:1px solid var(--line); text-align:center}
 .foot-mark{display:flex; align-items:center; justify-content:center; gap:9px; font-weight:900; letter-spacing:.2em; font-size:15px}
 .foot-mark .glyph{width:32px; height:32px; font-size:18px; border-radius:9px; border:1px solid var(--line-2); background:linear-gradient(160deg,var(--ink-3),var(--ink-2))}
 .foot-tag{color:var(--paper-dim); font-size:13.5px; max-width:50ch; margin:16px auto}
@@ -583,7 +586,7 @@ body.booted::after{animation:flicker .55s steps(1) forwards}
      placement would otherwise spawn an implicit 2nd column and squeeze them */
   .shot-row,.shot-row.reverse{grid-template-columns:1fr; gap:16px}
   .shot-row>*,.shot-row.reverse>*{grid-column:1 !important; grid-row:auto !important}
-  .shot.mob{max-width:280px; margin:0 auto}
+  .shot.mob{width:auto; max-width:240px; margin:0 auto}
   .kanji-rail{display:none}
 }
 @media (max-width:560px){
