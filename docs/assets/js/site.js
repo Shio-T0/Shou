@@ -70,6 +70,60 @@
     }, { passive: true });
   }
 
+  /* ── Backdrop: ember / film-dust particle field ─────────────────────── */
+  function initEmbers() {
+    if (reduced) return;                         // honour reduced-motion
+    const cv = $(".bg-embers");
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    let dpr = 1, W = 0, H = 0, parts = [], raf = 0, running = false;
+
+    const resize = () => {
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      W = cv.clientWidth; H = cv.clientHeight;
+      cv.width = W * dpr; cv.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // sparse, area-scaled, capped — light on mobile, never silly on ultrawide
+      const n = Math.max(14, Math.min(60, Math.round((W * H) / 26000)));
+      parts = Array.from({ length: n }, () => spawn(true));
+    };
+    const spawn = (anywhere) => ({
+      x: Math.random() * W,
+      y: anywhere ? Math.random() * H : H + 8,
+      r: 0.6 + Math.random() * 1.8,
+      vy: 0.15 + Math.random() * 0.5,          // slow rise
+      drift: (Math.random() - 0.5) * 0.4,
+      sway: Math.random() * Math.PI * 2,
+      tw: 0.4 + Math.random() * 0.6,           // twinkle base alpha
+    });
+    const tick = () => {
+      ctx.clearRect(0, 0, W, H);
+      for (const p of parts) {
+        p.y -= p.vy;
+        p.sway += 0.01;
+        p.x += p.drift + Math.sin(p.sway) * 0.3;
+        if (p.y < -8) Object.assign(p, spawn(false));
+        const a = p.tw * (0.55 + 0.45 * Math.sin(p.sway * 1.7));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,106,77," + a.toFixed(3) + ")";
+        ctx.shadowColor = "rgba(255,74,50,.9)";
+        ctx.shadowBlur = 6;
+        ctx.fill();
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    const start = () => { if (!running) { running = true; tick(); } };
+    const stop  = () => { running = false; cancelAnimationFrame(raf); };
+
+    resize();
+    addEventListener("resize", resize, { passive: true });
+    document.addEventListener("visibilitychange", () =>
+      document.hidden ? stop() : start());
+    start();
+  }
+  initEmbers();
+
   /* ── Hero: the living remote ────────────────────────────────────────── */
   const cf = $("#coverflow");
   const state = { list: "watching", index: 0, playing: false, cast: false };
@@ -297,6 +351,22 @@
     }
     if (!hasGSAP() || !window.ScrollTrigger) return;
     const { gsap } = window; gsap.registerPlugin(window.ScrollTrigger);
+
+    // backdrop parallax — drift the aurora group up and the sprockets down as
+    // the page scrolls, giving the "Projection Room" depth. Tiny, scrubbed.
+    const docH = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
+    if ($(".bg-aurora")) {
+      gsap.to(".bg-aurora", {
+        yPercent: -12, ease: "none",
+        scrollTrigger: { start: 0, end: docH, scrub: true, invalidateOnRefresh: true },
+      });
+    }
+    if ($(".bg-sprockets")) {
+      gsap.to(".bg-sprockets", {
+        yPercent: 8, ease: "none",
+        scrollTrigger: { start: 0, end: docH, scrub: true, invalidateOnRefresh: true },
+      });
+    }
 
     // pinned throw-to-phone scrubbed timeline.
     // Place the tile over the screen (its left/top become the x:0/y:0 origin),

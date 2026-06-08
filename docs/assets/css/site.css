@@ -37,17 +37,99 @@ code{font-family:var(--mono); font-size:.86em; color:var(--acc-2)}
 em{font-style:normal; color:var(--paper)}
 ::selection{background:var(--acc); color:#fff}
 
-/* ── Ambience layers ──────────────────────────────────────────────────── */
+/* ── Ambience: the "Projection Room" composited backdrop ──────────────────
+   A fixed, full-viewport scene stacked behind all content (content/nav sit at
+   higher z-index). Every layer is non-interactive; the whole thing freezes under
+   prefers-reduced-motion. Reuses only :root tokens — no new palette.
+   ──────────────────────────────────────────────────────────────────────── */
+.bg{position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden}
+.bg>*{position:absolute; pointer-events:none}
+
+/* -8 base wash sits on body; -7 aurora mesh (the living glow) */
+.bg-aurora{inset:-10%}
+.bg-aurora .blob{
+  display:block; border-radius:50%; mix-blend-mode:screen;
+  filter:blur(70px); opacity:.6; will-change:transform;
+}
+.bg-aurora .b1{width:48vw; height:48vw; left:-6vw; top:-8vh;
+  background:radial-gradient(closest-side, rgba(255,74,50,.5), transparent 70%);
+  animation:drift1 34s ease-in-out infinite}
+.bg-aurora .b2{width:42vw; height:42vw; right:-8vw; top:6vh;
+  background:radial-gradient(closest-side, rgba(214,59,39,.45), transparent 70%);
+  animation:drift2 41s ease-in-out infinite}
+.bg-aurora .b3{width:38vw; height:38vw; left:24vw; top:34vh;
+  background:radial-gradient(closest-side, rgba(255,106,77,.34), transparent 70%);
+  animation:drift3 29s ease-in-out infinite}
+.bg-aurora .b4{width:34vw; height:34vw; right:14vw; bottom:-6vh; opacity:.4;
+  background:radial-gradient(closest-side, rgba(106,176,255,.22), transparent 70%);
+  animation:drift1 47s ease-in-out infinite reverse}
+
+/* -6 horizon glow — the "screen below the fold" bleed at page bottom */
+.bg-horizon{
+  left:-10%; right:-10%; bottom:-22vh; height:46vh;
+  background:radial-gradient(60% 100% at 50% 100%, rgba(255,74,50,.3), transparent 72%);
+  filter:blur(26px); mix-blend-mode:screen; opacity:.7;
+  animation:breathe 9s ease-in-out infinite;
+}
+
+/* -5 shoji / film-frame lattice — faint architectural hairline grid */
+.bg-lattice{
+  inset:0; opacity:.5;
+  background-image:
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 96px),
+    repeating-linear-gradient(0deg,  rgba(255,255,255,.04) 0 1px, transparent 1px 96px);
+  -webkit-mask-image:radial-gradient(120% 90% at 50% 40%, transparent 28%, #000 88%);
+          mask-image:radial-gradient(120% 90% at 50% 40%, transparent 28%, #000 88%);
+}
+/* sprocket ticks down both margins, like 35mm film perforations */
+.bg-sprockets{
+  inset:0;
+  background-image:
+    repeating-linear-gradient(0deg, var(--line-2) 0 9px, transparent 9px 26px),
+    repeating-linear-gradient(0deg, var(--line-2) 0 9px, transparent 9px 26px);
+  background-size:5px 26px, 5px 26px;
+  background-position:18px 0, calc(100% - 18px) 0;
+  background-repeat:repeat-y, repeat-y;
+  opacity:.5; will-change:transform;
+}
+
+/* -4 kanji nebula — oversized blurred glyphs drifting in the deep field */
+.bg-nebula{inset:0; mix-blend-mode:screen}
+.bg-nebula .kj{
+  font-family:var(--serif); font-weight:800; color:var(--acc);
+  line-height:1; filter:blur(3px); opacity:.05; will-change:transform;
+}
+.bg-nebula .k1{font-size:34vw; left:-6vw;  top:-8vh;  animation:float1 52s ease-in-out infinite}
+.bg-nebula .k2{font-size:22vw; right:2vw;  top:30vh;  opacity:.04; animation:float2 61s ease-in-out infinite}
+.bg-nebula .k3{font-size:28vw; left:30vw;  bottom:-12vh; opacity:.035; animation:float3 70s ease-in-out infinite}
+.bg-nebula .k4{font-size:9vw; writing-mode:vertical-rl; letter-spacing:.3em;
+  left:6vw; bottom:6vh; opacity:.035; color:var(--paper);
+  filter:blur(2px); animation:float2 58s ease-in-out infinite reverse}
+
+/* -3 ember particle field (canvas, animated in JS) */
+.bg-embers{inset:0; width:100%; height:100%; mix-blend-mode:screen; opacity:.7}
+
+/* -2 projector sweep — one slow volumetric light wedge */
+.bg-sweep{
+  top:-40%; left:-30%; width:60%; height:180%;
+  background:linear-gradient(100deg, transparent, rgba(255,106,77,.07) 45%, rgba(255,255,255,.05) 50%, rgba(255,106,77,.07) 55%, transparent);
+  filter:blur(30px); transform:rotate(8deg); mix-blend-mode:screen;
+  animation:sweep 26s ease-in-out infinite;
+}
+
+/* edge vignette — keeps the central reading column calm */
+.bg-vignette{
+  inset:0;
+  background:radial-gradient(120% 95% at 50% 42%, transparent 52%, rgba(5,5,7,.55) 100%);
+}
+
+/* +2 film grain, with a faint animated shimmer */
 .grain{
-  position:fixed; inset:0; z-index:2; pointer-events:none; opacity:.05;
+  position:absolute; inset:-50%; width:200%; height:200%; opacity:.05;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grain 7s steps(6) infinite;
 }
-.aura{
-  position:fixed; top:-20vh; left:50%; transform:translateX(-50%);
-  width:120vw; height:70vh; z-index:0; pointer-events:none;
-  background:radial-gradient(closest-side, var(--acc-soft), transparent 70%);
-  filter:blur(10px);
-}
+
 .cursor-aura{
   position:fixed; top:0; left:0; z-index:1; pointer-events:none;
   width:46vw; height:46vw; border-radius:50%;
@@ -61,6 +143,20 @@ em{font-style:normal; color:var(--paper)}
   font-family:var(--serif); font-weight:700; font-size:13px;
   color:var(--paper-dim); opacity:.32; mix-blend-mode:screen;
 }
+
+/* ── Backdrop keyframes ───────────────────────────────────────────────── */
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}   50%{transform:translate(6vw,4vh) scale(1.12)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1.05)}50%{transform:translate(-5vw,5vh) scale(.92)}}
+@keyframes drift3{0%,100%{transform:translate(0,0) scale(.95)} 50%{transform:translate(4vw,-5vh) scale(1.1)}}
+@keyframes breathe{0%,100%{opacity:.5}                          50%{opacity:.85}}
+@keyframes float1{0%,100%{transform:translate(0,0) rotate(0)}   50%{transform:translate(2vw,3vh) rotate(3deg)}}
+@keyframes float2{0%,100%{transform:translate(0,0) rotate(0)}   50%{transform:translate(-2vw,-2vh) rotate(-2deg)}}
+@keyframes float3{0%,100%{transform:translate(0,0) rotate(0)}   50%{transform:translate(3vw,-2vh) rotate(2deg)}}
+@keyframes sweep{0%{transform:translateX(0) rotate(8deg); opacity:0}
+  20%{opacity:1} 80%{opacity:1} 100%{transform:translateX(220%) rotate(8deg); opacity:0}}
+@keyframes grain{0%{transform:translate(0,0)}10%{transform:translate(-3%,-4%)}
+  30%{transform:translate(4%,-2%)}50%{transform:translate(-2%,5%)}
+  70%{transform:translate(5%,2%)}90%{transform:translate(-4%,-3%)}100%{transform:translate(0,0)}}
 
 /* ── Shared atoms ─────────────────────────────────────────────────────── */
 .glyph{
@@ -430,6 +526,11 @@ body.booted::after{animation:flicker .55s steps(1) forwards}
   .diorama{perspective:none}
   .bigscreen{transform:none}
   .phone{position:relative; right:auto; bottom:auto; transform:none; margin:-30px auto 0; width:200px}
+  /* lighten the backdrop on small screens */
+  .bg-sweep,.bg-sprockets{display:none}
+  .bg-aurora .blob{filter:blur(54px); opacity:.45}
+  .bg-aurora .b3,.bg-aurora .b4{display:none}
+  .bg-lattice{background-size:64px 64px,64px 64px}
 }
 
 /* ── Reduced motion ───────────────────────────────────────────────────── */
@@ -441,4 +542,7 @@ body.booted::after{animation:flicker .55s steps(1) forwards}
   body.boot .hero-copy,body.boot .diorama{opacity:1}
   body.boot::after{display:none}
   .reveal,.fcard,.shot,.reveal-lines span{opacity:1; transform:none}
+  /* freeze the backdrop into a still composition; drop the moving layers */
+  .bg-embers,.bg-sweep{display:none}
+  .bg *{animation:none !important}
 }
