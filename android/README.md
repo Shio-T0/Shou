@@ -33,8 +33,11 @@ open the remote in a plain browser instead:
 - **Lock-screen media controls.** A `MediaSession` + MediaStyle notification
   mirrors what's playing, with prev / play-pause / next that work from the lock
   screen and headset, even with the app closed.
-- **Home-screen widget & Quick Settings tile.** Wake, play/pause, skip and open
-  — without launching the app.
+- **Home-screen widget & Quick Settings tile.** The widget is a **one-cell-tall
+  now-playing strip** — cover art, title/subtitle and a progress bar of what's on
+  the PC, with **wake, play/pause, prev/next** inline — so you can drive playback
+  straight from the home screen without ever opening the app. The Quick Settings
+  tile gives the same wake/transport at a swipe.
 - **Per-server shortcuts.** Long-press the icon for "Living room", "Bedroom", …
   each opening the remote already pointed at that PC.
 - **Notifications.** A heads-up when you finish a series, and a background check

@@ -13,8 +13,10 @@ list, shows a cinematic 3D-coverflow **kiosk** (a fullscreen browser window) on 
 serves a touch-first **phone web-remote (PWA)** that mirrors the kiosk live over WebSocket.
 Pick an anime and it auto-plays your next unwatched episode through the `anipy` scrapers →
 `mpv` (fullscreen), or through `ani-cli` if you have it. Everything you do on the phone
-shows up on the TV instantly, and vice-versa. The remote is a **PWA**, but there's also an
-optional **native Android app** that keeps your screen awake and finds the PC by itself.
+shows up on the TV instantly, and vice-versa — and you can even **throw the playing episode
+onto your phone** mid-watch and toss it back to the PC right where you left off. The remote
+is a **PWA**, but there's also an optional **native Android app** that keeps your screen
+awake and finds the PC by itself.
 
 Runs on **most Linux distros** (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, …) and
 any desktop/compositor — it needs only `mpv`, a browser, `curl`, and `uv`. Playback control
@@ -31,6 +33,11 @@ On **Windows**? There's a [`windows` branch](#windows) with its own installer.
   fullscreen. Progress, episode counts, and a progress bar mirror to your phone.
 - ⏯️ **Full playback control** — pause, ±30s seek, and previous/next **episode**, all from
   the remote, all sent straight to `mpv`.
+- 📲 **Throw to phone** — leaving the room? Tap **Watch on this phone** (or press **`t`** in
+  `mpv`) and the episode you're watching **hands off to your phone** — it pauses the PC,
+  re-resolves a mobile stream, and plays it in a built-in full-screen player (double-tap to
+  seek ±15s). **Throw it back** and the PC resumes *exactly* where your phone left off. The
+  couch is optional now too.
 - ⏪ **Continue Watching** — left an episode half-finished? Shou remembers where (and which
   episode) and offers to **resume a few seconds before** you stopped. Because nobody pauses
   at a sensible moment.
@@ -118,6 +125,7 @@ fixed IP), Shou auto-detects the PC's current address — via its <code>&lt;name
   - [The remote at a glance](#the-remote-at-a-glance)
   - [Watch something](#watch-something)
   - [Continue Watching](#continue-watching)
+  - [Throw to phone](#throw-to-phone)
   - [Search New & set status](#search-new--set-status)
   - [Rate a finished series](#rate-a-finished-series)
 - [Auto-mark episodes watched on AniList](#auto-mark-episodes-watched-on-anilist)
@@ -330,6 +338,7 @@ Changing `PORT`, `REMOTE_TOKEN`, or `ANILIST_TOKEN` needs a daemon restart.
 | **⏮ / ⏭** | Jump to the previous / next **episode** (relaunches the player). |
 | **⏯** | Play / pause the current episode. |
 | **« 30s / 30s »** | Seek 30 seconds back / forward. |
+| **Watch on this phone ▸** | Appears while an episode plays — [throws it to your phone](#throw-to-phone). |
 
 A **Continue Watching** rail also appears on the remote (and as a panel on the kiosk)
 whenever you have half-finished episodes.
@@ -356,6 +365,27 @@ which anime, which episode, and how far in. It then shows a **Continue Watching*
 both the remote and the kiosk. Tap an entry on the phone to **resume on the PC**, picking up
 a few seconds *before* you left off so you remember what was happening. Each entry has a
 small **×** to forget it. No "are you still watching?" guilt-trips here.
+
+### Throw to phone
+
+Watching on the big screen but need to move — bed, kitchen, the bus stop? While an episode
+is playing, a **Watch on this phone ▸** button appears on the remote (and the same handoff is
+bound to **`t`** inside `mpv`). Tap it and Shou:
+
+1. **Pauses the PC** and shows a *“Sending to your phone…”* overlay on the TV.
+2. **Re-resolves a phone-playable stream** for the same episode (mpv's own URL is tied to its
+   session, so a fresh one is scraped) and **proxies it through the server** — adding the
+   Referer the CDN wants and rewriting HLS playlists, so your phone can actually play it
+   without CORS or hotlink errors.
+3. Plays it on the phone in a **built-in full-screen player** with its own controls:
+   play/pause, a scrubber, and **double-tap the left/right edge to seek ±15s**.
+
+Tap **Throw back** and the cast clears, the PC un-pauses, and `mpv` **seeks to where the
+phone left off** — so the episode continues on the big screen without missing a beat. Only
+one throw is live at a time, and starting another (or throwing back) cancels a stale one.
+
+> Throw to phone needs a stream the phone can play, so it uses the same backup scrapers as
+> regular playback. If none can be re-resolved, the PC simply resumes instead of freezing.
 
 ### Search New & set status
 
@@ -434,6 +464,8 @@ needed; from any other host append `?k=<REMOTE_TOKEN>`.
 | `/pause` · `/fwd` `/rew` · `/next` `/prev` | Play-pause · seek ±30s · prev/next episode |
 | `/resume?media_id=…&episode=…` | Resume a Continue-Watching entry |
 | `/forget?media_id=…&episode=…` | Remove a Continue-Watching entry |
+| `/throw` | Throw the playing episode to the phone (also mpv's `t` key) |
+| `/cast/clear?pos=…` | Throw back: stop casting, resume the PC at `pos` seconds |
 | `/search/key?c=…` · `/search/back` · `/search/clear` | Edit the shared search query |
 | `/search/genre?g=…` · `/search/genres/clear` | Toggle a genre/tag filter · clear all filters |
 | `/search/more` | Load the next page of results (infinite scroll) |
