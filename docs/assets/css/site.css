@@ -65,11 +65,48 @@ em{font-style:normal; color:var(--paper)}
   animation:drift1 47s ease-in-out infinite reverse}
 
 /* -6 horizon glow — the "screen below the fold" bleed at page bottom */
+/* -6 synthwave horizon — a perspective floor grid flowing toward a banded sun */
 .bg-horizon{
-  left:-10%; right:-10%; bottom:-22vh; height:46vh;
-  background:radial-gradient(60% 100% at 50% 100%, rgba(255,74,50,.3), transparent 72%);
-  filter:blur(26px); mix-blend-mode:screen; opacity:.7;
+  left:0; right:0; bottom:0; height:54vh; overflow:hidden; opacity:.95;
+  perspective:440px; perspective-origin:50% 40%;
+  -webkit-mask-image:linear-gradient(0deg, #000 78%, transparent);
+          mask-image:linear-gradient(0deg, #000 78%, transparent);
+}
+.bg-horizon>*{position:absolute; left:0; right:0}
+/* the sky glow that blooms upward from the horizon line */
+.hz-glow{
+  left:-12%; right:-12%; bottom:44%; height:46%;
+  background:radial-gradient(70% 100% at 50% 100%,
+    rgba(255,74,50,.55), rgba(255,74,50,.14) 42%, transparent 72%);
+  filter:blur(10px); mix-blend-mode:screen;
   animation:breathe 9s ease-in-out infinite;
+}
+/* the banded sun sitting on the horizon (lower bands carved out by dark lines) */
+.hz-sun{
+  left:50%; bottom:44%; width:40vh; height:40vh;
+  transform:translate(-50%, 50%); border-radius:50%;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 5px, #0a0a0c 5px 8px) bottom/100% 50% no-repeat,
+    linear-gradient(180deg, #ffe0bd 0%, #ff8a5b 46%, #e0432c 100%);
+  filter:drop-shadow(0 0 30px rgba(255,74,50,.55));
+}
+/* bright horizon line where sky meets floor */
+.hz-line{
+  bottom:44%; height:2px;
+  background:linear-gradient(90deg, transparent, #ff9a6b, rgba(255,255,255,.85), #ff9a6b, transparent);
+  box-shadow:0 0 30px 7px rgba(255,74,50,.6);
+}
+/* the receding, flowing floor grid */
+.hz-grid{
+  left:50%; bottom:0; width:320%; height:46%;
+  transform:translateX(-50%) rotateX(82deg);
+  transform-origin:50% 0%; will-change:background-position;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255,96,64,.6) 0 2px, transparent 2px 6.25%),
+    repeating-linear-gradient(0deg,  rgba(255,96,64,.6) 0 2px, transparent 2px 34px);
+  -webkit-mask-image:linear-gradient(0deg, #000, transparent 94%);
+          mask-image:linear-gradient(0deg, #000, transparent 94%);
+  animation:gridflow 3.4s linear infinite;
 }
 
 /* -5 shoji / film-frame lattice — faint architectural hairline grid */
@@ -93,18 +130,33 @@ em{font-style:normal; color:var(--paper)}
   opacity:.5; will-change:transform;
 }
 
-/* -4 kanji nebula — oversized blurred glyphs drifting in the deep field */
-.bg-nebula{inset:0; mix-blend-mode:screen}
-.bg-nebula .kj{
-  font-family:var(--serif); font-weight:800; color:var(--acc);
-  line-height:1; filter:blur(3px); opacity:.05; will-change:transform;
+/* -4 nebula — a deep field of star dust + faint drifting gas clouds */
+.bg-nebula{
+  inset:0; mix-blend-mode:screen; opacity:.9;
+  /* star dust, kept to the upper sky so it never lands on the floor grid */
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 16%, rgba(255,255,255,.85), transparent 60%),
+    radial-gradient(1px 1px   at 27% 40%, rgba(255,255,255,.5),  transparent 60%),
+    radial-gradient(1.4px 1.4px at 45% 11%, rgba(255,224,200,.75), transparent 60%),
+    radial-gradient(1px 1px   at 62% 31%, rgba(255,255,255,.5),  transparent 60%),
+    radial-gradient(1.4px 1.4px at 79% 20%, rgba(255,255,255,.75), transparent 60%),
+    radial-gradient(1px 1px   at 89% 44%, rgba(255,224,200,.55), transparent 60%),
+    radial-gradient(1px 1px   at 34% 52%, rgba(255,255,255,.5),  transparent 60%),
+    radial-gradient(1.4px 1.4px at 55% 47%, rgba(255,255,255,.6), transparent 60%),
+    radial-gradient(1px 1px   at 7%  46%, rgba(255,255,255,.45), transparent 60%),
+    radial-gradient(1.4px 1.4px at 71% 8%, rgba(255,224,200,.6),  transparent 60%);
+  animation:twinkle 6s ease-in-out infinite;
 }
-.bg-nebula .k1{font-size:34vw; left:-6vw;  top:-8vh;  animation:float1 52s ease-in-out infinite}
-.bg-nebula .k2{font-size:22vw; right:2vw;  top:30vh;  opacity:.04; animation:float2 61s ease-in-out infinite}
-.bg-nebula .k3{font-size:28vw; left:30vw;  bottom:-12vh; opacity:.035; animation:float3 70s ease-in-out infinite}
-.bg-nebula .k4{font-size:9vw; writing-mode:vertical-rl; letter-spacing:.3em;
-  left:6vw; bottom:6vh; opacity:.035; color:var(--paper);
-  filter:blur(2px); animation:float2 58s ease-in-out infinite reverse}
+.bg-nebula .neb{
+  position:absolute; display:block; border-radius:50%;
+  filter:blur(64px); mix-blend-mode:screen; will-change:transform;
+}
+.bg-nebula .n1{width:54vw; height:30vw; left:-8vw; top:12vh; opacity:.16;
+  background:radial-gradient(closest-side, rgba(255,74,50,.6), transparent 70%);
+  animation:float1 64s ease-in-out infinite}
+.bg-nebula .n2{width:42vw; height:26vw; right:-6vw; top:34vh; opacity:.14;
+  background:radial-gradient(closest-side, rgba(106,176,255,.5), transparent 70%);
+  animation:float2 74s ease-in-out infinite}
 
 /* -3 ember particle field (canvas, animated in JS) */
 .bg-embers{inset:0; width:100%; height:100%; mix-blend-mode:screen; opacity:.7}
@@ -152,6 +204,8 @@ em{font-style:normal; color:var(--paper)}
 @keyframes float1{0%,100%{transform:translate(0,0) rotate(0)}   50%{transform:translate(2vw,3vh) rotate(3deg)}}
 @keyframes float2{0%,100%{transform:translate(0,0) rotate(0)}   50%{transform:translate(-2vw,-2vh) rotate(-2deg)}}
 @keyframes float3{0%,100%{transform:translate(0,0) rotate(0)}   50%{transform:translate(3vw,-2vh) rotate(2deg)}}
+@keyframes gridflow{from{background-position:0 0,0 0} to{background-position:0 0,0 34px}}
+@keyframes twinkle{0%,100%{opacity:.55} 50%{opacity:1}}
 @keyframes sweep{0%{transform:translateX(0) rotate(8deg); opacity:0}
   20%{opacity:1} 80%{opacity:1} 100%{transform:translateX(220%) rotate(8deg); opacity:0}}
 @keyframes grain{0%{transform:translate(0,0)}10%{transform:translate(-3%,-4%)}
