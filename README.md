@@ -53,7 +53,7 @@ or if you wish to build it yourself, check its **[README.md](android/README.md)*
 
 Recently, an **iOS** version of the app, albeit with less features, was created. Check 
 its **[README.md](../../tree/macos/ios/README.md)** and go to the **[MacOS branch](../../tree/macos)**
-since macos is needed for the iOS app instalation.
+since macos is needed for the iOS app instalation. (I don't think this one is worth it though)
 
 ### Using the browser
 Still, if the app doesn't run on your device, or you just don't want it (which is unfortunate), you can
