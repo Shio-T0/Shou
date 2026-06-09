@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Shared container: the widget + AppIntents read the active server and the
+	     last playback snapshot from here without launching the app. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.io.github.shiot0.shou</string>
+	</array>
+	<!-- Shared Keychain: secret REMOTE_TOKENs live here and must be reachable from
+	     the widget process too (so its Wake/Pause/Next intents can authenticate). -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)io.github.shiot0.shou</string>
+	</array>
+	<!-- Wake-on-LAN sends a UDP broadcast (255.255.255.255); iOS gates broadcast/
+	     multicast behind this entitlement, which needs Apple approval per app id. -->
+	<key>com.apple.developer.networking.multicast</key>
+	<true/>
+</dict>
+</plist>

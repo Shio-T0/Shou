@@ -1,0 +1,12 @@
+# XcodeGen generates this from project.yml — don't commit it.
+Shou.xcodeproj/
+
+# Xcode / build noise
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+*.ipa
+*.dSYM.zip
+*.dSYM

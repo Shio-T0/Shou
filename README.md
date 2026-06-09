@@ -19,8 +19,8 @@ Pick an anime and it auto-plays your next unwatched episode through the `anipy` 
 `mpv` (fullscreen), or through `ani-cli` if you have it. Everything you do on the phone
 shows up on the TV instantly, and vice-versa — and you can even **throw the playing episode
 onto your phone** mid-watch and toss it back to the PC right where you left off. The remote
-is a **PWA**, but there's also an optional **native Android app** that keeps your screen
-awake and finds the PC by itself.
+is a **PWA**, but there are also optional **native Android & iOS apps** that keep your
+screen awake and find the PC by themselves.
 
 Runs on **most Linux distros** (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, …) and
 any desktop/compositor — it needs only `mpv`, a browser, `curl`, and `uv`. Playback control
@@ -55,8 +55,8 @@ reaches mpv over its own IPC socket, so there's **no `playerctl`/`mpv-mpris` req
   1), or just plays the latest released episode.
 - ✅ **Auto-mark watched** *(optional)* — tick episodes off on AniList as you finish them,
   and flip a series to *Completed* on the last episode.
-- 📱 **Phone app** *(optional)* — the remote is a PWA; there's also a tiny **native Android
-  app** that keeps your screen awake and **auto-discovers the PC on your network**. See
+- 📱 **Phone app** *(optional)* — the remote is a PWA; there are also tiny **native Android
+  & iOS apps** that keep your screen awake and **auto-discover the PC on your network**. See
   [The phone remote](#the-phone-remote-pwa-or-native-app).
 
 The phone remote always **mirrors the kiosk live**, so it confirms every action even when
@@ -288,6 +288,16 @@ that over plain HTTP, so the screen dims mid-episode; the native app uses
 > behind your own TLS cert. On the default plain-HTTP LAN you can ignore it. The native app
 > is just a frame: the web remote is still the single source of truth, so it mirrors the
 > kiosk live exactly like the PWA. Build it yourself from [`android/`](android/README.md).
+
+There's a matching **native iOS app** (source in [`ios/`](ios/README.md)) — the same
+full-screen WebView shell with the same superpowers (Wake-on-LAN, Bonjour scan,
+lock-screen controls, a now-playing home-screen widget, per-server shortcuts, new-episode
+notifications). A few things Apple won't let an app do identically — volume-button capture
+is omitted, the Quick Settings tile becomes an iOS-18 Control Center control, and
+Wake-on-LAN needs Apple's multicast entitlement — are spelled out in
+[`ios/README.md`](ios/README.md). It builds on a Mac with Xcode (the repo ships the
+`project.yml`; run `xcodegen` to generate the Xcode project), and installs via TestFlight
+or a direct device build.
 
 ## Configuration
 
