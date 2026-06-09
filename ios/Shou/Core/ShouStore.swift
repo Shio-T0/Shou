@@ -17,9 +17,18 @@ enum ShouStore {
     static let appGroup = "group.io.github.shiot0.shou"
     private static let keychainService = "io.github.shiot0.shou"
 
-    private static var defaults: UserDefaults {
-        UserDefaults(suiteName: appGroup) ?? .standard
+    /// The shared store. The FULL (paid) build uses the App Group so the widget and
+    /// AppIntents can read it from their own process; the FREE build has no App Group
+    /// entitlement (and no widget), so it just uses the app's own UserDefaults.
+    static var sharedDefaults: UserDefaults {
+        #if SHOU_FREE
+        return .standard
+        #else
+        return UserDefaults(suiteName: appGroup) ?? .standard
+        #endif
     }
+
+    private static var defaults: UserDefaults { sharedDefaults }
 
     // MARK: - Single-server settings (Settings screen) ----------------------- //
 

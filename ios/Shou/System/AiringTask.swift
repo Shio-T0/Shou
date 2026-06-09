@@ -17,7 +17,7 @@ enum AiringTask {
     private static let primedKey = "airing_primed"
     private static let seenCap = 200
 
-    private static var defaults: UserDefaults { UserDefaults(suiteName: ShouStore.appGroup) ?? .standard }
+    private static var defaults: UserDefaults { ShouStore.sharedDefaults }
 
     /// Register the handler — must run before the app finishes launching.
     static func register() {
