@@ -26,8 +26,8 @@ Pick an anime and it auto-plays your next unwatched episode through the `anipy` 
 `mpv` (fullscreen), or through `ani-cli` if you have it. Everything you do on the phone
 shows up on the TV instantly, and vice-versa — and you can even **throw the playing episode
 onto your phone** mid-watch and toss it back to the PC right where you left off. The remote
-is a **PWA**, but there's also an optional **native Android app** that keeps your screen
-awake and finds the PC by itself.
+is a **PWA**, but there are also optional **native Android & iOS apps** that keep your
+screen awake and find the PC by themselves.
 
 Runs on **macOS** (Apple Silicon and Intel) via **Homebrew** — it needs only `mpv`, a
 browser, and `uv` (`curl` ships with macOS). Playback control reaches mpv over its own IPC
@@ -63,8 +63,8 @@ socket, so there's **no extra media-key plumbing**. Prefer **Linux**? Use the
   1), or just plays the latest released episode.
 - ✅ **Auto-mark watched** *(optional)* — tick episodes off on AniList as you finish them,
   and flip a series to *Completed* on the last episode.
-- 📱 **Phone app** *(optional)* — the remote is a PWA; there's also a tiny **native Android
-  app** that keeps your screen awake and **auto-discovers the PC on your network**. See
+- 📱 **Phone app** *(optional)* — the remote is a PWA; there are also tiny **native Android
+  & iOS apps** that keep your screen awake and **auto-discover the PC on your network**. See
   [The phone remote](#the-phone-remote-pwa-or-native-app).
 
 The phone remote always **mirrors the kiosk live**, so it confirms every action even when
@@ -295,6 +295,18 @@ that over plain HTTP, so the screen dims mid-episode; the native app uses
 > behind your own TLS cert. On the default plain-HTTP LAN you can ignore it. The native app
 > is just a frame: the web remote is still the single source of truth, so it mirrors the
 > kiosk live exactly like the PWA. Build it yourself from [`android/`](android/README.md).
+
+### …and on iPhone
+
+There's a matching **native iOS app** — the same full-screen WebView shell with the same
+superpowers (Bonjour scan, lock-screen controls, per-server shortcuts, new-episode
+notifications, and — on a paid build — a home-screen widget and Wake-on-LAN). Its source
+and full build instructions live right here in [`ios/`](ios/README.md). **This is the
+branch to build it from**, since iOS needs a Mac with Xcode anyway — and the **default
+build installs with a free Apple ID** (no paid Developer account required; it just re-signs
+every 7 days from Xcode). A few things Apple won't let an app do identically — volume-button
+capture is omitted, the Quick Settings tile becomes an iOS-18 Control Center control — are
+spelled out in [`ios/README.md`](ios/README.md).
 
 ## Configuration
 
