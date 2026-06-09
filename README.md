@@ -60,7 +60,7 @@ or if you wish to build it yourself, check its **[README.md](android/README.md)*
 
 Recently, an **iOS** version of the app, albeit with less features, was created. Check 
 its **[README.md](../../tree/macos/ios/README.md)**, you'll need a **MacOS** to build it. 
-> **But Actually**... with the ammout of features removed from the **iOS App** for it to remain free and considering the work it needs on your side to remain active, 
+> **But Actually**... with the amout of features removed from the **iOS App** for it to remain free and considering the work it needs on your side to remain active, 
 > *you might be better off with just the browser instead of the iOS app*.
 
 ### Using the browser
