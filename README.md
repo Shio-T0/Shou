@@ -47,6 +47,18 @@ http://<hostname>.local:4100/remote?k=<your-private-token>
 
 ## Connect your phone
 
+### Using the App
+I **recomend** getting our **Android App** from its **[Release](https://github.com/Shio-T0/Shou/releases/tag/v1.3.0)** (easier to download), 
+or if you wish to build it yourself, check its **[README.md](android/README.md)**.
+
+Recently, an **iOS** version of the app, albeit with less features, was created. Check 
+its **[README.md](../../tree/macos/ios/README.md)** and go to the **[MacOS branch](../../tree/macos)**
+since macos is needed for the iOS app instalation.
+
+### Using the browser
+Still, if the app doesn't run on your device, or you just don't want it (which is unfortunate), you can
+still use the browser on your phone.
+
 1. Make sure the daemon is up — autostart handles it, or run `./shou_daemon.sh` once. The
    server lives in the background; the kiosk only appears when you press **Open**.
 2. Open that `…/remote?k=<token>` URL in your phone's browser; the dot top-right turns
@@ -57,10 +69,6 @@ http://<hostname>.local:4100/remote?k=<your-private-token>
 > `<hostname>.local` not resolving? Use the PC's LAN IP instead (`http://192.168.1.50:4100/…`)
 > — DNS, the cause of *and* solution to all networking woes. The `?k=<token>` is your private
 > key, so don't share the URL.
-
-**Screen keeps dimming mid-episode?** There's a native **[Android app](android/README.md)**
-(a thin WebView that simply refuses to sleep) and a matching **[iOS app](../../tree/macos/ios)**
-(on the macos branch). Both optional — the PWA is all most people need.
 
 ## Configuration
 
