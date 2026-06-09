@@ -289,15 +289,12 @@ that over plain HTTP, so the screen dims mid-episode; the native app uses
 > is just a frame: the web remote is still the single source of truth, so it mirrors the
 > kiosk live exactly like the PWA. Build it yourself from [`android/`](android/README.md).
 
-There's a matching **native iOS app** (source in [`ios/`](ios/README.md)) — the same
-full-screen WebView shell with the same superpowers (Wake-on-LAN, Bonjour scan,
-lock-screen controls, a now-playing home-screen widget, per-server shortcuts, new-episode
-notifications). A few things Apple won't let an app do identically — volume-button capture
-is omitted, the Quick Settings tile becomes an iOS-18 Control Center control, and
-Wake-on-LAN needs Apple's multicast entitlement — are spelled out in
-[`ios/README.md`](ios/README.md). It builds on a Mac with Xcode (the repo ships the
-`project.yml`; run `xcodegen` to generate the Xcode project), and installs via TestFlight
-or a direct device build.
+There's a matching **native iOS app**, too — the same full-screen WebView shell with the
+same superpowers (Bonjour scan, lock-screen controls, per-server shortcuts, new-episode
+notifications, plus an optional home-screen widget and Wake-on-LAN). Since iOS only builds
+on a Mac, its source lives on the **[`macos` branch](../../tree/macos/ios)** (see
+[`ios/README.md`](../../tree/macos/ios/README.md)). The **default build installs with a
+free Apple ID** — no paid Developer account needed.
 
 ## Configuration
 
