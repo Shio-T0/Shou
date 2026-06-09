@@ -77,10 +77,6 @@ still use the browser on your phone.
 > `<name>.local` not resolving? Use the Mac's LAN IP instead. The `?k=<token>` is your private
 > key, so don't share the URL.
 
-**Phone apps** *(optional)*: a native **[iOS app](ios/README.md)** lives right here (this is
-the branch to build it from — iOS needs a Mac anyway, and the default build installs with a
-**free** Apple ID), plus a **[Android app](android/README.md)**. The PWA is all most people need.
-
 ## Configuration
 
 `~/.config/shou/shou.conf`:
