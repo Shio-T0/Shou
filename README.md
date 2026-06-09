@@ -54,6 +54,19 @@ http://<name>.local:4100/remote?k=<your-private-token>
 
 ## Connect your phone
 
+### Using the App
+I **recomend** getting our **Android App** from its **[Release](https://github.com/Shio-T0/Shou/releases/tag/v1.3.0)** (easier to download), 
+or if you wish to build it yourself, check its **[README.md](android/README.md)**.
+
+Recently, an **iOS** version of the app, albeit with less features, was created. Check 
+its **[README.md](../../tree/macos/ios/README.md)**, you'll need a **MacOS** to build it. 
+> **But Actually**... with the ammout of features removed from the **iOS App** for it to remain free and considering the work it needs on your side to remain active, 
+> *you might be better off with just the browser instead of the iOS app*.
+
+### Using the browser
+Still, if the app doesn't run on your device, or you just don't want it (which is unfortunate), you can
+still use the browser on your phone.
+
 1. Make sure the daemon is up — the LaunchAgent handles it at login, or run `./shou_daemon.sh`
    once. The server lives in the background; the kiosk only appears when you press **Open**.
 2. Open that `…/remote?k=<token>` URL in your phone's browser; the dot top-right turns
