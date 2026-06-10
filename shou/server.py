@@ -1132,22 +1132,66 @@ def _sway_is_fullscreen(pid: int) -> bool:
     return False
 
 
-def focus_kiosk(pid: int) -> None:
-    """Best-effort raise + fullscreen of the kiosk window. Supports Hyprland and Sway;
-    a no-op on other compositors/DEs — the browser was already opened with --kiosk, so
-    it stays fullscreen on its own. This is purely a 'bring it back to front' nicety.
+def _x11_focus_fullscreen(pid: int) -> bool:
+    """Raise + fullscreen the kiosk window on X11 — any EWMH window manager (bspwm, i3,
+    openbox, XFCE, KDE/X11, …). Uses wmctrl if present, else xdotool. Returns True if a
+    tool handled it, False if neither is installed.
 
-    The fullscreen toggle is only applied when the window ISN'T already fullscreen —
-    re-dispatching it on an already-fullscreen window would flip it back out (which is
-    what made Back un-fullscreen the kiosk)."""
-    if shutil.which("hyprctl"):
+    Unlike the Wayland toggles, EWMH lets us *add* the fullscreen state idempotently, so
+    this is safe to call even when the window is already fullscreen — no un-fullscreen
+    flip, so Back/Open never knocks the kiosk out of fullscreen."""
+    if shutil.which("wmctrl"):
+        try:
+            out = subprocess.run(["wmctrl", "-lp"],
+                                 capture_output=True, text=True, timeout=3)
+            for line in out.stdout.splitlines():
+                # cols: window-id  desktop  pid  host  title
+                parts = line.split(None, 4)
+                if len(parts) >= 3 and parts[2] == str(pid):
+                    wid = parts[0]
+                    subprocess.run(["wmctrl", "-i", "-a", wid], check=False)
+                    subprocess.run(["wmctrl", "-i", "-r", wid, "-b", "add,fullscreen"],
+                                   check=False)
+                    return True
+        except Exception:  # noqa: BLE001
+            pass
+    if shutil.which("xdotool"):
+        try:
+            out = subprocess.run(["xdotool", "search", "--pid", str(pid)],
+                                 capture_output=True, text=True, timeout=3)
+            ids = out.stdout.split()
+            if ids:
+                wid = ids[-1]  # the last match is the top-level mapped window
+                subprocess.run(["xdotool", "windowactivate", "--sync", wid], check=False)
+                subprocess.run(["xdotool", "windowstate", "--add", "FULLSCREEN", wid],
+                               check=False)
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+    return False
+
+
+def focus_kiosk(pid: int) -> None:
+    """Best-effort raise + fullscreen of the kiosk window. Supports Hyprland and Sway on
+    Wayland, and any EWMH window manager on X11 (bspwm, i3, openbox, …) via wmctrl/xdotool;
+    a no-op only when none of those tools are present — the browser was already opened with
+    --kiosk, so it stays fullscreen on its own. This is purely a 'bring it back to front'
+    nicety.
+
+    On Wayland the fullscreen toggle is only applied when the window ISN'T already
+    fullscreen — re-dispatching it on an already-fullscreen window would flip it back out
+    (which is what made Back un-fullscreen the kiosk). On X11 we *add* the EWMH fullscreen
+    state, which is idempotent, so no such guard is needed."""
+    if os.environ.get("WAYLAND_DISPLAY") and shutil.which("hyprctl"):
         subprocess.run(["hyprctl", "dispatch", "focuswindow", f"pid:{pid}"], check=False)
         if not _hypr_is_fullscreen(pid):
             subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "2", "-1"], check=False)
-    elif shutil.which("swaymsg"):
+    elif os.environ.get("WAYLAND_DISPLAY") and shutil.which("swaymsg"):
         subprocess.run(["swaymsg", f"[pid={pid}]", "focus"], check=False)
         if not _sway_is_fullscreen(pid):
             subprocess.run(["swaymsg", "fullscreen", "enable"], check=False)
+    else:
+        _x11_focus_fullscreen(pid)
 
 
 # Browser candidates, in preference order. Each entry: (binaries, argv-builder, env).

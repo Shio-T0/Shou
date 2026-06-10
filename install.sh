@@ -269,6 +269,18 @@ elif [[ -n "$PM" ]] && ask_yes "Install $(pkg_name libnotify) for desktop notifi
   pm_install "$(pkg_name libnotify)" || warn "Couldn't install — notifications will be skipped."
 fi
 
+# X11 kiosk raise/fullscreen helper (optional). On Wayland, Shou drives the kiosk via
+# hyprctl/swaymsg; on X11 (bspwm, i3, openbox, …) it needs wmctrl or xdotool to bring the
+# kiosk back to front and keep it fullscreen when you press Open. The browser still opens
+# fullscreen with --kiosk without it — this just makes refocus work.
+if [[ "${XDG_SESSION_TYPE:-}" != "wayland" && -z "${WAYLAND_DISPLAY:-}" && -n "${DISPLAY:-}" ]]; then
+  if command -v wmctrl >/dev/null 2>&1 || command -v xdotool >/dev/null 2>&1; then
+    ok "X11 kiosk control available (wmctrl/xdotool)."
+  elif [[ -n "$PM" ]] && ask_yes "X11 session detected — install wmctrl so Shou can raise + fullscreen the kiosk? (optional)"; then
+    pm_install wmctrl || warn "Couldn't install wmctrl — the kiosk still opens fullscreen, just won't auto-refocus."
+  fi
+fi
+
 # --------------------------------------------------------------------------- #
 step "Installing the Python environment (uv)"
 # --------------------------------------------------------------------------- #

@@ -22,7 +22,7 @@ right where you left off.
 - **Linux** with `pacman` / `apt` / `dnf` / `zypper` / `xbps` / `apk` (no match? you install the handful of deps by hand).
 - A **public** AniList account — so Shou can read your lists without logging in.
 - Phone + PC **on the same network**.
-- Auto-installed if missing: `mpv`, a browser, `curl`, `uv`. Optional extras: `ani-cli` (a second source), `libnotify` (notifications), `avahi` + `nss-mdns` (reach the PC as `<hostname>.local`).
+- Auto-installed if missing: `mpv`, a browser, `curl`, `uv`. Optional extras: `ani-cli` (a second source), `libnotify` (notifications), `avahi` + `nss-mdns` (reach the PC as `<hostname>.local`), and on **X11** `wmctrl` (so Shou can raise + re-fullscreen the kiosk — Wayland's Hyprland/Sway are driven directly).
 
 ## Install
 
