@@ -1239,18 +1239,28 @@ def focus_kiosk(pid: int) -> None:
 def _focus_kiosk_when_ready(pid: int) -> None:
     """A freshly-launched browser hasn't mapped its window yet, so a one-shot focus would
     miss it — bspwm in particular maps the kiosk floating until we flip its node state.
-    Poll for the real window (skipping the early helper windows) and fullscreen it once it
-    appears. X11 only; Wayland honors the browser's own --kiosk fullscreen at map time."""
+    Worse, the browser re-asserts its own geometry just *after* mapping, which knocks the
+    node back to floating after a single fullscreen call (so the first Open lands in a
+    corner and only a second Open sticks). So we poll for the real window (skipping the
+    early helper windows) and keep re-applying fullscreen until it stays put across a
+    couple of checks. X11 only; Wayland honors the browser's own --kiosk at map time."""
     if os.environ.get("WAYLAND_DISPLAY"):
         return
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 8
+    stable = 0
     while time.monotonic() < deadline:
         if kiosk_pid() != pid:          # browser exited or was replaced — stop
             return
-        if _x11_window_id(pid):         # the real (NORMAL) window is up
-            focus_kiosk(pid)
-            return
-        time.sleep(0.4)
+        wid = _x11_window_id(pid)        # the real (NORMAL) window, once it's up
+        if wid:
+            if shutil.which("bspc") and _bspwm_is_fullscreen(wid):
+                stable += 1
+                if stable >= 2:          # fullscreen held across two checks — done
+                    return
+            else:
+                focus_kiosk(pid)
+                stable = 0
+        time.sleep(0.3)
 
 
 # Browser candidates, in preference order. Each entry: (binaries, argv-builder, env).
