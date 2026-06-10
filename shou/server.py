@@ -1132,14 +1132,64 @@ def _sway_is_fullscreen(pid: int) -> bool:
     return False
 
 
+def _x11_window_id(pid: int) -> str | None:
+    """Decimal id of the real top-level X11 window owned by `pid` (via xdotool), or None.
+
+    Browsers spawn tiny helper/utility windows (Firefox maps a 10x10 one early), so when
+    `xprop` is around we pick the one whose `_NET_WM_WINDOW_TYPE` is NORMAL and skip the
+    rest — returning None while only helpers exist, so a poll keeps waiting for the real
+    kiosk window. Without xprop we fall back to the last match."""
+    if not shutil.which("xdotool"):
+        return None
+    try:
+        out = subprocess.run(["xdotool", "search", "--pid", str(pid)],
+                             capture_output=True, text=True, timeout=3)
+        ids = out.stdout.split()
+    except Exception:  # noqa: BLE001
+        return None
+    if not ids:
+        return None
+    if not shutil.which("xprop"):
+        return ids[-1]
+    for wid in ids:
+        try:
+            t = subprocess.run(["xprop", "-id", wid, "_NET_WM_WINDOW_TYPE"],
+                               capture_output=True, text=True, timeout=2).stdout
+            if "_NET_WM_WINDOW_TYPE_NORMAL" in t:
+                return wid
+        except Exception:  # noqa: BLE001
+            pass
+    return None
+
+
+def _bspwm_is_fullscreen(wid: str) -> bool:
+    """True if bspwm already has node `wid` in its fullscreen state."""
+    try:
+        out = subprocess.run(["bspc", "query", "-T", "-n", wid],
+                             capture_output=True, text=True, timeout=3)
+        client = json.loads(out.stdout or "{}").get("client") or {}
+        return client.get("state") == "fullscreen"
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _x11_focus_fullscreen(pid: int) -> bool:
     """Raise + fullscreen the kiosk window on X11 — any EWMH window manager (bspwm, i3,
-    openbox, XFCE, KDE/X11, …). Uses wmctrl if present, else xdotool. Returns True if a
-    tool handled it, False if neither is installed.
+    openbox, XFCE, KDE/X11, …). Returns True if a tool handled it.
 
-    Unlike the Wayland toggles, EWMH lets us *add* the fullscreen state idempotently, so
-    this is safe to call even when the window is already fullscreen — no un-fullscreen
-    flip, so Back/Open never knocks the kiosk out of fullscreen."""
+    bspwm tracks fullscreen as its own *node state*, and a bare EWMH property change (all
+    `xdotool windowstate` does) doesn't flip it — only a real `_NET_WM_STATE` client
+    message would, which xdotool can't send. So when `bspc` is present we drive bspwm
+    natively; otherwise `wmctrl -b` (which DOES send the client message) is preferred over
+    the weaker xdotool fallback. Each path is idempotent — it never knocks the kiosk back
+    out of fullscreen, so Back/Open are safe to repeat."""
+    if shutil.which("bspc"):
+        wid = _x11_window_id(pid)
+        if wid:
+            if not _bspwm_is_fullscreen(wid):
+                subprocess.run(["bspc", "node", wid, "-t", "fullscreen"], check=False)
+            subprocess.run(["bspc", "node", wid, "-f"], check=False)  # focus/raise
+            return True
     if shutil.which("wmctrl"):
         try:
             out = subprocess.run(["wmctrl", "-lp"],
@@ -1155,19 +1205,11 @@ def _x11_focus_fullscreen(pid: int) -> bool:
                     return True
         except Exception:  # noqa: BLE001
             pass
-    if shutil.which("xdotool"):
-        try:
-            out = subprocess.run(["xdotool", "search", "--pid", str(pid)],
-                                 capture_output=True, text=True, timeout=3)
-            ids = out.stdout.split()
-            if ids:
-                wid = ids[-1]  # the last match is the top-level mapped window
-                subprocess.run(["xdotool", "windowactivate", "--sync", wid], check=False)
-                subprocess.run(["xdotool", "windowstate", "--add", "FULLSCREEN", wid],
-                               check=False)
-                return True
-        except Exception:  # noqa: BLE001
-            pass
+    wid = _x11_window_id(pid)
+    if wid:
+        subprocess.run(["xdotool", "windowactivate", "--sync", wid], check=False)
+        subprocess.run(["xdotool", "windowstate", "--add", "FULLSCREEN", wid], check=False)
+        return True
     return False
 
 
@@ -1192,6 +1234,23 @@ def focus_kiosk(pid: int) -> None:
             subprocess.run(["swaymsg", "fullscreen", "enable"], check=False)
     else:
         _x11_focus_fullscreen(pid)
+
+
+def _focus_kiosk_when_ready(pid: int) -> None:
+    """A freshly-launched browser hasn't mapped its window yet, so a one-shot focus would
+    miss it — bspwm in particular maps the kiosk floating until we flip its node state.
+    Poll for the real window (skipping the early helper windows) and fullscreen it once it
+    appears. X11 only; Wayland honors the browser's own --kiosk fullscreen at map time."""
+    if os.environ.get("WAYLAND_DISPLAY"):
+        return
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if kiosk_pid() != pid:          # browser exited or was replaced — stop
+            return
+        if _x11_window_id(pid):         # the real (NORMAL) window is up
+            focus_kiosk(pid)
+            return
+        time.sleep(0.4)
 
 
 # Browser candidates, in preference order. Each entry: (binaries, argv-builder, env).
@@ -1261,6 +1320,8 @@ def ensure_kiosk() -> None:
         start_new_session=True,
     )
     FF_PIDFILE.write_text(str(proc.pid))
+    # The window isn't mapped yet; fullscreen it once it appears (bspwm maps it floating).
+    threading.Thread(target=_focus_kiosk_when_ready, args=(proc.pid,), daemon=True).start()
 
 
 # --------------------------------------------------------------------------- #
