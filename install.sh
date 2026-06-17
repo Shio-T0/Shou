@@ -400,12 +400,22 @@ HYPR_TARGET=""
 for f in "$HOME/.config/hypr/hyprland/execs.conf" "$HOME/.config/hypr/hyprland.conf"; do
   [[ -f "$f" ]] && { HYPR_TARGET="$f"; break; }
 done
+BSPWMRC="$HOME/.config/bspwm/bspwmrc"
 if [[ -n "$HYPR_TARGET" ]]; then
   if grep -qF "$DAEMON" "$HYPR_TARGET"; then
     ok "Autostart already present in ${DIM}$HYPR_TARGET${RESET}"
   elif ask_yes "Add the daemon to ${DIM}$HYPR_TARGET${RESET} so it starts on login?"; then
     printf '\n# Shou server (auto-added by install.sh)\n%s\n' "$EXEC_LINE" >>"$HYPR_TARGET"
     ok "Added Hyprland autostart line."
+  fi
+elif [[ -f "$BSPWMRC" ]]; then
+  # bspwm runs bspwmrc (a shell script) at login; it does NOT process XDG autostart.
+  if grep -qF "shou_daemon.sh" "$BSPWMRC"; then
+    ok "Autostart already present in ${DIM}$BSPWMRC${RESET}"
+  elif ask_yes "Add the daemon to ${DIM}$BSPWMRC${RESET} so it starts on login?"; then
+    printf '\n# Shou server (auto-added by install.sh)\npgrep -f shou_daemon.sh >/dev/null || "%s" &\n' \
+      "$DAEMON" >>"$BSPWMRC"
+    ok "Added bspwm autostart line."
   fi
 else
   # XDG autostart — honored by GNOME, KDE, XFCE, Cinnamon, MATE, LXQt, …

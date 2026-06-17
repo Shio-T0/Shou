@@ -17,6 +17,20 @@ mkdir -p "$HOME/.config/shou"
 PORT=4100
 [ -f "$HOME/.config/shou/shou.conf" ] && source "$HOME/.config/shou/shou.conf"
 
+# Resolve uv. Launched from a login session (bspwm's bspwmrc, .xinitrc, an i3/openbox
+# autostart, …) PATH often doesn't yet include ~/.local/bin, so a bare `uv` fails with
+# "command not found" and the server never starts. Fall back to the usual install dirs.
+UV="$(command -v uv 2>/dev/null)"
+if [ -z "$UV" ]; then
+  for c in "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv" /usr/local/bin/uv /usr/bin/uv; do
+    [ -x "$c" ] && { UV="$c"; break; }
+  done
+fi
+if [ -z "$UV" ]; then
+  echo "[$(date)] uv not found on PATH or in the usual dirs — install uv, then re-login" >>"$LOG"
+  exit 1
+fi
+
 # Don't start a second daemon if the server is already answering.
 if curl -s -o /dev/null "http://127.0.0.1:${PORT}/"; then
   echo "[$(date)] Shou already running on :${PORT}; daemon exiting" >>"$LOG"
@@ -25,7 +39,7 @@ fi
 
 while true; do
   echo "[$(date)] starting Shou server" >>"$LOG"
-  uv run --project "$APPDIR" python "$APPDIR/server.py" >>"$LOG" 2>&1
+  "$UV" run --project "$APPDIR" python "$APPDIR/server.py" >>"$LOG" 2>&1
   echo "[$(date)] server exited (code $?), restarting in 2s" >>"$LOG"
   sleep 2
 done
