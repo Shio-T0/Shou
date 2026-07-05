@@ -381,10 +381,17 @@ def fetch_list(mode: str = "watching") -> list:
         raise RuntimeError("ANILIST_USER is not set in ~/.config/shou/shou.conf")
     status = LIST_STATUS.get(mode, "CURRENT")
 
+    # AniList now rejects unauthenticated GraphQL with a 403 ("API temporarily
+    # disabled") even for reading a PUBLIC list, so attach the token when we have
+    # one — same as every other call. Falls back to anonymous if none is set.
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    token = anilist_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     resp = requests.post(
         ANILIST_URL,
         json={"query": LIST_QUERY, "variables": {"name": user, "status": status}},
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers=headers,
         timeout=15,
     )
     resp.raise_for_status()
