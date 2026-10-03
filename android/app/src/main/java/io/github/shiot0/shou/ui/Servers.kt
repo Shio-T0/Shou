@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -65,6 +66,8 @@ fun ServersSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
     var adding by remember { mutableStateOf<NsdResult?>(null) }
     var addingBlank by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<Remote?>(null) }
+    // Names and addresses heal in the background (see LiveLink); show the latest.
+    LaunchedEffect(Unit) { vm.refreshRemotes() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -252,7 +255,6 @@ fun RemoteForm(initial: Remote?, found: NsdResult?, onSave: (Remote) -> Unit, on
     fun absorbLink(text: String): Boolean {
         val l = parsePhoneLink(text) ?: return false
         host = l.host; port = l.port; key = l.key
-        if (name.isBlank()) name = l.host.substringBefore(".local")
         return true
     }
     // Fill in from a link the moment one is pasted (several characters arriving at once);
@@ -276,7 +278,7 @@ fun RemoteForm(initial: Remote?, found: NsdResult?, onSave: (Remote) -> Unit, on
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RoundButton(Glyph.Back, "Cancel", onCancel, size = 44.dp, color = Color.Transparent, border = false)
                 Spacer(Modifier.width(6.dp))
-                Text(if (initial == null) "Add a PC" else "Edit ${initial.name}", style = Type.TitleSmall, color = Shu.Paper)
+                Text(if (initial == null) "Add a PC" else "Edit ${initial.name.ifBlank { "PC" }}", style = Type.TitleSmall, color = Shu.Paper)
             }
             Spacer(Modifier.height(18.dp))
             Text(
@@ -284,7 +286,7 @@ fun RemoteForm(initial: Remote?, found: NsdResult?, onSave: (Remote) -> Unit, on
                 style = Type.Meta, color = Shu.Ash,
             )
             Spacer(Modifier.height(18.dp))
-            Field("Name", name, { name = it }, placeholder = "Living room")
+            Field("Name", name, { name = it }, placeholder = "Living room", help = "Leave empty to use the PC's own name")
             Field(
                 "Address", host, { if (!pasted(host, it)) host = it.trim() },
                 placeholder = "192.168.1.20 or my-pc.local", keyboard = KeyboardType.Uri,
@@ -312,7 +314,8 @@ fun RemoteForm(initial: Remote?, found: NsdResult?, onSave: (Remote) -> Unit, on
                         onSave(
                             Remote(
                                 id = initial?.id ?: RemoteViewModel.newId(),
-                                name = name.trim().ifBlank { host.substringBefore(".local") },
+                                // Left blank, it takes the PC's own name on first connect.
+                                name = name.trim(),
                                 key = key,
                                 host = host,
                                 hostname = initial?.hostname.orEmpty(),
