@@ -78,7 +78,7 @@ fun ShowDetail(s: KioskState, vm: RemoteViewModel) {
                 for (g in d.genres) {
                     Text(
                         g, style = Type.Small, color = Shu.Paper,
-                        modifier = Modifier.clip(CircleShape).border(1.dp, Shu.Rule, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.clip(CircleShape).background(Shu.Booth2).padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
             }
@@ -150,7 +150,7 @@ private fun Synopsis(text: String) {
 @Composable
 private fun Seasons(title: String, idx: Int, count: Int, vm: RemoteViewModel) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Shu.Booth).border(1.dp, Shu.Rule, RoundedCornerShape(20.dp)).padding(6.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(Shu.Booth).padding(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RoundButton(Glyph.ChevronLeft, "Earlier season", vm::left, size = 48.dp, enabled = idx > 0, border = false, color = Shu.Booth2)
@@ -174,9 +174,8 @@ private fun StatusGrid(d: Detail, statuses: List<Pair<String, String>>, enabled:
                     Pressable(
                         onClick = { haptics.confirm(); vm.setStatus(value) },
                         enabled = enabled && !on,
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (on) c.copy(alpha = 0.16f) else Shu.Booth,
-                        border = BorderStroke(if (on) 1.5.dp else 1.dp, if (on) c else Shu.Rule),
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (on) c.copy(alpha = 0.18f) else Shu.Booth,
                         modifier = Modifier.weight(1f).height(54.dp),
                     ) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -195,8 +194,7 @@ private fun StatusGrid(d: Detail, statuses: List<Pair<String, String>>, enabled:
                 onClick = { haptics.confirm(); vm.setStatus("REMOVE") },
                 enabled = enabled,
                 shape = RoundedCornerShape(16.dp),
-                color = Color.Transparent,
-                border = BorderStroke(1.dp, Shu.Rose.copy(alpha = 0.4f)),
+                color = Shu.Rose.copy(alpha = 0.10f),
                 modifier = Modifier.fillMaxWidth().height(50.dp),
             ) { Text("Remove from your lists", style = Type.Label, color = if (enabled) Shu.Rose else Shu.Ash) }
         }

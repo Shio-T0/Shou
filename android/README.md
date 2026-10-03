@@ -6,14 +6,16 @@ the PC stays the single source of truth, but everything on the phone is native:
 
 - **Follows the kiosk.** Browsing, playing, rating, search and show details each get their
   own layout, lit by the focused show's own artwork and colour.
-- **Tap a poster to jump to it**, then one big button plays the next episode. Continue
-  Watching sits right below.
+- **Your whole list as a poster grid.** Tap a poster and the PC jumps to it; the *Up next*
+  bar above the tabs plays it. Continue Watching sits on top as wide art cards (long-press
+  to remove one). While an episode plays, that bar becomes a mini player.
 - **Now playing:** drag the timeline to seek the PC, ±15 s / ±30 s, *Skip opening* (+1:25),
   previous/next episode, PC volume (the phone's volume buttons work too).
 - **Watch on phone:** the PC's episode continues in a native full-screen player (Media3);
   *Back to the PC* resumes it on the big screen from the same spot.
-- **Search with your own keyboard**, filter by genre/theme, open a show to read its synopsis,
-  flip between seasons and set its list status.
+- **Search with your own keyboard** (the Watching / Planned / Search tabs stay right above
+  it), filter by genre/theme, open a show to read its synopsis, flip between seasons and set
+  its list status.
 - **Sign in to AniList from the phone:** Settings → AniList opens AniList's own login; tap
   *Authorize* and the PC is signed in (and shows that account's lists), no terminal needed.
 - **Several PCs:** switch from the top bar; Shou re-finds each one on whatever network you're

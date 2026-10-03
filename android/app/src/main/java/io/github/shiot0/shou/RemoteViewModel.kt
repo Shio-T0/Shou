@@ -61,17 +61,23 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun select() = cmd("select")
     fun showList(mode: String) = cmd("list", mapOf("to" to mode))
 
-    /** Jump the carousel to item [i] by stepping the shorter way round. */
+    /** Jump the PC's carousel to item [i]: straight there via /focus, or — on a server
+     *  from before /focus — by stepping left/right the shorter way round. */
     fun focus(i: Int) {
         val s = state.value ?: return
         val n = s.items.size
         val from = _pendingFocus.value ?: s.cursor
         if (n == 0 || i == from) return
-        val fwd = (i - from + n) % n
-        val bwd = (from - i + n) % n
         _pendingFocus.value = i
-        repeat(min(fwd, bwd)) { cmd(if (fwd <= bwd) "right" else "left") }
         viewModelScope.launch {
+            val (code, _) = withContext(Dispatchers.IO) {
+                ServerClient.postForm(getApplication(), "focus", mapOf("i" to i.toString()))
+            }
+            if (code == 404) {
+                val fwd = (i - from + n) % n
+                val bwd = (from - i + n) % n
+                repeat(min(fwd, bwd)) { cmd(if (fwd <= bwd) "right" else "left") }
+            }
             delay(3000)
             if (_pendingFocus.value == i) _pendingFocus.value = null
         }

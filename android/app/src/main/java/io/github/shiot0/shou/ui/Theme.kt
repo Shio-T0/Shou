@@ -19,12 +19,13 @@ import io.github.shiot0.shou.R
  * (朱, shu) is held back for the one thing on screen you're most likely to press.
  */
 object Shu {
-    val Ink = Color(0xFF0A090C)        // the room
-    val Booth = Color(0xFF15131A)      // raised surfaces
-    val Booth2 = Color(0xFF1E1B23)     // pressed / nested surfaces
-    val Rule = Color(0xFF2B2830)       // hairlines
-    val Paper = Color(0xFFF1ECE3)      // primary text
-    val Ash = Color(0xFF9A938A)        // secondary text (6.4:1 on Ink)
+    val Ink = Color(0xFF100E12)        // the room: warm, not pitch black
+    val Booth = Color(0xFF1B181E)      // soft raised surfaces (cards, rows)
+    val Booth2 = Color(0xFF25222A)     // buttons and chips on the room or on cards
+    val Booth3 = Color(0xFF302C35)     // pressed / selected surfaces
+    val Rule = Color(0xFF2E2A32)       // the rare divider
+    val Paper = Color(0xFFF5EFE6)      // primary text
+    val Ash = Color(0xFFA79F95)        // secondary text (7:1 on Ink)
     val Vermilion = Color(0xFFFF4A32)  // the one primary action
     val VermilionDeep = Color(0xFFD63B27)
     val Jade = Color(0xFF5AD6A0)       // live / caught up / watching
@@ -51,6 +52,8 @@ object Type {
     val Title = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, lineHeight = 29.sp)
     val TitleSmall = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.Bold, fontSize = 19.sp, lineHeight = 24.sp)
     val Heading = TextStyle(fontFamily = Gothic, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 21.sp)
+    /** Section names ("Watching", "Continue watching") — editorial, like a magazine. */
+    val Section = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, lineHeight = 27.sp)
     val Body = TextStyle(fontFamily = Gothic, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 23.sp)
     val BodyStrong = TextStyle(fontFamily = Gothic, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 21.sp)
     val Label = TextStyle(fontFamily = Gothic, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 18.sp, letterSpacing = 0.01.em)

@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,17 +90,22 @@ private fun Home(vm: RemoteViewModel, onSettings: () -> Unit, onLeave: () -> Uni
     val remote by vm.remote.collectAsStateWithLifecycle()
     val pending by vm.pendingFocus.collectAsStateWithLifecycle()
     var showServers by rememberSaveable { mutableStateOf(false) }
+    // The full player opened from the mini player (while the PC shows the list).
+    var playerOpen by rememberSaveable { mutableStateOf(false) }
     val snack = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) { vm.notices.collect { snack.currentSnackbarDismiss(); snack.showSnackbar(it) } }
 
     val state = s
-    val mode = state?.let(::modeOf)
+    val kioskMode = state?.let(::modeOf)
+    if (state?.playing == null) playerOpen = false
+    val mode = if (playerOpen && kioskMode == Mode.BROWSE) Mode.PLAYER else kioskMode
     val (art, tint) = ambientFor(state, mode, pending)
 
     BackHandler {
-        when (mode) {
-            Mode.DETAIL, Mode.SEARCH -> vm.back()
+        when {
+            playerOpen -> playerOpen = false
+            mode == Mode.DETAIL || mode == Mode.SEARCH -> vm.back()
             else -> onLeave()
         }
     }
@@ -107,7 +113,7 @@ private fun Home(vm: RemoteViewModel, onSettings: () -> Unit, onLeave: () -> Uni
     Box(Modifier.fillMaxSize()) {
         Ambient(art, tint)
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-            TopBar(remote, link, onServers = { showServers = true }, onSettings = onSettings)
+            TopBar(remote, link, onServers = { showServers = true }, onSettings = onSettings, onOpen = vm::open)
             AnimatedVisibility(
                 visible = state != null && link == Link.OFFLINE,
                 enter = expandVertically() + fadeIn(),
@@ -131,8 +137,8 @@ private fun Home(vm: RemoteViewModel, onSettings: () -> Unit, onLeave: () -> Uni
                         label = "mode",
                     ) { m ->
                         when (m) {
-                            Mode.BROWSE -> Browse(state, pending, remote?.name.orEmpty(), vm)
-                            Mode.PLAYER -> Player(state, vm)
+                            Mode.BROWSE -> Browse(state, pending, remote?.name.orEmpty(), vm) { playerOpen = true }
+                            Mode.PLAYER -> Player(state, vm, onCollapse = if (playerOpen) ({ playerOpen = false }) else null)
                             Mode.RATING -> RatingPanel(state, vm)
                             Mode.SEARCH -> Search(state, vm)
                             Mode.DETAIL -> ShowDetail(state, vm)
@@ -141,13 +147,15 @@ private fun Home(vm: RemoteViewModel, onSettings: () -> Unit, onLeave: () -> Uni
                 }
             }
 
-            val tabs = state != null && (mode == Mode.BROWSE || mode == Mode.SEARCH) && !WindowInsets.isImeVisible
+            // The tabs stay put above the keyboard, so Watching/Planned are always one tap
+            // away — even mid-search.
+            val tabs = state != null && (mode == Mode.BROWSE || mode == Mode.SEARCH)
             if (tabs) ListTabs(state!!.list, onPick = vm::showList)
-            else if (!WindowInsets.isImeVisible) Spacer(Modifier.navigationBarsPadding())
+            else Spacer(Modifier.navigationBarsPadding())
         }
         SnackbarHost(
             snack,
-            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 76.dp),
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = 150.dp),
         ) { data ->
             Snackbar(data, containerColor = Shu.Booth2, contentColor = Shu.Paper, shape = RoundedCornerShape(16.dp))
         }
@@ -171,7 +179,7 @@ private fun ambientFor(s: KioskState?, mode: Mode?, pending: Int?): Pair<String,
 }
 
 @Composable
-private fun TopBar(remote: Remote?, link: Link, onServers: () -> Unit, onSettings: () -> Unit) {
+private fun TopBar(remote: Remote?, link: Link, onServers: () -> Unit, onSettings: () -> Unit, onOpen: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().height(60.dp).padding(start = 12.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -202,9 +210,15 @@ private fun TopBar(remote: Remote?, link: Link, onServers: () -> Unit, onSetting
             }
         }
         Spacer(Modifier.weight(1f))
+        if (link == Link.LIVE) {
+            RoundButton(
+                Glyph.Power, "Open Shou on the PC", onOpen,
+                size = 44.dp, iconSize = 21.dp, color = Color.Transparent, tint = Shu.Ash,
+            )
+        }
         RoundButton(
             Glyph.Tune, "Settings", onSettings,
-            size = 44.dp, iconSize = 22.dp, color = Color.Transparent, tint = Shu.Ash, border = false,
+            size = 44.dp, iconSize = 22.dp, color = Color.Transparent, tint = Shu.Ash,
         )
     }
 }
@@ -315,17 +329,16 @@ private fun Unreachable(vm: RemoteViewModel, remote: Remote?, onServers: () -> U
     }
 }
 
-/** Watching · Planned · Search, at the bottom where thumbs are. */
+/** Watching · Planned · Search, at the bottom where thumbs are (and above the keyboard). */
 @Composable
 private fun ListTabs(current: String, onPick: (String) -> Unit) {
     val haptics = rememberHaptics()
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Shu.Ink.copy(alpha = 0.92f))
+            .background(Shu.Ink.copy(alpha = 0.97f))
             .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         for ((key, label, icon) in listOf(
             Triple("watching", "Watching", Glyph.Play),
@@ -333,19 +346,22 @@ private fun ListTabs(current: String, onPick: (String) -> Unit) {
             Triple("search", "Search", Glyph.Search),
         )) {
             val on = current == key
-            val bg by animateColorAsState(if (on) Shu.Vermilion.copy(alpha = 0.14f) else Color.Transparent, tween(250), label = "tab-bg")
+            val pill by animateColorAsState(if (on) Shu.Vermilion.copy(alpha = 0.16f) else Color.Transparent, tween(250), label = "tab-pill")
             val fg by animateColorAsState(if (on) Shu.Vermilion else Shu.Ash, tween(250), label = "tab-fg")
-            Pressable(
-                onClick = { if (!on) { haptics.tick(); onPick(key) } },
-                shape = RoundedCornerShape(16.dp),
-                color = bg,
-                modifier = Modifier.weight(1f).height(52.dp),
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable { if (!on) { haptics.tick(); onPick(key) } }
+                    .padding(vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(icon, null, Modifier.size(18.dp), tint = fg)
-                    Spacer(Modifier.width(7.dp))
-                    Text(label, style = Type.Label, color = if (on) Shu.Paper else Shu.Ash)
-                }
+                Box(
+                    Modifier.size(width = 60.dp, height = 32.dp).clip(CircleShape).background(pill),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(icon, null, Modifier.size(20.dp), tint = fg) }
+                Spacer(Modifier.height(4.dp))
+                Text(label, style = Type.Small.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = if (on) Shu.Paper else Shu.Ash)
             }
         }
     }

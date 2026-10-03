@@ -1,335 +1,478 @@
 package io.github.shiot0.shou.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import io.github.shiot0.shou.Card
 import io.github.shiot0.shou.KioskState
+import io.github.shiot0.shou.Playing
 import io.github.shiot0.shou.RemoteViewModel
 import io.github.shiot0.shou.ResumeEntry
 import io.github.shiot0.shou.SignInActivity
+import kotlinx.coroutines.launch
 
 /**
- * Browsing a list: the show the PC is focused on, every other show as a poster you can
- * tap to jump to, what you left half-watched, and a thumb-height dock to drive it all.
+ * Your list, as a wall of posters you browse with your thumb. Tapping one moves the
+ * PC to it; the bar at the bottom always says what Play will do (or what's playing).
  */
 @Composable
-fun Browse(s: KioskState, pending: Int?, pcName: String, vm: RemoteViewModel) {
+fun Browse(s: KioskState, pending: Int?, pcName: String, vm: RemoteViewModel, onExpandPlayer: () -> Unit) {
     val focusedIdx = (pending ?: s.cursor).coerceIn(0, (s.items.size - 1).coerceAtLeast(0))
-    val item = s.items.getOrNull(focusedIdx)
-    val onGrid = s.view == "grid" && item != null
+    val focused = s.items.getOrNull(focusedIdx)
+    val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+    val headerCount = (if (s.history.isNotEmpty()) 1 else 0) + (if (s.view == "error" && s.items.isNotEmpty()) 1 else 0) + 1
 
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            Spacer(Modifier.height(10.dp))
+        Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                s.view == "sequel" && s.sequel != null && item != null -> SequelFeature(s, item)
-                onGrid -> Feature(item!!)
-                else -> StatusFeature(s, pcName)
-            }
-            if (s.items.size > 1 && (onGrid || s.view == "sequel")) {
-                PosterRail(s, focusedIdx, onTap = { i ->
-                    if (i == focusedIdx && pending == null) vm.select() else vm.focus(i)
-                })
-            }
-            if (s.history.isNotEmpty()) ContinueRail(s.history, vm)
-            Spacer(Modifier.height(20.dp))
-        }
-        Dock(s, item, vm)
-    }
-}
-
-// --- The focused show ------------------------------------------------------------- //
-
-/** Shrink long titles so the feature block keeps one height and nothing below it jumps. */
-private fun titleStyle(title: String) = when {
-    title.length <= 18 -> Type.Display
-    title.length <= 40 -> Type.Title
-    else -> Type.TitleSmall
-}
-
-@Composable
-private fun Feature(item: Card) {
-    Row(Modifier.fillMaxWidth().height(174.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.Bottom) {
-        Cover(
-            item.cover, item.color,
-            Modifier.size(width = 122.dp, height = 174.dp).shadow(22.dp, RoundedCornerShape(12.dp), ambientColor = showColor(item.color), spotColor = showColor(item.color)),
-            shape = RoundedCornerShape(12.dp),
-        )
-        Spacer(Modifier.width(18.dp))
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Bottom) {
-            Text(
-                item.title,
-                style = titleStyle(item.title),
-                color = Shu.Paper,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(12.dp))
-            val (headline, detail) = episodeCopy(item)
-            Text(headline, style = Type.BodyStrong, color = if (item.caughtUp) Shu.Jade else Shu.Paper)
-            Spacer(Modifier.height(3.dp))
-            Text(detail, style = Type.Meta, color = Shu.Ash)
-            Spacer(Modifier.height(12.dp))
-            ProgressLine(item.fraction, Modifier.fillMaxWidth(), color = if (item.caughtUp) Shu.Jade else Shu.Vermilion)
-        }
-    }
-}
-
-/** "Episode 3 is next" + "2 of 13 watched", phrased for airing and finished shows. */
-private fun episodeCopy(c: Card): Pair<String, String> {
-    val next = c.progress + 1
-    val watched = when {
-        c.total != null -> "${c.progress} of ${c.total} watched"
-        c.available != null -> "${c.progress} watched, ${c.available} aired so far"
-        else -> "${c.progress} watched"
-    }
-    return when {
-        c.caughtUp && c.total != null && c.progress >= c.total -> "You've seen it all" to watched
-        c.caughtUp -> "You're caught up" to "Episode $next hasn't aired yet"
-        c.progress == 0 -> "Starts at episode 1" to watched
-        else -> "Episode $next is next" to watched
-    }
-}
-
-@Composable
-private fun SequelFeature(s: KioskState, item: Card) {
-    val sq = s.sequel!!
-    Row(Modifier.fillMaxWidth().height(174.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.Bottom) {
-        Cover(item.cover, item.color, Modifier.size(width = 122.dp, height = 174.dp), RoundedCornerShape(12.dp))
-        Spacer(Modifier.width(18.dp))
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Bottom) {
-            Text("Finished ${sq.finished}", style = Type.Meta, color = Shu.Jade, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(8.dp))
-            Text(sq.sequelTitle, style = titleStyle(sq.sequelTitle), color = Shu.Paper, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(8.dp))
-            Text("The story continues in this sequel.", style = Type.Meta, color = Shu.Ash)
-        }
-    }
-}
-
-/** Closed kiosk, loading, empty list or an error — said plainly, with the way forward. */
-@Composable
-private fun StatusFeature(s: KioskState, pcName: String) {
-    val (title, body) = when {
-        s.kioskClosed -> "Shou is closed" to "Open it to put your list on ${pcName.ifBlank { "the PC" }}'s screen."
-        s.view == "loading" -> "Loading" to s.message.ifBlank { "Fetching your list from AniList…" }
-        s.view == "empty" -> "Nothing here yet" to (s.message.ifBlank { "This list is empty." } + " Find something new in Search.")
-        s.view == "error" && s.items.isEmpty() -> "Couldn't load your list" to s.message
-        s.view == "error" -> "That didn't play" to s.message.replace(" Press Back and try another.", "")
-        else -> "Shou" to s.message
-    }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp)) {
-        if (s.view == "loading" && !s.kioskClosed) {
-            CircularProgressIndicator(Modifier.size(22.dp), color = Shu.Vermilion, strokeWidth = 2.dp)
-            Spacer(Modifier.height(18.dp))
-        }
-        Text(title, style = Type.Display, color = Shu.Paper)
-        Spacer(Modifier.height(10.dp))
-        Text(body, style = Type.Body, color = Shu.Ash)
-    }
-}
-
-// --- Poster rail -------------------------------------------------------------------- //
-
-@Composable
-private fun PosterRail(s: KioskState, focusedIdx: Int, onTap: (Int) -> Unit) {
-    val listState = rememberLazyListState()
-    val density = LocalDensity.current
-    val haptics = rememberHaptics()
-
-    // Keep the PC's focus centred as it moves (from the phone or the kiosk keyboard).
-    LaunchedEffect(focusedIdx, s.items.size) {
-        val viewport = listState.layoutInfo.viewportSize.width
-        val item = with(density) { 82.dp.roundToPx() }
-        listState.animateScrollToItem(focusedIdx, -((viewport - item) / 2).coerceAtLeast(0))
-    }
-
-    Column(Modifier.padding(top = 26.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.Bottom) {
-            Text(if (s.list == "planned") "Planned" else "Watching", style = Type.Heading, color = Shu.Paper)
-            Spacer(Modifier.weight(1f))
-            Text("${focusedIdx + 1} of ${s.items.size}", style = Type.Time.copy(fontSize = 13.sp), color = Shu.Ash)
-        }
-        LazyRow(
-            state = listState,
-            contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(top = 12.dp),
-        ) {
-            itemsIndexed(s.items, key = { _, c -> c.id }) { i, c ->
-                val on = i == focusedIdx
-                val scale by animateFloatAsState(if (on) 1f else 0.92f, tween(220), label = "poster-scale")
-                val dim by animateFloatAsState(if (on) 1f else 0.62f, tween(220), label = "poster-dim")
-                Column(
-                    Modifier
-                        .width(82.dp)
-                        .clickable(remember { MutableInteractionSource() }, null) { haptics.tick(); onTap(i) },
-                ) {
-                    Box(Modifier.scale(scale)) {
-                        Cover(
-                            c.cover, c.color,
-                            Modifier
-                                .size(width = 82.dp, height = 117.dp)
-                                .alpha(dim)
-                                .then(if (on) Modifier.border(2.dp, Shu.Vermilion, RoundedCornerShape(10.dp)) else Modifier),
-                        )
-                        if (on) {
-                            Box(
-                                Modifier.align(Alignment.Center).size(34.dp).clip(CircleShape)
-                                    .background(Shu.Ink.copy(alpha = 0.62f)),
-                                contentAlignment = Alignment.Center,
-                            ) { Icon(Glyph.Play, "Play", Modifier.size(18.dp), tint = Color.White) }
+                s.kioskClosed -> Closed(s, pcName, vm)
+                s.items.isEmpty() && s.view == "loading" -> Skeleton(s)
+                s.items.isEmpty() && s.view == "empty" -> Message(
+                    if (s.list == "planned") "Nothing planned yet" else "Nothing to watch yet",
+                    "Find something in Search and add it to your lists.",
+                    "Search AniList",
+                ) { vm.showList("search") }
+                s.items.isEmpty() && s.view == "error" -> ListError(s, vm)
+                else -> {
+                    // Follow the PC when its focus moves on its own (kiosk keyboard), but
+                    // never yank the grid while you're steering from here.
+                    LaunchedEffect(s.cursor) {
+                        if (pending != null) return@LaunchedEffect
+                        val visible = gridState.layoutInfo.visibleItemsInfo.map { it.index }
+                        val target = headerCount + s.cursor
+                        if (visible.isNotEmpty() && target !in visible) gridState.animateScrollToItem(target)
+                    }
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Adaptive(minSize = 104.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        if (s.history.isNotEmpty()) fullWidth { ContinueWatching(s.history, vm) }
+                        if (s.view == "error" && s.items.isNotEmpty()) fullWidth {
+                            Notice("That didn't play", s.message.replace(" Press Back and try another.", ""), "Back to the list", vm::back)
+                        }
+                        fullWidth {
+                            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
+                                Text(if (s.list == "planned") "Planned" else "Watching", style = Type.Section, color = Shu.Paper)
+                                Spacer(Modifier.weight(1f))
+                                Text(
+                                    if (s.items.size == 1) "1 show" else "${s.items.size} shows",
+                                    style = Type.Meta, color = Shu.Ash, modifier = Modifier.padding(bottom = 3.dp),
+                                )
+                            }
+                        }
+                        itemsIndexed(s.items, key = { _, c -> c.id }) { i, c ->
+                            Poster(c, on = i == focusedIdx) {
+                                if (i == focusedIdx && pending == null && s.view == "grid") vm.select() else vm.focus(i)
+                            }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    ProgressLine(
-                        c.fraction, Modifier.fillMaxWidth().alpha(dim),
-                        color = if (c.caughtUp) Shu.Jade else Shu.Vermilion, height = 2.5.dp,
+                    // A soft edge where the grid slides under the bar.
+                    Box(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(28.dp)
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Shu.Ink))),
                     )
+                }
+            }
+        }
+
+        // One bar, one job: what Play will do — or what's playing right now.
+        val p = s.playing
+        AnimatedContent(
+            targetState = when {
+                p != null && p.live -> "playing"
+                s.view == "sequel" && s.sequel != null && focused != null -> "sequel"
+                s.view == "grid" && focused != null -> "next"
+                else -> "none"
+            },
+            transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
+            label = "bar",
+        ) { bar ->
+            when (bar) {
+                "playing" -> s.playing?.let { MiniPlayer(it, vm, onExpandPlayer) }
+                "sequel" -> focused?.let { SequelBar(s, it, vm) }
+                "next" -> focused?.let {
+                    UpNext(it, vm) { scope.launch { gridState.animateScrollToItem(headerCount + focusedIdx) } }
+                }
+                else -> Spacer(Modifier.height(0.dp))
+            }
+        }
+    }
+}
+
+private fun LazyGridScope.fullWidth(content: @Composable () -> Unit) =
+    item(span = { GridItemSpan(maxLineSpan) }) { content() }
+
+// --- Posters --------------------------------------------------------------------- //
+
+@Composable
+private fun Poster(c: Card, on: Boolean, onTap: () -> Unit) {
+    val haptics = rememberHaptics()
+    val scale by animateFloatAsState(if (on) 1f else 0.97f, tween(200), label = "poster")
+    Column(
+        Modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { haptics.tick(); onTap() },
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(16.dp))
+                .then(if (on) Modifier.border(2.5.dp, Shu.Vermilion, RoundedCornerShape(16.dp)) else Modifier),
+        ) {
+            Cover(c.cover, c.color, Modifier.fillMaxSize(), RoundedCornerShape(16.dp))
+            Box(
+                Modifier.fillMaxWidth().height(64.dp).align(Alignment.BottomCenter)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)))),
+            )
+            Text(
+                when {
+                    c.caughtUp -> "Caught up"
+                    c.progress == 0 -> "New"
+                    else -> "Ep ${c.progress + 1}"
+                },
+                style = Type.Small.copy(fontWeight = FontWeight.Bold),
+                color = if (c.caughtUp) Shu.Jade else Color.White,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 9.dp, bottom = 11.dp),
+            )
+            ProgressLine(
+                c.fraction,
+                Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(horizontal = 9.dp, vertical = 6.dp),
+                color = if (c.caughtUp) Shu.Jade else Shu.Vermilion,
+                track = Color.White.copy(alpha = 0.22f),
+                height = 2.5.dp,
+            )
+            if (on) {
+                Box(
+                    Modifier.align(Alignment.Center).size(42.dp).clip(CircleShape).background(Shu.Ink.copy(alpha = 0.55f)),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Glyph.Play, "Play", Modifier.size(20.dp), tint = Color.White) }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            c.title, style = Type.Label.copy(fontSize = 13.5.sp, lineHeight = 17.sp),
+            color = if (on) Shu.Paper else Shu.Paper.copy(alpha = 0.82f),
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+    }
+}
+
+// --- Continue watching ------------------------------------------------------------ //
+
+@Composable
+private fun ContinueWatching(history: List<ResumeEntry>, vm: RemoteViewModel) {
+    Column(Modifier.padding(top = 6.dp)) {
+        Text("Continue watching", style = Type.Section, color = Shu.Paper)
+        Spacer(Modifier.height(12.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            // Bleed to the screen edges while the first card lines up with the grid.
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            modifier = Modifier.fillMaxWidth().bleed(16.dp),
+        ) {
+            items(history, key = { "${it.mediaId}:${it.episode}" }) { e -> ResumeCard(e, vm) }
+        }
+        Spacer(Modifier.height(6.dp))
+    }
+}
+
+/** Widen a child past its parent's side padding so a rail can scroll edge to edge. */
+private fun Modifier.bleed(side: androidx.compose.ui.unit.Dp): Modifier = layout { measurable, constraints ->
+    val extra = (side * 2).roundToPx()
+    val placeable = measurable.measure(
+        constraints.copy(minWidth = constraints.maxWidth + extra, maxWidth = constraints.maxWidth + extra),
+    )
+    layout(constraints.maxWidth, placeable.height) { placeable.place(-extra / 2, 0) }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ResumeCard(e: ResumeEntry, vm: RemoteViewModel) {
+    val haptics = rememberHaptics()
+    val ctx = LocalContext.current
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier
+                .size(width = 264.dp, height = 148.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(showColor(e.color).copy(alpha = 0.6f))
+                .combinedClickable(
+                    onClick = { haptics.confirm(); vm.resume(e) },
+                    onLongClick = { haptics.tick(); menu = true },
+                    onClickLabel = "Resume",
+                    onLongClickLabel = "More",
+                ),
+        ) {
+            val art = e.banner.ifBlank { e.cover }
+            if (art.isNotBlank()) {
+                AsyncImage(
+                    model = remember(art) { ImageRequest.Builder(ctx).data(art).crossfade(260).build() },
+                    contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.25f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f))))
+            // Play sits in the corner, off the characters' faces.
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(12.dp).size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Glyph.Play, null, Modifier.size(18.dp), tint = Color.White) }
+            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(14.dp)) {
+                Text(e.title, style = Type.BodyStrong, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Episode ${e.episode}" + if (e.duration > 0) ", ${clock(e.duration - e.position)} left" else "",
+                    style = Type.Small, color = Color.White.copy(alpha = 0.78f),
+                )
+                Spacer(Modifier.height(8.dp))
+                ProgressLine(e.fraction, Modifier.fillMaxWidth(), track = Color.White.copy(alpha = 0.25f), height = 3.dp)
+            }
+        }
+        DropdownMenu(menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Shu.Booth2)) {
+            DropdownMenuItem(
+                text = { Text("Remove from Continue watching", style = Type.Label) },
+                onClick = { menu = false; vm.forget(e) },
+            )
+        }
+    }
+}
+
+// --- The bottom bar ----------------------------------------------------------------- //
+
+@Composable
+private fun BarShell(onClick: (() -> Unit)?, content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(Shu.Booth2)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(10.dp),
+    ) { content() }
+}
+
+/** What Play will do: the show the PC is on, and its next episode. */
+@Composable
+private fun UpNext(c: Card, vm: RemoteViewModel, onReveal: () -> Unit) {
+    BarShell(onReveal) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Cover(c.cover, c.color, Modifier.size(width = 44.dp, height = 62.dp), RoundedCornerShape(10.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(c.title, style = Type.BodyStrong, color = Shu.Paper, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    when {
+                        c.caughtUp -> "Caught up, ${c.progress} watched"
+                        c.total != null -> "Episode ${c.progress + 1} of ${c.total}"
+                        else -> "Episode ${c.progress + 1}"
+                    },
+                    style = Type.Meta, color = if (c.caughtUp) Shu.Jade else Shu.Ash,
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            PrimaryButton(if (c.caughtUp) "Continue" else "Play", vm::select, icon = Glyph.Play, height = 50.dp)
+        }
+    }
+}
+
+@Composable
+private fun SequelBar(s: KioskState, c: Card, vm: RemoteViewModel) {
+    val sq = s.sequel ?: return
+    BarShell(null) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Cover(c.cover, c.color, Modifier.size(width = 44.dp, height = 62.dp), RoundedCornerShape(10.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(sq.sequelTitle, style = Type.BodyStrong, color = Shu.Paper, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("You finished ${sq.finished}", style = Type.Meta, color = Shu.Jade, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(8.dp))
+            GhostButton("Not now", vm::back, height = 50.dp, color = Color.Transparent, tint = Shu.Ash)
+            PrimaryButton("Watch", vm::select, icon = Glyph.Play, height = 50.dp)
+        }
+    }
+}
+
+/** Something's playing on the PC: a pocket version of the player. Tap to open it. */
+@Composable
+fun MiniPlayer(p: Playing, vm: RemoteViewModel, onExpand: () -> Unit) {
+    val haptics = rememberHaptics()
+    BarShell(onExpand) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Cover(p.cover, p.color, Modifier.size(width = 44.dp, height = 62.dp), RoundedCornerShape(10.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(p.title, style = Type.BodyStrong, color = Shu.Paper, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Episode ${p.episode}, ${clock(p.duration - p.position)} left", style = Type.Meta, color = Shu.Ash)
+                }
+                Pressable(
+                    onClick = { haptics.confirm(); vm.pause() },
+                    shape = CircleShape, color = Shu.Vermilion,
+                    contentDescription = if (p.paused) "Play" else "Pause",
+                    modifier = Modifier.size(50.dp),
+                ) { Icon(if (p.paused) Glyph.Play else Glyph.Pause, null, Modifier.size(22.dp), tint = Color.White) }
+            }
+            Spacer(Modifier.height(8.dp))
+            ProgressLine((p.position / p.duration).toFloat(), Modifier.fillMaxWidth(), height = 2.5.dp)
+        }
+    }
+}
+
+// --- States without a list ----------------------------------------------------------- //
+
+@Composable
+private fun Closed(s: KioskState, pcName: String, vm: RemoteViewModel) {
+    val haptics = rememberHaptics()
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        if (s.history.isNotEmpty()) Box(Modifier.padding(horizontal = 16.dp)) { ContinueWatching(s.history, vm) }
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.size(132.dp).clip(CircleShape).background(Shu.Vermilion.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+                Pressable(
+                    onClick = { haptics.confirm(); vm.open() },
+                    shape = CircleShape, color = Shu.Vermilion,
+                    contentDescription = "Open Shou on the PC",
+                    modifier = Modifier.size(96.dp),
+                ) { Icon(Glyph.Power, null, Modifier.size(38.dp), tint = Color.White) }
+            }
+            Spacer(Modifier.height(26.dp))
+            Text("Open Shou", style = Type.Title, color = Shu.Paper)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Puts your list on ${pcName.ifBlank { "the PC" }}'s screen and here.",
+                style = Type.Body, color = Shu.Ash, textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun Skeleton(s: KioskState) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Text(s.message.ifBlank { "Loading your list…" }, style = Type.Meta, color = Shu.Ash, modifier = Modifier.padding(vertical = 10.dp))
+        for (row in 0 until 3) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 18.dp)) {
+                repeat(3) {
+                    Column(Modifier.weight(1f)) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(16.dp)).background(Shu.Booth))
+                        Spacer(Modifier.height(8.dp))
+                        Box(Modifier.fillMaxWidth(0.8f).height(10.dp).clip(CircleShape).background(Shu.Booth))
+                    }
                 }
             }
         }
     }
 }
 
-// --- Continue watching ------------------------------------------------------------- //
-
 @Composable
-private fun ContinueRail(history: List<ResumeEntry>, vm: RemoteViewModel) {
-    Column(Modifier.padding(top = 26.dp)) {
-        Text("Continue watching", style = Type.Heading, color = Shu.Paper, modifier = Modifier.padding(horizontal = 20.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(top = 12.dp),
-        ) {
-            items(history, key = { "${it.mediaId}:${it.episode}" }) { e -> ResumeCard(e, vm) }
-        }
-    }
-}
-
-@Composable
-private fun ResumeCard(e: ResumeEntry, vm: RemoteViewModel) {
-    val haptics = rememberHaptics()
-    Pressable(
-        onClick = { haptics.confirm(); vm.resume(e) },
-        shape = RoundedCornerShape(18.dp),
-        color = Shu.Booth.copy(alpha = 0.92f),
-        border = BorderStroke(1.dp, Shu.Rule),
-        modifier = Modifier.width(250.dp).height(92.dp),
-        contentDescription = "Resume ${e.title}, episode ${e.episode}",
-    ) {
-        Row(Modifier.fillMaxSize().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box {
-                Cover(e.cover, e.color, Modifier.size(width = 50.dp, height = 72.dp), RoundedCornerShape(8.dp))
-                Box(
-                    Modifier.align(Alignment.Center).size(26.dp).clip(CircleShape).background(Shu.Ink.copy(alpha = 0.6f)),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Glyph.Play, null, Modifier.size(14.dp), tint = Color.White) }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(e.title, style = Type.Label, color = Shu.Paper, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                Text("Episode ${e.episode} at ${clock(e.position)}", style = Type.Time, color = Shu.Ash)
-                Spacer(Modifier.height(8.dp))
-                ProgressLine(e.fraction, Modifier.fillMaxWidth(), height = 2.5.dp)
-            }
-            Spacer(Modifier.width(2.dp))
-            Box(
-                Modifier.align(Alignment.Top).size(30.dp).clip(CircleShape)
-                    .clickable { haptics.tick(); vm.forget(e) },
-                contentAlignment = Alignment.Center,
-            ) { Icon(Glyph.Close, "Remove from Continue watching", Modifier.size(14.dp), tint = Shu.Ash) }
-        }
-    }
-}
-
-// --- The dock --------------------------------------------------------------------- //
-
-/** ‹  [ the one thing to do ]  › — plus Open/Back. Sits in the thumb zone. */
-@Composable
-private fun Dock(s: KioskState, item: Card?, vm: RemoteViewModel) {
+private fun ListError(s: KioskState, vm: RemoteViewModel) {
     val ctx = LocalContext.current
-    val canStep = s.view == "grid" && s.items.size > 1
-    data class Primary(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector?, val enabled: Boolean, val run: () -> Unit)
-
-    val primary = when {
-        s.kioskClosed -> Primary("Open Shou", Glyph.Power, true, vm::open)
-        s.view == "sequel" -> Primary("Watch the sequel", Glyph.Play, true, vm::select)
-        s.view == "grid" && item != null && !item.caughtUp ->
-            Primary("Play episode ${item.progress + 1}", Glyph.Play, true, vm::select)
-        s.view == "grid" && item != null -> Primary("Select", Glyph.Play, true, vm::select)
-        s.view == "loading" -> Primary("Loading…", null, false) {}
-        s.view == "empty" -> Primary("Search AniList", Glyph.Search, true) { vm.showList("search") }
-        s.view == "error" && s.items.isEmpty() && s.account?.listsElsewhere == true ->
-            Primary("Show ${s.account.name}'s lists", Glyph.Check, true, vm::useAccountLists)
-        s.view == "error" && s.items.isEmpty() && s.account?.signedIn == false ->
-            Primary("Sign in to AniList", null, true) { SignInActivity.start(ctx) }
-        s.view == "error" && s.items.isEmpty() -> Primary("Try again", null, true) { vm.showList(s.list) }
-        s.view == "error" -> Primary("Back to the list", Glyph.Undo, true, vm::back)
-        else -> Primary("Select", null, true, vm::select)
+    val a = s.account
+    when {
+        a?.listsElsewhere == true -> Message("Couldn't load your list", s.message, "Show ${a.name}'s lists", vm::useAccountLists)
+        a?.signedIn == false -> Message("Couldn't load your list", s.message, "Sign in to AniList") { SignInActivity.start(ctx) }
+        else -> Message("Couldn't load your list", s.message, "Try again") { vm.showList(s.list) }
     }
+}
 
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RoundButton(Glyph.ChevronLeft, "Previous show", vm::left, size = 64.dp, iconSize = 26.dp, enabled = canStep, color = Shu.Booth.copy(alpha = 0.9f))
-            Spacer(Modifier.width(10.dp))
-            PrimaryButton(primary.label, primary.run, Modifier.weight(1f), icon = primary.icon, enabled = primary.enabled, height = 64.dp)
-            Spacer(Modifier.width(10.dp))
-            RoundButton(Glyph.ChevronRight, "Next show", vm::right, size = 64.dp, iconSize = 26.dp, enabled = canStep, color = Shu.Booth.copy(alpha = 0.9f))
-        }
-        if (!s.kioskClosed) {
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GhostButton("Open on PC", vm::open, Modifier.weight(1f), icon = Glyph.Power, tint = Shu.Ash)
-                GhostButton("Back", vm::back, Modifier.weight(1f), icon = Glyph.Undo, tint = Shu.Ash)
-            }
-        }
+@Composable
+private fun Message(title: String, body: String, action: String, onAction: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(title, style = Type.Title, color = Shu.Paper, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(10.dp))
+        Text(body, style = Type.Body, color = Shu.Ash, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(24.dp))
+        PrimaryButton(action, onAction, Modifier.widthIn(min = 200.dp))
+    }
+}
+
+@Composable
+private fun Notice(title: String, body: String, action: String, onAction: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Shu.Vermilion.copy(alpha = 0.12f)).padding(16.dp),
+    ) {
+        Text(title, style = Type.BodyStrong, color = Shu.Paper)
+        Spacer(Modifier.height(4.dp))
+        Text(body, style = Type.Meta, color = Shu.Ash)
+        Spacer(Modifier.height(12.dp))
+        GhostButton(action, onAction, icon = Glyph.Undo, height = 42.dp)
     }
 }

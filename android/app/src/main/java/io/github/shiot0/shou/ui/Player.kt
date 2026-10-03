@@ -4,8 +4,8 @@ import android.os.SystemClock
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -28,15 +28,14 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.foundation.border
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -56,58 +55,66 @@ import kotlin.math.roundToInt
 /** An anime opening is about 1:30; this jumps you past it in one tap. */
 private const val SKIP_OPENING_SECONDS = 85
 
-/** Now playing on the PC: the episode's art, a scrubber you can drag, and the controls. */
+/**
+ * Now playing on the PC: big art, a timeline you can drag, and only the controls you
+ * reach for while watching — ordered by how often you'll want them.
+ * [onCollapse] is set when this was opened from the mini player.
+ */
 @Composable
-fun Player(s: KioskState, vm: RemoteViewModel) {
+fun Player(s: KioskState, vm: RemoteViewModel, onCollapse: (() -> Unit)? = null) {
     val p = s.playing ?: return
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Give the controls their room first; the artwork takes whatever height is left.
-        val coverH: Dp = (maxHeight - 480.dp).coerceIn(110.dp, 300.dp)
+        // The controls get their room first; the artwork takes whatever height is left.
+        val coverH: Dp = (maxHeight - 500.dp).coerceIn(120.dp, 330.dp)
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 22.dp),
+            Modifier.fillMaxSize().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.weight(0.5f))
+            if (onCollapse != null) {
+                Box(Modifier.fillMaxWidth()) {
+                    RoundButton(Glyph.ChevronDown, "Close the player", onCollapse, size = 44.dp, color = Color.Transparent, tint = Shu.Ash)
+                }
+            }
+            Spacer(Modifier.weight(0.6f))
             Cover(
                 p.cover, p.color,
                 Modifier
                     .height(coverH)
                     .aspectRatio(0.7f)
-                    .shadow(36.dp, RoundedCornerShape(14.dp), ambientColor = showColor(p.color), spotColor = showColor(p.color)),
-                shape = RoundedCornerShape(14.dp),
+                    .shadow(40.dp, RoundedCornerShape(20.dp), ambientColor = showColor(p.color), spotColor = showColor(p.color)),
+                shape = RoundedCornerShape(20.dp),
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(24.dp))
             Text(
-                p.title, style = Type.Title, color = Shu.Paper, textAlign = TextAlign.Center,
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                p.title, style = Type.Title.copy(fontSize = 26.sp, lineHeight = 31.sp), color = Shu.Paper,
+                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(6.dp))
             Text(
                 if (p.total != null) "Episode ${p.episode} of ${p.total}" else "Episode ${p.episode}",
-                style = Type.Meta, color = Shu.Ash,
+                style = Type.Body, color = Shu.Ash,
             )
-            Spacer(Modifier.height(18.dp))
-            if (p.live) {
-                Scrubber(p, onSeek = { target -> vm.seekBy((target - p.position).roundToInt()) })
-            } else {
-                Starting(s.message)
-            }
-            Spacer(Modifier.weight(0.5f))
+            Spacer(Modifier.height(20.dp))
+            if (p.live) Scrubber(p, onSeek = { target -> vm.seekBy((target - p.position).roundToInt()) })
+            else Starting(s.message)
+            Spacer(Modifier.weight(0.4f))
             Transport(p, vm)
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Jump("−30 s", Modifier.weight(1f)) { vm.seekBy(-30) }
-                Jump("Skip opening", Modifier.weight(1.5f), Glyph.SkipAhead) { vm.seekBy(SKIP_OPENING_SECONDS) }
-                Jump("+30 s", Modifier.weight(1f)) { vm.seekBy(30) }
-            }
-            Spacer(Modifier.height(12.dp))
-            Volume(vm)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(22.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GhostButton("Watch on phone", vm::throwToPhone, Modifier.weight(1.3f), icon = Glyph.Phone, tint = Shu.Vermilion, enabled = p.live)
-                GhostButton("Stop", vm::back, Modifier.weight(1f), icon = Glyph.Stop, tint = Shu.Ash)
+                GhostButton(
+                    "Skip opening", { vm.seekBy(SKIP_OPENING_SECONDS) }, Modifier.weight(1f),
+                    icon = Glyph.SkipAhead, height = 52.dp, enabled = p.live,
+                )
+                GhostButton(
+                    "Watch on phone", vm::throwToPhone, Modifier.weight(1f),
+                    icon = Glyph.Phone, height = 52.dp, enabled = p.live,
+                )
             }
             Spacer(Modifier.height(10.dp))
+            Volume(vm)
+            Spacer(Modifier.height(6.dp))
+            GhostButton("Stop watching", vm::back, icon = Glyph.Stop, tint = Shu.Ash, color = Color.Transparent, height = 46.dp)
+            Spacer(Modifier.height(4.dp))
         }
     }
 }
@@ -156,7 +163,7 @@ private fun Scrubber(p: Playing, onSeek: (Double) -> Unit) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(30.dp)
+                .height(32.dp)
                 .pointerInput(p.duration) {
                     detectTapGestures { o -> commit((o.x / size.width).coerceIn(0f, 1f)) }
                 }
@@ -171,12 +178,10 @@ private fun Scrubber(p: Playing, onSeek: (Double) -> Unit) {
             Canvas(Modifier.fillMaxSize()) {
                 val y = size.height / 2
                 val w = size.width
-                val stroke = 4.dp.toPx()
+                val stroke = (if (drag != null) 7 else 5).dp.toPx()
                 drawLine(Color.White.copy(alpha = 0.14f), Offset(0f, y), Offset(w, y), stroke, StrokeCap.Round)
                 drawLine(Shu.Vermilion, Offset(0f, y), Offset(w * shown, y), stroke, StrokeCap.Round)
-                val r = (if (drag != null) 10 else 7).dp.toPx()
-                drawCircle(Color.White, r, Offset(w * shown, y))
-                drawCircle(Shu.Vermilion, r - 2.5.dp.toPx(), Offset(w * shown, y))
+                drawCircle(Color.White, (if (drag != null) 11 else 8).dp.toPx(), Offset(w * shown, y))
             }
         }
         Row(Modifier.fillMaxWidth()) {
@@ -189,25 +194,25 @@ private fun Scrubber(p: Playing, onSeek: (Double) -> Unit) {
 
 @Composable
 private fun Transport(p: Playing, vm: RemoteViewModel) {
+    val haptics = rememberHaptics()
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RoundButton(Glyph.PrevEpisode, "Previous episode", vm::prevEpisode, size = 50.dp, iconSize = 22.dp, color = Color.Transparent, border = false, tint = Shu.Ash)
+        RoundButton(Glyph.PrevEpisode, "Previous episode", vm::prevEpisode, size = 48.dp, iconSize = 22.dp, color = Color.Transparent, tint = Shu.Ash)
         SeekButton(Glyph.Rewind, "Back 15 seconds") { vm.seekBy(-15) }
-        val haptics = rememberHaptics()
         Pressable(
             onClick = { haptics.confirm(); vm.pause() },
             shape = CircleShape,
             color = Shu.Vermilion,
             contentDescription = if (p.paused) "Play" else "Pause",
-            modifier = Modifier.size(80.dp),
+            modifier = Modifier.size(84.dp),
         ) {
-            Icon(if (p.paused) Glyph.Play else Glyph.Pause, null, Modifier.size(34.dp), tint = Color.White)
+            Icon(if (p.paused) Glyph.Play else Glyph.Pause, null, Modifier.size(36.dp), tint = Color.White)
         }
         SeekButton(Glyph.Forward, "Forward 15 seconds") { vm.seekBy(15) }
-        RoundButton(Glyph.NextEpisode, "Next episode", vm::nextEpisode, size = 50.dp, iconSize = 22.dp, color = Color.Transparent, border = false, tint = Shu.Ash)
+        RoundButton(Glyph.NextEpisode, "Next episode", vm::nextEpisode, size = 48.dp, iconSize = 22.dp, color = Color.Transparent, tint = Shu.Ash)
     }
 }
 
@@ -218,66 +223,49 @@ private fun SeekButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     Pressable(
         onClick = { haptics.tick(); onClick() },
         shape = CircleShape,
-        color = Shu.Booth.copy(alpha = 0.9f),
-        border = BorderStroke(1.dp, Shu.Rule),
+        color = Shu.Booth2,
         contentDescription = label,
-        modifier = Modifier.size(60.dp),
+        modifier = Modifier.size(62.dp),
     ) {
         Icon(icon, null, Modifier.size(34.dp), tint = Shu.Paper)
         Text("15", style = Type.Small.copy(fontSize = 10.sp), color = Shu.Paper, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
-@Composable
-private fun Jump(label: String, modifier: Modifier, icon: ImageVector? = null, onClick: () -> Unit) {
-    val haptics = rememberHaptics()
-    Pressable(
-        onClick = { haptics.tick(); onClick() },
-        shape = RoundedCornerShape(14.dp),
-        color = Shu.Booth.copy(alpha = 0.9f),
-        border = BorderStroke(1.dp, Shu.Rule),
-        modifier = modifier.height(44.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) {
-                Icon(icon, null, Modifier.size(16.dp), tint = Shu.Vermilion)
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(label, style = Type.Label.copy(fontSize = 13.sp, fontFeatureSettings = "tnum"), color = Shu.Paper, maxLines = 1)
-        }
-    }
-}
-
-/** The PC's volume, as one labelled rocker plus mute. The phone's own volume buttons
- *  do the same while the remote is open (see Settings). */
+/** The PC's volume as one soft rocker, mute in the middle. The phone's own volume
+ *  buttons do the same while the remote is open (see Settings). */
 @Composable
 private fun Volume(vm: RemoteViewModel) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier
-                .weight(1f)
-                .height(48.dp)
-                .clip(CircleShape)
-                .border(1.dp, Shu.Rule, CircleShape),
-            verticalAlignment = Alignment.CenterVertically,
+    val haptics = rememberHaptics()
+    Row(
+        Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(Shu.Booth2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        VolumeKey(Glyph.VolumeDown, "PC volume down", Modifier.weight(1f)) { vm.volume("down") }
+        Pressable(
+            onClick = { haptics.tick(); vm.volume("mute") },
+            shape = CircleShape, color = Color.Transparent,
+            contentDescription = "Mute the PC",
+            modifier = Modifier.weight(1.4f).height(52.dp),
         ) {
-            VolumeKey(Glyph.VolumeDown, "PC volume down") { vm.volume("down") }
-            Text("PC volume", style = Type.Meta, color = Shu.Ash, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-            VolumeKey(Glyph.VolumeUp, "PC volume up") { vm.volume("up") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Glyph.Mute, null, Modifier.size(18.dp), tint = Shu.Ash)
+                Spacer(Modifier.width(8.dp))
+                Text("Mute", style = Type.Label, color = Shu.Ash)
+            }
         }
-        Spacer(Modifier.width(10.dp))
-        RoundButton(Glyph.Mute, "Mute the PC", { vm.volume("mute") }, size = 48.dp, iconSize = 20.dp, color = Color.Transparent, tint = Shu.Ash)
+        VolumeKey(Glyph.VolumeUp, "PC volume up", Modifier.weight(1f)) { vm.volume("up") }
     }
 }
 
 @Composable
-private fun VolumeKey(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun VolumeKey(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
     val haptics = rememberHaptics()
     Pressable(
         onClick = { haptics.tick(); onClick() },
         shape = CircleShape,
         color = Color.Transparent,
         contentDescription = label,
-        modifier = Modifier.size(width = 64.dp, height = 48.dp),
-    ) { Icon(icon, null, Modifier.size(21.dp), tint = Shu.Paper) }
+        modifier = modifier.height(52.dp),
+    ) { Icon(icon, null, Modifier.size(22.dp), tint = Shu.Paper) }
 }

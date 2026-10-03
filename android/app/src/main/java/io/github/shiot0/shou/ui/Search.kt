@@ -114,8 +114,7 @@ private fun QueryField(server: String, vm: RemoteViewModel, modifier: Modifier) 
         modifier
             .height(52.dp)
             .clip(RoundedCornerShape(26.dp))
-            .background(Shu.Booth)
-            .border(1.dp, Shu.Rule, RoundedCornerShape(26.dp))
+            .background(Shu.Booth2)
             .padding(start = 16.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -179,7 +178,6 @@ private fun ActiveFilter(label: String, onRemove: () -> Unit) {
         onClick = { haptics.tick(); onRemove() },
         shape = CircleShape,
         color = Shu.Vermilion.copy(alpha = 0.14f),
-        border = BorderStroke(1.dp, Shu.Vermilion.copy(alpha = 0.4f)),
         contentDescription = "Remove $label filter",
         modifier = Modifier.height(34.dp),
     ) {
@@ -250,9 +248,10 @@ private fun ResultRow(r: SearchResult, focused: Boolean, onClick: () -> Unit) {
     val haptics = rememberHaptics()
     Pressable(
         onClick = { haptics.tick(); onClick() },
-        shape = RoundedCornerShape(18.dp),
-        color = if (focused) Shu.Booth2 else Shu.Booth.copy(alpha = 0.85f),
-        border = BorderStroke(if (focused) 1.5.dp else 1.dp, if (focused) Shu.Vermilion.copy(alpha = 0.7f) else Shu.Rule),
+        shape = RoundedCornerShape(22.dp),
+        color = if (focused) Shu.Booth3 else Shu.Booth,
+        // The PC's highlighted result keeps a soft vermilion ring, so you can see what Enter picks.
+        border = if (focused) BorderStroke(1.5.dp, Shu.Vermilion.copy(alpha = 0.55f)) else null,
         modifier = Modifier.fillMaxWidth().height(88.dp),
     ) {
         Row(Modifier.fillMaxSize().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -269,7 +268,7 @@ private fun ResultRow(r: SearchResult, focused: Boolean, onClick: () -> Unit) {
                 StatusPill(ListStatus.label[st] ?: st, statusColor(st))
             } else {
                 Box(
-                    Modifier.size(32.dp).clip(CircleShape).border(1.dp, Shu.Rule, CircleShape),
+                    Modifier.size(34.dp).clip(CircleShape).background(Shu.Booth2),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Glyph.Plus, "Not in your lists", Modifier.size(15.dp), tint = Shu.Ash) }
             }
@@ -321,7 +320,6 @@ private fun FilterChip(label: String, on: Boolean, onClick: () -> Unit) {
         onClick = { haptics.tick(); onClick() },
         shape = CircleShape,
         color = if (on) Shu.Vermilion else Shu.Booth2,
-        border = if (on) null else BorderStroke(1.dp, Shu.Rule),
         modifier = Modifier.height(38.dp),
     ) {
         Text(label, style = Type.Meta, color = if (on) Color.White else Shu.Paper, modifier = Modifier.padding(horizontal = 14.dp))

@@ -220,7 +220,7 @@ fun PrimaryButton(
     }
 }
 
-/** Secondary action: quiet, outlined. */
+/** Secondary action: a soft filled pill, quieter than the vermilion one. */
 @Composable
 fun GhostButton(
     text: String,
@@ -230,14 +230,14 @@ fun GhostButton(
     tint: Color = Shu.Paper,
     height: Dp = 48.dp,
     enabled: Boolean = true,
+    color: Color = Shu.Booth2,
 ) {
     val haptics = rememberHaptics()
     Pressable(
         onClick = { haptics.tick(); onClick() },
         enabled = enabled,
         shape = RoundedCornerShape(height / 2),
-        color = Color.Transparent,
-        border = BorderStroke(1.dp, Shu.Rule),
+        color = color,
         modifier = modifier.height(height),
     ) {
         Row(
@@ -264,9 +264,9 @@ fun RoundButton(
     modifier: Modifier = Modifier,
     size: Dp = 52.dp,
     iconSize: Dp = 24.dp,
-    color: Color = Shu.Booth,
+    color: Color = Shu.Booth2,
     tint: Color = Shu.Paper,
-    border: Boolean = true,
+    border: Boolean = false,
     enabled: Boolean = true,
     haptic: Boolean = true,
 ) {
@@ -299,9 +299,8 @@ fun StatusPill(label: String, color: Color, modifier: Modifier = Modifier) {
     Box(
         modifier
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.13f))
-            .border(1.dp, color.copy(alpha = 0.38f), CircleShape)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .background(color.copy(alpha = 0.16f))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
     ) {
         Text(label, style = Type.Small.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = color, maxLines = 1)
     }
@@ -314,8 +313,7 @@ fun Seal(modifier: Modifier = Modifier, size: Dp = 36.dp, lit: Boolean = true) {
         modifier
             .size(size)
             .clip(RoundedCornerShape(size * 0.3f))
-            .background(if (lit) Shu.Vermilion.copy(alpha = 0.14f) else Shu.Booth2)
-            .border(1.dp, if (lit) Shu.Vermilion.copy(alpha = 0.35f) else Shu.Rule, RoundedCornerShape(size * 0.3f)),
+            .background(if (lit) Shu.Vermilion.copy(alpha = 0.16f) else Shu.Booth2),
         contentAlignment = Alignment.Center,
     ) {
         Text("朱", style = TextStyle(fontFamily = Mincho, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, fontSize = (size.value * 0.52f).sp), color = Shu.Vermilion)

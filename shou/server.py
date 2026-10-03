@@ -2445,6 +2445,22 @@ def right():
     return jsonify(ok=True)
 
 
+@app.route("/focus", methods=["POST"])
+@require_auth
+def focus():
+    """Jump the carousel straight to item ?i= (the phone taps a poster in its grid)."""
+    try:
+        i = int(request.values.get("i", ""))
+    except ValueError:
+        return jsonify(ok=False, reason="bad index"), 400
+    with STATE_LOCK:
+        if STATE["view"] != "grid" or not 0 <= i < len(STATE["items"]):
+            return jsonify(ok=False, reason="not on the list"), 409
+        STATE["cursor"] = i
+    broadcast()
+    return jsonify(ok=True)
+
+
 def _move(delta: int) -> None:
     near_end = False
     with STATE_LOCK:

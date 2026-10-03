@@ -137,8 +137,7 @@ private fun RemoteRow(
     Pressable(
         onClick = onPick,
         shape = RoundedCornerShape(18.dp),
-        color = if (active) Shu.Booth2 else Shu.Ink.copy(alpha = 0.4f),
-        border = BorderStroke(1.dp, if (active) Shu.Vermilion.copy(alpha = 0.45f) else Shu.Rule),
+        color = if (active) Shu.Booth3 else Shu.Booth2,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -209,7 +208,6 @@ private fun Discover(vm: RemoteViewModel, primary: Boolean = false, onUse: (NsdR
                     onClick = { onUse(f) },
                     shape = RoundedCornerShape(16.dp),
                     color = Shu.Ink.copy(alpha = 0.4f),
-                    border = BorderStroke(1.dp, Shu.Rule),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
