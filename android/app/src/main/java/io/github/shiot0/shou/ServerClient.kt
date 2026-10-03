@@ -1,6 +1,8 @@
 package io.github.shiot0.shou
 
 import android.content.Context
+import okhttp3.OkHttpClient
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -11,10 +13,9 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
 
 /**
- * Tiny HTTP client for talking to the active Shou server from the background — the
- * media-session transport buttons, the widget, and the Quick Settings tile all route
- * through here, so they keep working when the WebView isn't in front. It speaks the
- * same token-gated control endpoints the web remote uses (POST /pause, /next, …).
+ * Tiny HTTP client for the active Shou server. Every control in the app routes through
+ * here (the remote screen, the media-session buttons, the widget, the Quick Settings
+ * tile), speaking the same token-gated endpoints the web remote uses (POST /pause, …).
  */
 object ServerClient {
 
@@ -47,11 +48,46 @@ object ServerClient {
         }
     }
 
-    private fun open(ctx: Context, url: String, method: String): HttpURLConnection? {
+    /** Probe a candidate address with the unauthenticated /whoami. Returns the server's
+     *  identity (name, host, ip, port) if a Shou server answers there, else null. */
+    fun whoami(ctx: Context, host: String, port: String): JSONObject? {
+        if (host.isBlank()) return null
+        val scheme = if (ShouStore.https(ctx)) "https" else "http"
+        return try {
+            open(ctx, "$scheme://$host:$port/whoami", "GET", timeoutMs = 2500)?.use { conn ->
+                if (conn.responseCode !in 200..299) return null
+                val o = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+                o.takeIf { it.optString("app") == "shou" }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** An OkHttp client that accepts a self-signed certificate, for the Socket.IO link
+     *  when the user opted in (Settings → Allow self-signed certificates). */
+    fun relaxedOkHttp(): OkHttpClient? = try {
+        val tm = TrustAll()
+        val sc = SSLContext.getInstance("TLS").apply { init(null, arrayOf(tm), java.security.SecureRandom()) }
+        OkHttpClient.Builder()
+            .sslSocketFactory(sc.socketFactory, tm)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+    } catch (e: Exception) {
+        null
+    }
+
+    private class TrustAll : X509TrustManager {
+        override fun checkClientTrusted(c: Array<out X509Certificate>?, a: String?) {}
+        override fun checkServerTrusted(c: Array<out X509Certificate>?, a: String?) {}
+        override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+    }
+
+    private fun open(ctx: Context, url: String, method: String, timeoutMs: Int = 4000): HttpURLConnection? {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = method
-        conn.connectTimeout = 4000
-        conn.readTimeout = 5000
+        conn.connectTimeout = timeoutMs
+        conn.readTimeout = timeoutMs + 1000
         conn.useCaches = false
         if (conn is HttpsURLConnection && ShouStore.allowBadCerts(ctx)) relaxTls(conn)
         if (method == "POST") {
@@ -61,15 +97,10 @@ object ServerClient {
         return conn
     }
 
-    /** Trust a self-signed cert only when the user opted in (Settings → Allow self-signed).
-     *  Mirrors the WebView's onReceivedSslError choice for these direct HTTP calls. */
+    /** Trust a self-signed cert only when the user opted in (Settings → Allow self-signed). */
     private fun relaxTls(conn: HttpsURLConnection) {
         try {
-            val trustAll = arrayOf<javax.net.ssl.TrustManager>(object : X509TrustManager {
-                override fun checkClientTrusted(c: Array<out X509Certificate>?, a: String?) {}
-                override fun checkServerTrusted(c: Array<out X509Certificate>?, a: String?) {}
-                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-            })
+            val trustAll = arrayOf<javax.net.ssl.TrustManager>(TrustAll())
             val sc = SSLContext.getInstance("TLS").apply { init(null, trustAll, java.security.SecureRandom()) }
             conn.sslSocketFactory = sc.socketFactory
             conn.hostnameVerifier = HostnameVerifier { _, _ -> true }

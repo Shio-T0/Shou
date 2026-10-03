@@ -18,7 +18,7 @@ import java.util.concurrent.Executors
 /**
  * Loads cover art for the media notification and the widget: a tiny async image fetcher
  * with an in-memory cache and helpers to center-crop + round it. Cover URLs come down
- * from the web remote with the live playback state.
+ * down with the live playback state.
  */
 object ArtLoader {
 

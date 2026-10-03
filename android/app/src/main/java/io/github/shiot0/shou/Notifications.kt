@@ -11,7 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 
 /**
  * System notifications and their channels. Two kinds beyond the media controls:
- * an episode finishing (pushed live from the web remote) and a Watching show getting a
+ * an episode finishing (seen live on the remote's connection) and a Watching show getting a
  * new episode (found by [AiringWorker] polling your own server). Both fit Shou's
  * local, account-free model — no cloud push, just your PC and your phone.
  */

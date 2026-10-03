@@ -9,7 +9,7 @@ import androidx.core.graphics.drawable.IconCompat
 /**
  * Per-server launcher shortcuts. Long-press the Shou icon and jump straight to
  * "Living Room" or "Bedroom" — each opens the app already pointed at that saved
- * server. Republished whenever the web remote syncs its set down to us.
+ * server. Republished whenever the saved set changes or the app connects.
  */
 object Shortcuts {
 

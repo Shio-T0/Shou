@@ -3,7 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- mDNS / NSD discovery of the Shou server on the LAN (Settings → Scan). -->
+    <!-- mDNS / NSD discovery of the Shou server on the LAN ("Find PCs on this network"). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Episode / airing notifications (runtime-requested on Android 13+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -25,6 +25,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -39,6 +40,15 @@
             android:name=".SettingsActivity"
             android:exported="true"
             android:label="@string/settings" />
+
+        <!-- "Watch on phone": the PC's episode in a native full-screen player. -->
+        <activity
+            android:name=".CastActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+            android:theme="@style/Theme.Shou.Player" />
 
         <!-- Lock-screen / headset media controls for what's playing on the PC. The
              MEDIA_BUTTON filter lets MediaButtonReceiver route transport keys here. -->

@@ -55,12 +55,44 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+    composeOptions {
+        // Compose compiler that matches Kotlin 1.9.24 (see the top-level build file).
+        kotlinCompilerExtensionVersion = "1.5.14"
+    }
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
 }
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.9.0")
+
+    // The remote UI is native Jetpack Compose.
+    val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
+    implementation(composeBom)
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
+    // Cover art + banners straight from AniList's CDN.
+    implementation("io.coil-kt:coil-compose:2.6.0")
+    // Live kiosk state over the server's Socket.IO channel (Android ships org.json).
+    implementation("io.socket:socket.io-client:2.1.1") {
+        exclude(group = "org.json", module = "json")
+    }
+    // "Throw to phone": a real native player for the PC's episode (HLS or a plain file).
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
     // Encrypted storage for the saved server keys / token.
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     // MediaSessionCompat + MediaStyle notification for lock-screen controls.

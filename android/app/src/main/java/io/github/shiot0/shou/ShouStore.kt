@@ -7,7 +7,7 @@ import androidx.security.crypto.MasterKey
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** One saved Shou server, mirrored from the web remote's localStorage set. */
+/** One saved Shou server: its key, plus addresses the app re-finds it by on any network. */
 data class Remote(
     val id: String,
     val name: String,
@@ -38,7 +38,7 @@ data class Remote(
     }
 }
 
-/** A compact mirror of what the kiosk is doing, pushed from the web remote each tick. */
+/** A compact mirror of what the kiosk is doing, refreshed from the live state each tick. */
 data class Playback(
     val active: Boolean,   // something is playing (mpv is up)
     val playing: Boolean,  // true = playing, false = paused
@@ -107,6 +107,13 @@ object ShouStore {
     fun https(ctx: Context): Boolean = plain(ctx).getBoolean("https", false)
     fun allowBadCerts(ctx: Context): Boolean = plain(ctx).getBoolean("allowBadCerts", false)
 
+    /** Hardware volume rocker drives the PC's player instead of the phone (default on). */
+    fun volumeKeys(ctx: Context): Boolean = plain(ctx).getBoolean("volumeKeys", true)
+
+    fun setOption(ctx: Context, key: String, on: Boolean) {
+        plain(ctx).edit().putBoolean(key, on).apply()
+    }
+
     fun token(ctx: Context): String {
         // Read the encrypted token, migrating a legacy plaintext token on first run.
         val s = secure(ctx)
@@ -133,26 +140,18 @@ object ShouStore {
         secure(ctx).edit().putString("token", token.trim()).apply()
     }
 
-    // --- Saved remotes (synced from the web remote's localStorage set) ------- //
+    // --- Saved remotes ------------------------------------------------------ //
+    // The app owns this list. (Older WebView builds kept it in the page's localStorage
+    // and mirrored it here on every load, so existing installs already have it.)
 
-    fun setRemotes(ctx: Context, json: String) {
-        val cleaned = try {
-            val arr = JSONArray(json)
-            val out = JSONArray()
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                if (o.optString("key").isBlank()) continue
-                out.put(Remote.fromJson(o).toJson())
-            }
-            out.toString()
-        } catch (e: Exception) {
-            return
-        }
-        secure(ctx).edit().putString("remotes", cleaned).apply()
+    fun saveRemotes(ctx: Context, list: List<Remote>) {
+        val out = JSONArray()
+        list.filter { it.key.isNotBlank() }.forEach { out.put(it.toJson()) }
+        secure(ctx).edit().putString("remotes", out.toString()).apply()
     }
 
     fun remotes(ctx: Context): List<Remote> {
-        val raw = secure(ctx).getString("remotes", null) ?: return emptyList()
+        val raw = secure(ctx).getString("remotes", null) ?: return legacyRemote(ctx)
         return try {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let(Remote::fromJson) }
@@ -161,12 +160,26 @@ object ShouStore {
         }
     }
 
+    /** A server typed into the old single-server Settings screen, as a saved remote. */
+    private fun legacyRemote(ctx: Context): List<Remote> {
+        val host = host(ctx)
+        val token = token(ctx)
+        if (host.isBlank() || token.isBlank()) return emptyList()
+        return listOf(Remote("r-legacy", host, token, host, "", port(ctx), ""))
+    }
+
     fun remoteByToken(ctx: Context, token: String): Remote? =
         remotes(ctx).firstOrNull { it.key == token }
 
+    /** The saved remote the app is pointed at, falling back to the first one saved. */
+    fun activeRemote(ctx: Context): Remote? {
+        val all = remotes(ctx)
+        return all.firstOrNull { it.key == activeToken(ctx) } ?: all.firstOrNull()
+    }
+
     // --- The active endpoint (what background features talk to) -------------- //
-    // Mirrored from the web on every load, so the media session / widget / WOL keep
-    // working even after the user switched remotes inside the WebView.
+    // Set whenever the app connects to a server, so the media session / widget / WOL
+    // target the same PC the remote is showing.
 
     fun setActive(ctx: Context, token: String, host: String, port: String, name: String) {
         secure(ctx).edit().putString("active_token", token).apply()

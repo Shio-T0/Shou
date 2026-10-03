@@ -2,30 +2,9 @@
 <resources>
     <string name="app_name">Shou Remote</string>
     <string name="settings">Settings</string>
-    <string name="tagline">Phone remote</string>
-    <string name="settings_blurb">Point this remote at the computer running Shou.</string>
-    <string name="label_computer">Computer</string>
-    <string name="label_port">Port</string>
-    <string name="label_token">Remote token</string>
-    <string name="token_help">The REMOTE_TOKEN from ~/.config/shou/shou.conf</string>
-    <string name="host_hint">192.168.1.20</string>
-    <string name="port_hint">4100</string>
-    <string name="token_hint">paste token</string>
-    <string name="use_https">Use HTTPS</string>
-    <string name="allow_bad_certs">Allow self-signed certificate</string>
-    <string name="save">Save &amp; connect</string>
-    <string name="scan_network">Scan network for Shou</string>
-    <string name="scanning">Scanning…</string>
-    <string name="scan_found">Found Shou at %1$s:%2$d</string>
-    <string name="scan_none">No Shou server found on this network.</string>
-    <string name="scan_failed">Scan failed — enter the address manually.</string>
-    <string name="scan_unavailable">Discovery isn\'t available on this device.</string>
-    <string name="volume_keys">Volume buttons control playback</string>
     <string name="wake_pc">Wake PC</string>
     <string name="cd_prev">Previous episode</string>
     <string name="cd_play">Play or pause</string>
     <string name="cd_next">Next episode</string>
-    <string name="cd_rew">Rewind 30 seconds</string>
-    <string name="cd_ffwd">Forward 30 seconds</string>
     <string name="widget_description">Wake the PC and control what\'s playing, without opening the app.</string>
 </resources>

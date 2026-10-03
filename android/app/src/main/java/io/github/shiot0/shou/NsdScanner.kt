@@ -11,8 +11,8 @@ import android.os.Looper
 data class NsdResult(val name: String, val host: String, val port: Int)
 
 /**
- * Reusable `_shou._tcp` discovery. Powers both the Settings "Scan" button and the
- * in-WebView Remotes page "Find on this network" action, so the phone can fill in a
+ * Reusable `_shou._tcp` discovery. Powers the remote's "Find PCs on this network"
+ * action (first run and the PC switcher), so the phone can fill in a
  * server's address without anyone typing an IP. Resolves are serialised because the
  * platform NSD resolver only tolerates one in-flight resolve at a time.
  */

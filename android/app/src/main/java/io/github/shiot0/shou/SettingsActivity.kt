@@ -1,92 +1,134 @@
 package io.github.shiot0.shou
 
+import android.graphics.Color as AColor
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.SwitchCompat
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import io.github.shiot0.shou.ui.Glyph
+import io.github.shiot0.shou.ui.RoundButton
+import io.github.shiot0.shou.ui.Shu
+import io.github.shiot0.shou.ui.ShouTheme
+import io.github.shiot0.shou.ui.Type
 
-/** Where you point the app: computer IP/host, port, the REMOTE_TOKEN, and http/https. */
-class SettingsActivity : AppCompatActivity() {
-
-    private lateinit var host: EditText
-    private lateinit var port: EditText
-    private lateinit var scanStatus: TextView
-    private var scanner: NsdScanner? = null
+/** App-wide options. Your PCs themselves are managed from the switcher on the remote. */
+class SettingsActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(AColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(AColor.TRANSPARENT),
+        )
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_settings)
         ShouStore.init(this)
+        LiveLink.init(this)
+        setContent { ShouTheme { SettingsScreen(onBack = ::finish) } }
+    }
 
-        host = findViewById(R.id.host)
-        port = findViewById(R.id.port)
-        scanStatus = findViewById(R.id.scan_status)
-        val token = findViewById<EditText>(R.id.token)
-        val https = findViewById<SwitchCompat>(R.id.https)
-        val allowCerts = findViewById<SwitchCompat>(R.id.allow_certs)
-        val volumeKeys = findViewById<SwitchCompat>(R.id.volume_keys)
+    @Composable
+    private fun SettingsScreen(onBack: () -> Unit) {
+        val ctx = this
+        var volumeKeys by remember { mutableStateOf(ShouStore.volumeKeys(ctx)) }
+        var https by remember { mutableStateOf(ShouStore.https(ctx)) }
+        var badCerts by remember { mutableStateOf(ShouStore.allowBadCerts(ctx)) }
 
-        host.setText(ShouStore.host(this))
-        port.setText(ShouStore.port(this))
-        token.setText(ShouStore.token(this))
-        https.isChecked = ShouStore.https(this)
-        allowCerts.isChecked = ShouStore.allowBadCerts(this)
-        volumeKeys.isChecked =
-            getSharedPreferences("shou", MODE_PRIVATE).getBoolean("volumeKeys", true)
+        Column(
+            Modifier.fillMaxSize().background(Shu.Ink).statusBarsPadding().navigationBarsPadding()
+                .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        ) {
+            Row(Modifier.height(60.dp), verticalAlignment = Alignment.CenterVertically) {
+                RoundButton(Glyph.Back, "Back", onBack, size = 44.dp, color = Color.Transparent, border = false)
+                Spacer(Modifier.width(6.dp))
+                Text("Settings", style = Type.TitleSmall, color = Shu.Paper)
+            }
+            Spacer(Modifier.height(10.dp))
 
-        findViewById<Button>(R.id.scan).setOnClickListener { startDiscovery() }
+            Section("Controls")
+            Toggle(
+                "Volume buttons control the PC",
+                "The phone's volume keys change the PC player's volume while the remote is open.",
+                volumeKeys,
+            ) { volumeKeys = it; ShouStore.setOption(ctx, "volumeKeys", it) }
 
-        findViewById<Button>(R.id.save).setOnClickListener {
-            ShouStore.saveSettings(
-                this,
-                host.text.toString(),
-                port.text.toString(),
-                token.text.toString(),
-                https.isChecked,
-                allowCerts.isChecked,
+            Section("Connection")
+            Toggle(
+                "Use HTTPS",
+                "Only if you put Shou behind a TLS proxy. Plain HTTP is normal on a home network.",
+                https,
+            ) { https = it; ShouStore.setOption(ctx, "https", it); LiveLink.reconnect() }
+            Toggle(
+                "Allow a self-signed certificate",
+                "Trust your own server's certificate when using HTTPS.",
+                badCerts, enabled = https,
+            ) { badCerts = it; ShouStore.setOption(ctx, "allowBadCerts", it); LiveLink.reconnect() }
+
+            Section("About")
+            Text(
+                "Shou Remote ${BuildConfig.VERSION_NAME}\n" +
+                    "Type: Shippori Mincho B1 and Zen Kaku Gothic New, both under the SIL Open Font License 1.1.",
+                style = Type.Meta, color = Shu.Ash,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
             )
-            getSharedPreferences("shou", MODE_PRIVATE).edit()
-                .putBoolean("volumeKeys", volumeKeys.isChecked)
-                .apply()
-            // A single typed-in server is also the active one; mirror it so background
-            // features (media controls, widget, tile) have somewhere to point.
-            ShouStore.setActive(
-                this, token.text.toString().trim(),
-                host.text.toString().trim(),
-                port.text.toString().trim().ifEmpty { "4100" },
-                host.text.toString().trim().ifEmpty { "Shou" },
-            )
-            finish()
+            Spacer(Modifier.height(24.dp))
         }
     }
 
-    // mDNS / NSD auto-discovery: find a Shou server advertising _shou._tcp on the LAN and
-    // fill in its host + port, so you don't have to type an IP. The token is never broadcast.
-    private fun startDiscovery() {
-        scanner?.stop()
-        scanStatus.text = getString(R.string.scanning)
-        var got = false
-        val s = NsdScanner(this)
-        scanner = s
-        s.start(
-            timeoutMs = 9000,
-            onFound = { r ->
-                if (!got) {
-                    got = true
-                    host.setText(r.host)
-                    if (r.port > 0) port.setText(r.port.toString())
-                    scanStatus.text = getString(R.string.scan_found, r.host, r.port)
-                    s.stop()
-                }
-            },
-            onDone = { if (!got) scanStatus.text = getString(R.string.scan_none) },
-        )
+    @Composable
+    private fun Section(title: String) {
+        Text(title, style = Type.Label, color = Shu.Vermilion, modifier = Modifier.padding(start = 6.dp, top = 18.dp, bottom = 8.dp))
     }
 
-    override fun onDestroy() {
-        scanner?.stop()
-        super.onDestroy()
+    @Composable
+    private fun Toggle(title: String, body: String, on: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp)).background(Shu.Booth)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = Type.BodyStrong, color = if (enabled) Shu.Paper else Shu.Ash)
+                Spacer(Modifier.height(3.dp))
+                Text(body, style = Type.Meta, color = Shu.Ash)
+            }
+            Spacer(Modifier.width(14.dp))
+            Switch(
+                checked = on, onCheckedChange = onChange, enabled = enabled,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = Shu.Vermilion,
+                    uncheckedThumbColor = Shu.Ash,
+                    uncheckedTrackColor = Shu.Booth2,
+                    uncheckedBorderColor = Shu.Rule,
+                ),
+            )
+        }
     }
 }

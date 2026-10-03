@@ -17,8 +17,8 @@ import androidx.media.session.MediaButtonReceiver
 import java.util.concurrent.Executors
 
 /**
- * Drives the active server's media notification + lock-screen controls. The web remote
- * pushes the kiosk's playback state down through [ShouBridge.playback]; we reflect it as
+ * Drives the active server's media notification + lock-screen controls. [LiveLink]
+ * mirrors the kiosk's playback state down here as it arrives; we reflect it as
  * a `MediaSessionCompat` with a MediaStyle notification, and route the transport buttons
  * (which work from the lock screen / quick-settings, even with the app closed) back to
  * the PC over the same token-gated control endpoints.
@@ -187,7 +187,7 @@ class PlaybackService : Service() {
     }
 }
 
-/** Starts/updates/stops [PlaybackService] in response to live state from the web remote. */
+/** Starts/updates/stops [PlaybackService] in response to live state from the server. */
 object PlaybackController {
     fun update(ctx: Context, p: Playback?) {
         val app = ctx.applicationContext
@@ -197,7 +197,7 @@ object PlaybackController {
             }
             return
         }
-        // Started while the app is foreground (state only flows while the WebView is live),
+        // Started while the app is foreground (state flows while the remote is connected),
         // so the foreground-service start is allowed; guard anyway.
         runCatching {
             ContextCompat.startForegroundService(app, Intent(app, PlaybackService::class.java))
