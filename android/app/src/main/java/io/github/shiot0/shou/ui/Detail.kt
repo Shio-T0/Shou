@@ -35,12 +35,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.shiot0.shou.Detail
 import io.github.shiot0.shou.KioskState
 import io.github.shiot0.shou.ListStatus
 import io.github.shiot0.shou.RemoteViewModel
+import io.github.shiot0.shou.SignInActivity
 
 /** One show from Search: what it is, its other seasons, and which of your lists it's on. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -105,11 +107,16 @@ fun ShowDetail(s: KioskState, vm: RemoteViewModel) {
         Spacer(Modifier.height(12.dp))
         StatusGrid(d, search.statuses, search.canWrite && !search.busy, vm)
         if (!search.canWrite) {
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "To change your lists from here, run ./shou_auth.sh on the PC once.",
-                style = Type.Meta, color = Shu.Ash,
-            )
+            val ctx = LocalContext.current
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Sign in to AniList to change your lists from here.",
+                    style = Type.Meta, color = Shu.Ash, modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(10.dp))
+                PrimaryButton("Sign in", { SignInActivity.start(ctx) }, height = 40.dp)
+            }
         }
         Spacer(Modifier.height(24.dp))
     }

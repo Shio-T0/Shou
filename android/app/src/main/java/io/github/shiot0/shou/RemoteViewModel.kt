@@ -186,6 +186,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     fun retry() = LiveLink.reconnect()
 
+    /** Point the PC's lists at the account it's signed in to AniList as. */
+    fun useAccountLists() {
+        viewModelScope.launch(Dispatchers.IO) { ServerClient.postForm(getApplication(), "auth/lists", emptyMap()) }
+    }
+
     // --- Network discovery (mDNS `_shou._tcp`) ------------------------------------ //
     private val _found = MutableStateFlow<List<NsdResult>>(emptyList())
     val found: StateFlow<List<NsdResult>> = _found

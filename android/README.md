@@ -14,6 +14,8 @@ the PC stays the single source of truth, but everything on the phone is native:
   *Back to the PC* resumes it on the big screen from the same spot.
 - **Search with your own keyboard**, filter by genre/theme, open a show to read its synopsis,
   flip between seasons and set its list status.
+- **Sign in to AniList from the phone:** Settings → AniList opens AniList's own login; tap
+  *Authorize* and the PC is signed in (and shows that account's lists), no terminal needed.
 - **Several PCs:** switch from the top bar; Shou re-finds each one on whatever network you're
   on, and can **wake** it (Wake-on-LAN) or **find** it (mDNS).
 - Keeps the screen awake while open, plus **lock-screen controls**, a now-playing

@@ -41,6 +41,12 @@
             android:exported="true"
             android:label="@string/settings" />
 
+        <!-- Sign the PC in to AniList (AniList's login page, then hand the token to the PC). -->
+        <activity
+            android:name=".SignInActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- "Watch on phone": the PC's episode in a native full-screen player. -->
         <activity
             android:name=".CastActivity"

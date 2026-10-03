@@ -128,6 +128,22 @@ data class SearchState(
     val canWrite: Boolean,
 )
 
+/** Which AniList account the PC is signed in as (null from servers before sign-in support). */
+data class Account(
+    val signedIn: Boolean,
+    val name: String,
+    val avatar: String,
+    val expired: Boolean,
+    val listUser: String,
+    val clientId: String,
+    val authUrl: String,
+    val redirect: String,
+) {
+    /** Signed in as one account while the lists shown belong to another. */
+    val listsElsewhere: Boolean
+        get() = signedIn && name.isNotBlank() && listUser.isNotBlank() && !name.equals(listUser, ignoreCase = true)
+}
+
 /** The episode "thrown" from the PC to this phone. */
 data class Cast(
     val active: Boolean,
@@ -153,6 +169,7 @@ data class KioskState(
     val history: List<ResumeEntry>,
     val search: SearchState?,
     val cast: Cast?,
+    val account: Account?,
 ) {
     val focused: Card? get() = items.getOrNull(cursor) ?: items.firstOrNull()
 
@@ -175,6 +192,18 @@ data class KioskState(
             history = o.optJSONArray("history").objects().map(::resume),
             search = o.optJSONObject("search")?.let(::search),
             cast = o.optJSONObject("cast")?.let(::cast),
+            account = o.optJSONObject("account")?.let(::account),
+        )
+
+        private fun account(o: JSONObject) = Account(
+            signedIn = o.optBoolean("signedIn"),
+            name = o.optString("name").nullless(),
+            avatar = o.optString("avatar").nullless(),
+            expired = o.optBoolean("expired"),
+            listUser = o.optString("listUser").nullless(),
+            clientId = o.optString("clientId").nullless(),
+            authUrl = o.optString("authUrl").nullless(),
+            redirect = o.optString("redirect").nullless().ifBlank { "https://anilist.co/api/v2/oauth/pin" },
         )
 
         private fun card(o: JSONObject) = Card(

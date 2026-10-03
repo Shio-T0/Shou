@@ -34,6 +34,25 @@ object ServerClient {
         }
     }
 
+    /** POST a form (secrets go in the body, never the URL) and return the HTTP status
+     *  with the JSON reply; status -1 when the PC couldn't be reached at all. */
+    fun postForm(ctx: Context, path: String, form: Map<String, String>): Pair<Int, JSONObject?> {
+        val base = ShouStore.activeBaseUrl(ctx) ?: return -1 to null
+        val body = form.entries.joinToString("&") { enc(it.key) + "=" + enc(it.value) }.toByteArray()
+        return try {
+            open(ctx, "$base/$path?k=${enc(ShouStore.activeToken(ctx))}", "POST", bodyLength = body.size)!!.use { conn ->
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                conn.outputStream.use { it.write(body) }
+                val code = conn.responseCode
+                val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                    ?.bufferedReader()?.use { it.readText() }
+                code to text?.let { runCatching { JSONObject(it) }.getOrNull() }
+            }
+        } catch (e: Exception) {
+            -1 to null
+        }
+    }
+
     /** GET the (token-gated) /airing feed as a JSON string, or null on failure. */
     fun airing(ctx: Context): String? {
         val base = ShouStore.activeBaseUrl(ctx) ?: return null
@@ -83,7 +102,9 @@ object ServerClient {
         override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
     }
 
-    private fun open(ctx: Context, url: String, method: String, timeoutMs: Int = 4000): HttpURLConnection? {
+    private fun open(
+        ctx: Context, url: String, method: String, timeoutMs: Int = 4000, bodyLength: Int = 0,
+    ): HttpURLConnection? {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = method
         conn.connectTimeout = timeoutMs
@@ -92,7 +113,7 @@ object ServerClient {
         if (conn is HttpsURLConnection && ShouStore.allowBadCerts(ctx)) relaxTls(conn)
         if (method == "POST") {
             conn.doOutput = true
-            conn.setFixedLengthStreamingMode(0)
+            conn.setFixedLengthStreamingMode(bodyLength)
         }
         return conn
     }

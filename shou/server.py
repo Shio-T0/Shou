@@ -80,7 +80,10 @@ def reload_config() -> None:
     global CONFIG
     fresh = load_config()
     fresh["REMOTE_TOKEN"] = TOKEN
+    changed = fresh.get("ANILIST_TOKEN") != CONFIG.get("ANILIST_TOKEN")
     CONFIG = fresh
+    if changed:  # e.g. shou_auth.sh ran: re-check who we're signed in as
+        socketio.start_background_task(refresh_account)
 
 
 def ensure_token() -> str:
@@ -394,6 +397,12 @@ def fetch_list(mode: str = "watching") -> list:
         headers=headers,
         timeout=15,
     )
+    if resp.status_code == 404:  # AniList's answer when the username doesn't exist
+        raise RuntimeError(f"AniList has no user named “{user}”. If you renamed your "
+                           "account, sign in again from the Shou app (Settings → AniList).")
+    if resp.status_code in (401, 403) and not token:
+        raise RuntimeError("AniList now needs you signed in to read lists. "
+                           "Sign in from the Shou app (Settings → AniList).")
     resp.raise_for_status()
     payload = resp.json()
     if "errors" in payload:
@@ -854,6 +863,125 @@ def apply_status(media_id: int, to: str, entry_id) -> None:
 # --------------------------------------------------------------------------- #
 def anilist_token() -> str:
     return (CONFIG.get("ANILIST_TOKEN") or "").strip()
+
+
+# --------------------------------------------------------------------------- #
+# AniList account : sign in / out from the phone (no terminal, no restart)
+# --------------------------------------------------------------------------- #
+# The phone app signs in with AniList's implicit grant: it opens
+#   https://anilist.co/api/v2/oauth/authorize?client_id=<id>&response_type=token
+# in an in-app browser, the user logs in and taps Authorize, AniList redirects to its
+# PIN page with #access_token=… in the URL, and the app hands that token to /auth/anilist.
+# The client id comes from ANILIST_CLIENT_ID, or — for anyone who ran shou_auth.sh
+# before — from the `aud` claim of their existing token (AniList tokens are JWTs), so
+# re-signing in needs no developer-page setup at all.
+ANILIST_PIN_URL = "https://anilist.co/api/v2/oauth/pin"
+ACCOUNT = {"id": None, "name": "", "avatar": "", "invalid": False}
+CONF_LOCK = threading.Lock()
+VIEWER_QUERY = "query { Viewer { id name avatar { medium } } }"
+
+
+def _jwt_claims(token: str) -> dict:
+    """The (unverified) payload of an AniList JWT, or {} if it isn't one."""
+    try:
+        part = token.split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+    except Exception:  # noqa: BLE001 - anything malformed just means "no claims"
+        return {}
+
+
+def anilist_client_id() -> str:
+    cid = (CONFIG.get("ANILIST_CLIENT_ID") or "").strip()
+    if cid:
+        return cid
+    aud = _jwt_claims(anilist_token()).get("aud")
+    return str(aud) if aud else ""
+
+
+def set_conf_value(key: str, value: str) -> None:
+    """Set KEY="value" in shou.conf, replacing an existing line or appending one,
+    and mirror it into CONFIG. Values are validated by callers (no quotes/newlines)."""
+    line = f'{key}="{value}"'
+    with CONF_LOCK:
+        lines = CONFIG_FILE.read_text().splitlines() if CONFIG_FILE.exists() else []
+        for i, raw in enumerate(lines):
+            if raw.strip().startswith(f"{key}="):
+                lines[i] = line
+                break
+        else:
+            lines += ["", f"# Set from the Shou phone app ({key}).", line]
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CONFIG_FILE.with_name(CONFIG_FILE.name + ".tmp")
+        tmp.write_text("\n".join(lines) + "\n")
+        os.chmod(tmp, 0o600)  # it holds tokens
+        tmp.replace(CONFIG_FILE)
+        CONFIG[key] = value
+
+
+def fetch_viewer(token: str) -> dict | None:
+    """Who a token belongs to ({id, name, avatar}), or None if AniList rejects it.
+    Raises on network trouble so callers can tell "offline" from "invalid"."""
+    resp = requests.post(
+        ANILIST_URL, json={"query": VIEWER_QUERY},
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+                 "Accept": "application/json"},
+        timeout=15,
+    )
+    if resp.status_code in (400, 401, 403):
+        return None
+    resp.raise_for_status()
+    viewer = (resp.json().get("data") or {}).get("Viewer")
+    if not viewer or not viewer.get("name"):
+        return None
+    return {"id": viewer.get("id"), "name": viewer["name"],
+            "avatar": (viewer.get("avatar") or {}).get("medium") or ""}
+
+
+def refresh_account() -> None:
+    """Look up who the configured token signs in as (startup, and when it changes)."""
+    token = anilist_token()
+    if not token:
+        ACCOUNT.update(id=None, name="", avatar="", invalid=False)
+        broadcast()
+        return
+    try:
+        viewer = fetch_viewer(token)
+    except requests.RequestException as exc:
+        print(f"[account] couldn't reach AniList: {exc}", flush=True)
+        return  # unknown — keep whatever we knew
+    if viewer:
+        ACCOUNT.update(viewer, invalid=False)
+    else:
+        ACCOUNT.update(id=None, name="", avatar="", invalid=True)
+        print("[account] AniList rejected the saved token (expired or revoked)", flush=True)
+    broadcast()
+
+
+def account_snapshot() -> dict:
+    token = anilist_token()
+    exp = _jwt_claims(token).get("exp") if token else None
+    expired = bool(exp and exp < time.time())
+    cid = anilist_client_id()
+    return {
+        "signedIn": bool(token) and not ACCOUNT["invalid"] and not expired,
+        "name": ACCOUNT["name"],
+        "avatar": ACCOUNT["avatar"],
+        "expired": bool(token) and (ACCOUNT["invalid"] or expired),
+        "expiresAt": exp,
+        "listUser": (CONFIG.get("ANILIST_USER") or "").strip(),
+        "clientId": cid,
+        "authUrl": (f"https://anilist.co/api/v2/oauth/authorize?client_id={cid}"
+                    f"&response_type=token") if cid else "",
+        "redirect": ANILIST_PIN_URL,
+    }
+
+
+def _reload_list_after_account_change() -> None:
+    """Show the newly signed-in account's lists, unless the kiosk is busy/closed."""
+    with STATE_LOCK:
+        idle_list = STATE["view"] in ("grid", "empty", "error") and STATE["list"] in LIST_STATUS
+    if idle_list:
+        refresh_list()
 
 
 def _anilist_post(query: str, variables: dict) -> dict:
@@ -2053,6 +2181,7 @@ def stop_cast(resume_pc: bool = True, position: float | None = None) -> None:
 # --------------------------------------------------------------------------- #
 def broadcast() -> None:
     history = history_snapshot()  # read outside STATE_LOCK (own lock)
+    account = account_snapshot()
     with STATE_LOCK:
         in_search = STATE["list"] == "search" or STATE["view"] in ("search", "detail")
         snapshot = {
@@ -2065,6 +2194,7 @@ def broadcast() -> None:
             "rating": STATE["rating"],
             "message": STATE["message"],
             "history": history,
+            "account": account,
             "search": {
                 "query": SEARCH["query"],
                 "genres": SEARCH["genres"],
@@ -2581,6 +2711,72 @@ def set_status():
     return jsonify(ok=True, action="status")
 
 
+@app.route("/auth/anilist", methods=["POST"])
+@require_auth
+def auth_anilist():
+    """Sign in: save an AniList access token (form field `token`, never the URL) after
+    checking who it belongs to, and point the lists at that account."""
+    token = (request.form.get("token") or "").strip()
+    if not token or len(token) > 4096 or not re.fullmatch(r"[A-Za-z0-9._\-]+", token):
+        return jsonify(ok=False, reason="That doesn't look like an AniList token."), 400
+    try:
+        viewer = fetch_viewer(token)
+    except requests.RequestException:
+        return jsonify(ok=False, reason="The PC couldn't reach AniList. Check its internet."), 502
+    if not viewer:
+        return jsonify(ok=False, reason="AniList didn't accept that sign-in. Try again."), 400
+    set_conf_value("ANILIST_TOKEN", token)
+    if re.fullmatch(r"[A-Za-z0-9_]+", viewer["name"]):
+        set_conf_value("ANILIST_USER", viewer["name"])  # show the signed-in account's lists
+    aud = _jwt_claims(token).get("aud")
+    if aud and not (CONFIG.get("ANILIST_CLIENT_ID") or "").strip():
+        set_conf_value("ANILIST_CLIENT_ID", str(aud))  # survives a later sign-out
+    ACCOUNT.update(viewer, invalid=False)
+    print(f"[account] signed in to AniList as {viewer['name']}", flush=True)
+    broadcast()
+    socketio.start_background_task(_reload_list_after_account_change)
+    return jsonify(ok=True, name=viewer["name"])
+
+
+@app.route("/auth/signout", methods=["POST"])
+@require_auth
+def auth_signout():
+    """Forget the AniList token (the list username stays, for when you sign back in)."""
+    cid = anilist_client_id()
+    if cid and not (CONFIG.get("ANILIST_CLIENT_ID") or "").strip():
+        set_conf_value("ANILIST_CLIENT_ID", cid)  # keep signing back in one-tap
+    set_conf_value("ANILIST_TOKEN", "")
+    ACCOUNT.update(id=None, name="", avatar="", invalid=False)
+    print("[account] signed out of AniList", flush=True)
+    broadcast()
+    return jsonify(ok=True)
+
+
+@app.route("/auth/lists", methods=["POST"])
+@require_auth
+def auth_lists():
+    """Show the signed-in account's lists (when ANILIST_USER names someone else)."""
+    name = ACCOUNT["name"]
+    if not anilist_token() or not re.fullmatch(r"[A-Za-z0-9_]+", name or ""):
+        return jsonify(ok=False, reason="Sign in to AniList first."), 400
+    set_conf_value("ANILIST_USER", name)
+    broadcast()
+    socketio.start_background_task(_reload_list_after_account_change)
+    return jsonify(ok=True, name=name)
+
+
+@app.route("/auth/client", methods=["POST"])
+@require_auth
+def auth_client():
+    """Store the AniList API client id used to sign in (first-time setup only)."""
+    cid = (request.form.get("id") or "").strip()
+    if not re.fullmatch(r"\d{1,10}", cid):
+        return jsonify(ok=False, reason="The Client ID is the number AniList shows."), 400
+    set_conf_value("ANILIST_CLIENT_ID", cid)
+    broadcast()
+    return jsonify(ok=True)
+
+
 @app.route("/pause", methods=["POST"])
 @require_auth
 def pause():
@@ -2838,6 +3034,7 @@ if __name__ == "__main__":
     print(f"  remote (local) : {local_url}")
     print(f"  remote (phone) : {lan_url}")
     mdns_close = start_mdns()
+    socketio.start_background_task(refresh_account)  # who is the token signed in as?
     try:
         socketio.run(app, host="0.0.0.0", port=PORT, allow_unsafe_werkzeug=True)
     finally:

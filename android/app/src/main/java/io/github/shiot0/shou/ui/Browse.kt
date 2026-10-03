@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,6 +51,7 @@ import io.github.shiot0.shou.Card
 import io.github.shiot0.shou.KioskState
 import io.github.shiot0.shou.RemoteViewModel
 import io.github.shiot0.shou.ResumeEntry
+import io.github.shiot0.shou.SignInActivity
 
 /**
  * Browsing a list: the show the PC is focused on, every other show as a poster you can
@@ -293,6 +295,7 @@ private fun ResumeCard(e: ResumeEntry, vm: RemoteViewModel) {
 /** ‹  [ the one thing to do ]  › — plus Open/Back. Sits in the thumb zone. */
 @Composable
 private fun Dock(s: KioskState, item: Card?, vm: RemoteViewModel) {
+    val ctx = LocalContext.current
     val canStep = s.view == "grid" && s.items.size > 1
     data class Primary(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector?, val enabled: Boolean, val run: () -> Unit)
 
@@ -304,6 +307,10 @@ private fun Dock(s: KioskState, item: Card?, vm: RemoteViewModel) {
         s.view == "grid" && item != null -> Primary("Select", Glyph.Play, true, vm::select)
         s.view == "loading" -> Primary("Loading…", null, false) {}
         s.view == "empty" -> Primary("Search AniList", Glyph.Search, true) { vm.showList("search") }
+        s.view == "error" && s.items.isEmpty() && s.account?.listsElsewhere == true ->
+            Primary("Show ${s.account.name}'s lists", Glyph.Check, true, vm::useAccountLists)
+        s.view == "error" && s.items.isEmpty() && s.account?.signedIn == false ->
+            Primary("Sign in to AniList", null, true) { SignInActivity.start(ctx) }
         s.view == "error" && s.items.isEmpty() -> Primary("Try again", null, true) { vm.showList(s.list) }
         s.view == "error" -> Primary("Back to the list", Glyph.Undo, true, vm::back)
         else -> Primary("Select", null, true, vm::select)

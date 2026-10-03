@@ -48,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,7 @@ import io.github.shiot0.shou.KioskState
 import io.github.shiot0.shou.Link
 import io.github.shiot0.shou.Remote
 import io.github.shiot0.shou.RemoteViewModel
+import io.github.shiot0.shou.SignInActivity
 
 /** Which layout the remote shows, following what the PC's kiosk is doing. */
 enum class Mode { BROWSE, PLAYER, RATING, SEARCH, DETAIL }
@@ -111,6 +113,13 @@ private fun Home(vm: RemoteViewModel, onSettings: () -> Unit, onLeave: () -> Uni
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut(),
             ) { ReconnectBanner(remote?.name.orEmpty()) }
+            val account = state?.account
+            AnimatedVisibility(
+                visible = account != null && !account.signedIn && link == Link.LIVE &&
+                    (mode == Mode.BROWSE || mode == Mode.SEARCH),
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) { SignInBanner(expired = account?.expired == true) }
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
@@ -230,6 +239,28 @@ private fun ReconnectBanner(name: String) {
         CircularProgressIndicator(Modifier.size(14.dp), color = Shu.Vermilion, strokeWidth = 2.dp)
         Spacer(Modifier.width(10.dp))
         Text("Lost ${name.ifBlank { "the PC" }}. Reconnecting…", style = Type.Meta, color = Shu.Paper)
+    }
+}
+
+/** Without an AniList sign-in the PC can't even load your lists any more — say so, with the fix. */
+@Composable
+private fun SignInBanner(expired: Boolean) {
+    val ctx = LocalContext.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Shu.Booth2)
+            .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(if (expired) "AniList sign-in expired" else "Not signed in to AniList", style = Type.Label, color = Shu.Paper)
+            Text("Sign in so Shou can load your lists and track episodes.", style = Type.Small, color = Shu.Ash)
+        }
+        Spacer(Modifier.width(10.dp))
+        PrimaryButton("Sign in", { SignInActivity.start(ctx) }, height = 40.dp)
     }
 }
 

@@ -82,9 +82,12 @@ WATCHED_PERCENT="90"           # auto-mark watched past this %
 # REMOTE_TOKEN / ANILIST_TOKEN — managed for you; leave them out
 ```
 
-`REMOTE_TOKEN` is generated on first launch. Run `./shou_auth.sh` to grant AniList write
-access if you want Shou to **auto-mark episodes watched**. Changing user/quality just needs
-an **Open** tap; changing port or tokens needs a daemon restart.
+`REMOTE_TOKEN` is generated on first launch. **Sign in to AniList** from the Android app
+(**Settings → AniList → Sign in**): log in, tap *Authorize*, done. AniList now needs a sign-in
+even to read lists, and it lets Shou **auto-mark episodes watched**. Signing in also points
+`ANILIST_USER` at that account, and takes effect immediately (no restart). No app? Run
+`./shou_auth.sh` instead. Changing user/quality just needs an **Open** tap; changing the port
+or `REMOTE_TOKEN` needs a daemon restart.
 
 ## Run / restart / uninstall
 
